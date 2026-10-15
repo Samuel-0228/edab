@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: automation-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: automation
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d automation"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: automation-engine
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/automation?sslmode=disable
+      PORT: "8080"
+      WORKER_POLL_INTERVAL: "1s"
+      WORKER_CONCURRENCY: "4"
+      MAX_RETRIES: "3"
+      INITIAL_BACKOFF: "2s"
+      MAX_BACKOFF: "1m"
+      LOG_LEVEL: "info"
+      ENVIRONMENT: "production"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
