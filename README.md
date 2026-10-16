@@ -1,600 +1,400 @@
-# Generic Event-Driven Automation Engine Boilerplate
+# Damtie: Multi-Channel Telegram Mirroring Engine
 
-A clean, production-ready, reusable backend boilerplate for event-driven automation systems built with **Go** and **PostgreSQL**.
-
-The goal of this engine is to serve as a foundational template that can be cloned and adapted to any event-driven automation use case without modifying core logic:
-- Telegram → Telegram
-- Telegram → Discord
-- RSS → Telegram
-- Webhook → Telegram
-- GitHub → Discord
-- API → API
-- Database → Webhook
-
----
-
-## 1. Core Principle
-
-The system follows a strict pipeline:
+> **Damtie is an event-driven Telegram mirroring engine.** One Telegram bot can monitor multiple Telegram channels and groups, route incoming posts according to configurable rules, and automatically deliver them to one or more destination channels or groups.
 
 ```text
-SOURCE → INGEST → NORMALIZE → ROUTE → DELIVER → RECORD
+                     Telegram Bot
+                          │
+          ┌───────────────┼───────────────┐
+          ↓               ↓               ↓
+      Source A        Source B        Source C
+     (Monitored)     (Monitored)     (Monitored)
+          │               │               │
+          └───────────────┼───────────────┘
+                          ↓
+                    Damtie Engine
+                     (Idempotency)
+                          │
+                    Routing Rules
+                          │
+          ┌───────────────┼───────────────┐
+          ↓               ↓               ↓
+      Target X        Target Y        Target Z
+    (Backup / Sync) (Archive / Rep) (Public Mirror)
 ```
 
-**The core engine does not know or care what the source or destination service is.**
-
-External services interact with the system strictly through **Source Adapters** and **Destination Adapters**. Service-specific implementations (e.g. Telegram, Discord, GitHub, Slack) are plugins on top of the generic core.
+Damtie is **not** a basic script or a naive polling loop. It is a robust, decoupled, event-driven engine providing persistent state, strict idempotency, album/media-group buffering, exponential backoff retries, dead-letter tracking, Telegram rate limiting, and an operator management API with a live web dashboard.
 
 ---
 
-## 2. Architecture & Event Flow
+## 1. Core Principles
 
-### System Overview
+- **One Bot / Many Channels**: A single bot application connects to Telegram Bot API, monitors N sources, and replicates to N destinations according to dynamic database routes.
+- **Pure Verbatim Mirroring**: Damtie preserves original content as closely as the Telegram API allows. It does **not** introduce AI summarization, text rewriting, opportunity extraction, or automated footers.
+- **Copy vs. Forward**: By default, Damtie uses Telegram's native `copyMessage` and `copyMessages` APIs. This duplicates the message, media, captions, entities, and formatting **without** the "Forwarded from..." banner, so mirrored posts look native.
+- **Strict Deduplication & Idempotency**:
+  - **Source level**: Uniquely keyed by `telegram:<chat_id>:<message_id>` (or `telegram:<chat_id>:mg:<media_group_id>` for albums). Duplicate updates are ignored.
+  - **Destination level**: Unique constraint on `(event_id, destination_id)`. The destination message ID is recorded; if a failed job is retried after delivery, the recorded result prevents duplicate posts.
+- **Album / Media Group Preservation**: Posts sharing a `media_group_id` are buffered within a sliding window and published as a unified Telegram album rather than isolated single posts.
+- **Decoupled Architecture**: Telegram is an adapter layer. The underlying Damtie engine (ingestion, event model, routing, PostgreSQL persistence, worker pool) remains completely reusable.
+
+---
+
+## 2. System Architecture
+
+```text
+               Telegram Long-Poll Updates
+                          │
+                          ▼
+             ┌─────────────────────────┐
+             │ Damtie Telegram Listener│ (buffers albums & filters monitored chats)
+             └────────────┬────────────┘
+                          │ RawPost JSON
+                          ▼
+             ┌─────────────────────────┐
+             │ Telegram Source Adapter │ (normalizes to generic Event)
+             └────────────┬────────────┘
+                          │
+                          ▼
+             ┌─────────────────────────┐
+             │   Ingestion Pipeline    │ (persists Event with unique external ID)
+             └────────────┬────────────┘
+                          │
+                          ▼
+             ┌─────────────────────────┐
+             │     Routing Engine      │ (resolves matching active routes)
+             └────────────┬────────────┘
+                          │
+                          ▼
+             ┌─────────────────────────┐
+             │ Delivery Store (Jobs)   │ (enqueues pending jobs in PostgreSQL)
+             └────────────┬────────────┘
+                          │
+       FOR UPDATE SKIP LOCKED (concurrent workers)
+                          │
+                          ▼
+             ┌─────────────────────────┐
+             │ Background Worker Pool  │
+             └────────────┬────────────┘
+                          │
+                          ▼
+             ┌─────────────────────────┐
+             │Telegram Destination Adp.│ (rate-limited, copies post/album)
+             └────────────┬────────────┘
+                          │
+                          ▼
+             Destination Telegram Channels
+```
 
 ```mermaid
-flowchart LR
-    subgraph ExternalSources["External Sources"]
-        WebhookSrc["Webhook / HTTP Push"]
-        PollSrc["Poller / API / RSS"]
+flowchart TD
+    subgraph TelegramSources["Telegram Channels & Groups"]
+        ChA["Source Channel A"]
+        ChB["Source Group B"]
+        ChC["Source Channel C"]
     end
 
-    subgraph Adapters["Adapters Layer"]
-        SA["Source Adapters\n(Normalize to Generic Event)"]
-        DA["Destination Adapters\n(Translate & Send)"]
+    subgraph DamtieIntegration["Telegram Integration Layer"]
+        Listener["Telegram Listener\n(Long-poll getUpdates)"]
+        Buffer["Media Group Buffer\n(Album Aggregator)"]
+        SrcAdp["Telegram Source Adapter\n(Normalize to Event)"]
     end
 
-    subgraph CoreEngine["Core Engine"]
-        Ingest["Ingestion Pipeline"]
-        RouteEngine["Routing Engine"]
-        Worker["Background Worker Pool"]
+    subgraph CoreEngine["Damtie Core Engine"]
+        Pipe["Ingestion Pipeline"]
+        Router["Routing Engine"]
+        Workers["Delivery Worker Pool\n(Exponential Backoff)"]
     end
 
-    subgraph Storage["PostgreSQL"]
-        DBEvents[("events\n(source_id + ext_id unique)")]
-        DBRoutes[("routes\n(filters & bindings)")]
-        DBJobs[("delivery_jobs\n(event_id + dest_id unique)")]
+    subgraph Storage["PostgreSQL Database"]
+        Events[("events\n(uq_events_source_external)")]
+        Routes[("routes\n(bindings & filters)")]
+        Jobs[("delivery_jobs\n(uq_event_destination)")]
+        State[("telegram_update_state\n(offset tracking)")]
     end
 
-    subgraph Targets["External Targets"]
-        TgtA["Target Service A"]
-        TgtB["Target Service B"]
+    subgraph Targets["Mirrored Targets"]
+        Dest1["Backup Channel A"]
+        Dest2["Backup Group B"]
+        Dest3["Archive Channel C"]
     end
 
-    ExternalSources --> SA
-    SA --> Ingest
-    Ingest --> DBEvents
-    Ingest --> RouteEngine
-    DBRoutes -.-> RouteEngine
-    RouteEngine --> DBJobs
-    Worker -. Claim with SKIP LOCKED .-> DBJobs
-    Worker --> DA
-    DA --> Targets
-    DA -. Result / Error .-> Worker
-    Worker -. Status update & Retry .-> DBJobs
-```
-
-### Event Lifecycle
-
-1. **Ingest & Normalize**: A Source Adapter receives raw data from an external provider (webhook push or poll) and translates it into a generic `Event`.
-2. **Persist (Idempotent)**: The event is stored in PostgreSQL. A database uniqueness constraint on `(source_id, external_event_id)` guarantees the same external event is never duplicated.
-3. **Route**: The routing engine queries active routes matching the event's source ID and evaluates any optional filter criteria (such as `event_types`).
-4. **Enqueue Deliveries**: For each matched route, a `DeliveryJob` is created with status `pending`. Uniqueness constraint on `(event_id, destination_id)` ensures idempotent job creation.
-5. **Process Deliveries**: Background workers claim pending jobs atomically using `FOR UPDATE SKIP LOCKED`.
-6. **Deliver & Record**: The worker looks up the destination's adapter, connects it with the destination's configuration, and delivers the generic event.
-7. **Retry / Dead-Letter**:
-   - If delivery succeeds, the job is marked `delivered`.
-   - If delivery fails, the failure error is recorded, an exponential backoff is calculated, and status is set to `failed`.
-   - If max retry attempts are reached, the job is permanently marked `dead_letter`.
-
-### Step-by-Step Delivery and Retry Workflow
-
-```text
-Example Source
-      ↓
-   Event #123
-      ↓
-   PostgreSQL (Idempotency Check)
-      ↓
-   Route Lookup
-      ↓
- ┌────┴─────┐
- ↓          ↓
-Target A   Target B
- ↓          ↓
-SUCCESS    FAILED
-             ↓
-           RETRY (Exponential Backoff)
-             ↓
-           SUCCESS (or DEAD_LETTER)
+    ChA & ChB & ChC --> Listener
+    Listener --> Buffer --> SrcAdp --> Pipe
+    Pipe --> Events
+    Pipe --> Router
+    Routes -.-> Router
+    Router --> Jobs
+    Workers -. Claim with SKIP LOCKED .-> Jobs
+    Workers --> DestAdp["Telegram Destination Adapter\n(Rate-Limited copyMessage/s)"]
+    DestAdp --> Targets
+    DestAdp -. Result (Message IDs) .-> Workers
+    Workers -. Update result & status .-> Jobs
+    Listener -. Confirm offset .-> State
 ```
 
 ---
 
-## 3. Project Structure
+## 3. Telegram Bot Setup & Permissions Guide
 
-```text
-automation-engine/
-├── cmd/
-│   └── server/
-│       └── main.go              # Application bootstrap & graceful shutdown
-│
-├── internal/
-│   ├── core/
-│   │   ├── event/               # Generic Event model and PostgreSQL store
-│   │   ├── routing/             # Route entity, rule evaluation, and store
-│   │   ├── delivery/            # DeliveryJob, atomic claim store, and background worker
-│   │   └── workflow/            # Ingestion and processing pipeline orchestrator
-│   │
-│   ├── adapters/
-│   │   ├── sources/             # SourceAdapter interface, registry, mock, webhook
-│   │   └── destinations/        # DestinationAdapter interface, registry, mock, webhook, stdout
-│   │
-│   ├── database/                # Connection pooling and embedded SQL migration runner
-│   ├── config/                  # Environment variable configuration loader
-│   └── api/                     # REST API server and handlers (Go 1.22+ ServeMux)
-│
-├── migrations/                  # Pure SQL schema migrations (embedded in binary)
-│   ├── 000001_init.up.sql
-│   ├── 000001_init.down.sql
-│   └── migrations.go
-│
-├── tests/                       # Unit and API integration tests
-│   ├── memstore.go              # In-memory stores for isolated unit testing
-│   ├── engine_test.go           # 10 core requirement test suite
-│   └── api_test.go              # REST API integration test suite
-│
-├── docker-compose.yml           # Multi-container orchestration (PostgreSQL + Engine)
-├── Dockerfile                   # Multi-stage lightweight Alpine container
-├── .env.example                 # Configuration template
-├── go.mod                       # Go module definition
-└── README.md                    # Project documentation
-```
+### Step 1: Create a Bot via @BotFather
+1. Open Telegram and message [@BotFather](https://t.me/BotFather).
+2. Send `/newbot` and follow instructions to choose a name and username.
+3. Save the **HTTP API Bot Token** (e.g. `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`).
+4. To allow the bot to read group messages without being explicitly mentioned:
+   - Send `/setprivacy` to @BotFather.
+   - Select your bot.
+   - Choose **Disable** (or ensure the bot is added as an Administrator in your groups).
+
+### Step 2: Understanding Telegram Bot Permissions
+
+| Context | Required Role | Required Permissions | Notes |
+| :--- | :--- | :--- | :--- |
+| **Source Channel** | Administrator | Read Messages / Channel Posts | Telegram Bot API **does not deliver channel posts** to bots unless the bot is an Administrator in the channel. |
+| **Source Group / Supergroup** | Member or Admin | Read Messages | If Privacy Mode is enabled, bot must be Admin to see all posts. If Privacy Mode is disabled, bot can be normal member. |
+| **Destination Channel** | Administrator | **Post Messages**, Edit Messages | Bot must have rights to publish new posts. |
+| **Destination Group** | Member or Admin | Send Messages, Send Media | Ensure group permissions allow bots to send media and links. |
+
+### Step 3: Determining Telegram Chat IDs
+Telegram channel and supergroup IDs are 64-bit integers usually prefixed with `-100` (e.g., `-1001234567890`).
+To find a chat ID:
+- Forward a message from the channel to [@userinfobot](https://t.me/userinfobot) or [@JsonDumpBot](https://t.me/JsonDumpBot).
+- Or add your bot to the chat and make a request to `GET http://localhost:8080/sources/{id}/access` after registering.
 
 ---
 
-## 4. Key Models
+## 4. Quickstart with Docker Compose
 
-### Generic Event
-```json
-{
-  "id": "c1f7a0b3-5776-47b8-89c0-9d0a6c6c7e2b",
-  "source_id": "8bb38f82-a0ef-4f11-9277-3e4b786c527e",
-  "external_event_id": "gh-push-892341",
-  "event_type": "git.push",
-  "payload": {
-    "repository": "my-org/repo",
-    "ref": "refs/heads/main",
-    "commits": 3
-  },
-  "metadata": {
-    "ip": "192.30.252.0",
-    "user_agent": "GitHub-Hookshot/abc123"
-  },
-  "created_at": "2026-10-15T12:00:00Z"
-}
-```
-
-### Source & Destination
-Sources and destinations store flexible JSON configuration so individual adapters can declare their own settings without schema alterations:
-```json
-{
-  "id": "8bb38f82-a0ef-4f11-9277-3e4b786c527e",
-  "name": "Incoming GitHub Webhook",
-  "adapter_type": "webhook",
-  "config": {
-    "header_secret": "X-Hub-Signature-256"
-  },
-  "enabled": true
-}
-```
-
-### Route
-Routes connect a Source to a Destination, with optional filtering criteria:
-```json
-{
-  "id": "e229c9b4-64df-419b-a01d-55734fa09ab4",
-  "source_id": "8bb38f82-a0ef-4f11-9277-3e4b786c527e",
-  "destination_id": "51a37c98-1e43-4ce4-8933-bf97cf339230",
-  "enabled": true,
-  "filters": {
-    "event_types": ["git.push", "release.published"]
-  }
-}
-```
-
-### Delivery Job
-```json
-{
-  "id": "7616110a-ffec-4581-9b16-43ad07271e11",
-  "event_id": "c1f7a0b3-5776-47b8-89c0-9d0a6c6c7e2b",
-  "destination_id": "51a37c98-1e43-4ce4-8933-bf97cf339230",
-  "status": "pending",
-  "attempts": 0,
-  "max_attempts": 3,
-  "next_attempt_at": "2026-10-15T12:00:00Z",
-  "last_error": null
-}
-```
-
----
-
-## 5. Idempotency Guarantees
-
-Idempotency is enforced at the database level:
-
-1. **Event Ingestion**:
-   ```sql
-   CONSTRAINT uq_events_source_external UNIQUE (source_id, external_event_id)
-   ```
-   If the same external event arrives multiple times, the database rejects the duplicate insert (`ON CONFLICT DO NOTHING`), returns the existing event, and skips route processing and duplicate job scheduling.
-
-2. **Delivery Job Enqueueing**:
-   ```sql
-   CONSTRAINT uq_delivery_jobs_event_dest UNIQUE (event_id, destination_id)
-   ```
-   Each destination is assigned exactly one delivery task per event. If Destination B fails while Destination A succeeds, retrying Destination B will never trigger a duplicate delivery to Target A.
-
-3. **Concurrency-Safe Job Claiming**:
-   ```sql
-   UPDATE delivery_jobs
-   SET status = 'processing', attempts = attempts + 1, updated_at = NOW()
-   WHERE id = (
-       SELECT id FROM delivery_jobs
-       WHERE status IN ('pending', 'failed') AND next_attempt_at <= NOW()
-       ORDER BY next_attempt_at ASC
-       FOR UPDATE SKIP LOCKED
-       LIMIT 1
-   ) RETURNING ...;
-   ```
-   Multiple workers running across threads or containers can never claim the same job simultaneously.
-
----
-
-## 6. Getting Started
-
-### Prerequisites
-- Docker & Docker Compose (or Go 1.22+ and PostgreSQL 14+)
-
-### Running with Docker Compose
-
-1. Clone or navigate to the repository:
-   ```bash
-   cd automation-engine
-   ```
-
-2. Copy environment configuration:
-   ```bash
-   cp .env.example .env
-   ```
-
-3. Start all services:
-   ```bash
-   docker compose up -d --build
-   ```
-
-4. Verify service health:
-   ```bash
-   curl http://localhost:8080/health
-   # {"status":"healthy"}
-
-   curl http://localhost:8080/ready
-   # {"registered_destinations":["mock","webhook","stdout"],"registered_sources":["mock","webhook"],"status":"ready"}
-   ```
-
----
-
-## 7. Configuration & Environment Variables
-
-| Variable | Description | Default |
-|---|---|---|
-| `DATABASE_URL` | PostgreSQL connection string | `postgres://postgres:postgres@localhost:5432/automation?sslmode=disable` |
-| `PORT` | REST API HTTP port | `8080` |
-| `WORKER_POLL_INTERVAL` | Polling frequency for pending delivery jobs | `1s` |
-| `WORKER_CONCURRENCY` | Number of concurrent worker goroutines | `4` |
-| `MAX_RETRIES` | Max attempts before marking job `dead_letter` | `3` |
-| `INITIAL_BACKOFF` | Starting backoff duration for retries | `2s` |
-| `MAX_BACKOFF` | Maximum capped backoff duration | `1m` |
-| `LOG_LEVEL` | Structured logging level (`debug`, `info`, `warn`, `error`) | `info` |
-| `ENVIRONMENT` | Environment name (`development`, `production`) | `development` |
-
----
-
-## 8. REST API Reference
-
-### Health
-- `GET /health` - Basic liveness probe.
-- `GET /ready` - Readiness probe returning registered adapter types.
-
-### Sources
-- `GET /sources` - List all configured sources.
-- `POST /sources` - Create a new source.
-  ```json
-  {
-    "name": "My Webhook",
-    "adapter_type": "webhook",
-    "config": {},
-    "enabled": true
-  }
-  ```
-- `GET /sources/{id}` - Get source details.
-- `PUT /sources/{id}` - Update source configuration or toggle enabled state.
-- `DELETE /sources/{id}` - Delete source and cascade routes.
-- `POST /sources/{id}/ingest` - Push raw data into the source pipeline (useful for webhooks).
-
-### Destinations
-- `GET /destinations` - List all configured destinations.
-- `POST /destinations` - Create a new destination.
-  ```json
-  {
-    "name": "Webhook Sink",
-    "adapter_type": "webhook",
-    "config": {
-      "target_url": "https://example.com/api/events",
-      "timeout_seconds": 5
-    },
-    "enabled": true
-  }
-  ```
-- `GET /destinations/{id}` - Get destination details.
-- `PUT /destinations/{id}` - Update destination configuration.
-- `DELETE /destinations/{id}` - Delete destination.
-
-### Routes
-- `GET /routes` - List all routes.
-- `POST /routes` - Create a route linking a source to a destination:
-  ```json
-  {
-    "source_id": "SOURCE_UUID",
-    "destination_id": "DEST_UUID",
-    "enabled": true,
-    "filters": {
-      "event_types": ["alert", "status.change"]
-    }
-  }
-  ```
-- `GET /routes/{id}` - Get route details.
-- `PUT /routes/{id}` - Update route bindings or filters.
-- `DELETE /routes/{id}` - Delete route.
-
-### Events
-- `GET /events?source_id=...&event_type=...&limit=50&offset=0` - List persisted events.
-- `GET /events/{id}` - Get event details.
-- `POST /events` - Ingest a generic event directly.
-
-### Deliveries
-- `GET /deliveries?event_id=...&destination_id=...&status=...` - List delivery jobs.
-- `GET /deliveries/{id}` - Get delivery job details, retry attempt count, and last error.
-- `POST /deliveries/{id}/retry` - Manually reset a failed or dead-letter job for immediate retry.
-
----
-
-## 9. End-to-End Walkthrough Example
-
-### 1. Create a Source
+### 1. Clone & Configure
 ```bash
-SOURCE_ID=$(curl -s -X POST http://localhost:8080/sources \
-  -H "Content-Type: application/json" \
-  -d '{"name":"System Alerts","adapter_type":"webhook","enabled":true}' | grep -o '"id":"[^"]*' | cut -d'"' -f4)
-echo "Created Source: $SOURCE_ID"
+git clone https://github.com/Samuel-0228/Damtie.git
+cd Damtie
+cp .env.example .env
 ```
 
-### 2. Create Two Destinations
-```bash
-# Destination 1: Stdout Logger
-DEST_LOGGER_ID=$(curl -s -X POST http://localhost:8080/destinations \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Stdout Logger","adapter_type":"stdout","enabled":true}' | grep -o '"id":"[^"]*' | cut -d'"' -f4)
-
-# Destination 2: Mock target
-DEST_MOCK_ID=$(curl -s -X POST http://localhost:8080/destinations \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Mock Target","adapter_type":"mock","enabled":true}' | grep -o '"id":"[^"]*' | cut -d'"' -f4)
+Edit `.env` and fill in your Bot Token:
+```env
+TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
+DATABASE_URL=postgres://postgres:postgres@postgres:5432/automation?sslmode=disable
 ```
 
-### 3. Bind Source to Destinations via Routes
+### 2. Launch Services
 ```bash
-curl -X POST http://localhost:8080/routes \
-  -H "Content-Type: application/json" \
-  -d "{\"source_id\":\"$SOURCE_ID\",\"destination_id\":\"$DEST_LOGGER_ID\",\"enabled\":true}"
-
-curl -X POST http://localhost:8080/routes \
-  -H "Content-Type: application/json" \
-  -d "{\"source_id\":\"$SOURCE_ID\",\"destination_id\":\"$DEST_MOCK_ID\",\"enabled\":true}"
+docker compose up -d
 ```
+This spins up:
+- PostgreSQL 16 (with automatic migrations applied on startup)
+- Damtie Engine & Telegram Listener (`http://localhost:8080`)
 
-### 4. Push an External Event
+### 3. Open the Management Dashboard
+Navigate to `http://localhost:8080/` in your browser to view the technical dashboard showing sources, destinations, active routes, and real-time delivery statistics.
+
+---
+
+## 5. Operator Management API
+
+Damtie provides a clean REST API for dynamic source, destination, and route configuration without restarting the service.
+
+### Sources (`/sources`)
+
+#### Add a Monitored Telegram Source
 ```bash
-curl -X POST http://localhost:8080/sources/$SOURCE_ID/ingest \
+curl -X POST http://localhost:8080/sources \
   -H "Content-Type: application/json" \
   -d '{
-    "id": "alert-9001",
-    "type": "server.cpu_high",
-    "cpu": 98.5,
-    "host": "prod-worker-01"
+    "name": "Alpha Channel",
+    "telegram_chat_id": "-100111222333"
   }'
 ```
 
-### 5. Verify Deliveries
+#### Check Bot Access to Source
 ```bash
-curl -s http://localhost:8080/deliveries | jq .
+curl http://localhost:8080/sources/<SOURCE_ID>/access
 ```
-Both destinations will receive independent delivery jobs and transition to `delivered`.
-
----
-
-## 10. Extending the Engine: Adding Adapters
-
-The engine uses a clean **Adapter Registry / Factory Pattern**. Adding new integrations requires zero conditional checks in the core engine.
-
-### How to Create a New Source Adapter
-
-Implement the `SourceAdapter` interface in `internal/adapters/sources/`:
-
-```go
-package sources
-
-import (
-    "context"
-    "encoding/json"
-    "automation-engine/internal/core/event"
-)
-
-type RSSSourceAdapter struct {
-    feedURL string
-}
-
-func (a *RSSSourceAdapter) Name() string { return "rss" }
-
-func (a *RSSSourceAdapter) Connect(ctx context.Context, config json.RawMessage) error {
-    var cfg struct { FeedURL string `json:"feed_url"` }
-    _ = json.Unmarshal(config, &cfg)
-    a.feedURL = cfg.FeedURL
-    return nil
-}
-
-func (a *RSSSourceAdapter) Health(ctx context.Context) error { return nil }
-
-func (a *RSSSourceAdapter) Poll(ctx context.Context) ([]RawEvent, error) {
-    // Fetch RSS feed items and return []RawEvent
-    return nil, nil
-}
-
-func (a *RSSSourceAdapter) Normalize(ctx context.Context, sourceID string, raw []byte) (*event.Event, error) {
-    // Parse RSS item and construct generic Event
-    return event.New(sourceID, "item-guid-123", "rss.article", raw, nil)
+Response:
+```json
+{
+  "accessible": true,
+  "title": "Alpha Channel",
+  "type": "channel",
+  "status": "administrator"
 }
 ```
 
-Register it in `cmd/server/main.go`:
-```go
-srcRegistry.Register("rss", func() sources.SourceAdapter {
-    return &RSSSourceAdapter{}
-})
-```
-
----
-
-### How to Create a New Destination Adapter
-
-Implement the `DestinationAdapter` interface in `internal/adapters/destinations/`:
-
-```go
-package destinations
-
-import (
-    "context"
-    "encoding/json"
-    "automation-engine/internal/core/event"
-)
-
-type DiscordDestinationAdapter struct {
-    webhookURL string
-}
-
-func (d *DiscordDestinationAdapter) Name() string { return "discord" }
-
-func (d *DiscordDestinationAdapter) Connect(ctx context.Context, config json.RawMessage) error {
-    var cfg struct { WebhookURL string `json:"webhook_url"` }
-    _ = json.Unmarshal(config, &cfg)
-    d.webhookURL = cfg.WebhookURL
-    return nil
-}
-
-func (d *DiscordDestinationAdapter) Health(ctx context.Context) error { return nil }
-
-func (d *DiscordDestinationAdapter) Deliver(ctx context.Context, ev *event.Event) error {
-    // Translate generic Event to Discord webhook JSON format and execute HTTP POST
-    return nil
-}
-```
-
-Register it in `cmd/server/main.go`:
-```go
-destRegistry.Register("discord", func() destinations.DestinationAdapter {
-    return &DiscordDestinationAdapter{}
-})
-```
-
----
-
-## 11. Example: Future Telegram Integration
-
-When adding Telegram in the future, the core engine remains untouched. Telegram will simply exist as an adapter:
-
-```text
-┌─────────────────┐
-│ TelegramSource  │ (Receives Telegram Update via Webhook / Long-polling)
-└────────┬────────┘
-         │ Normalize(Update) -> Generic Event:
-         │   ExternalEventID: Update.UpdateID
-         │   EventType: "telegram.message"
-         │   Payload: { "chat_id": 123, "text": "Hello", "media": ... }
-         ▼
-┌─────────────────┐
-│   Core Engine   │ (Stores event, resolves routes, creates delivery jobs)
-└────────┬────────┘
-         │ Deliver(Generic Event)
-         ▼
-┌─────────────────────────┐
-│   TelegramDestination   │ (Parses generic event payload, invokes SendMessage API)
-└─────────────────────────┘
-```
-
-Secrets (bot tokens) can either be referenced via environment variable mappings (e.g., `{"token_env": "TELEGRAM_BOT_TOKEN"}`) or passed via adapter configuration.
-
----
-
-## 12. Testing
-
-The codebase includes an extensive automated test suite covering all core requirements:
-
-1. **Event normalization**
-2. **Event idempotency** (duplicate events ignored without error)
-3. **Route resolution** (active vs inactive routes, filter evaluation)
-4. **Delivery creation** (pending jobs enqueued for matched routes)
-5. **Successful delivery** (worker claims job, updates status to delivered)
-6. **Failed delivery** (worker records failure, schedules retry)
-7. **Retry behavior** (exponential backoff, dead_letter transition after max retries)
-8. **Multiple destinations** (one event dispatched to multiple targets)
-9. **Destination isolation** (failure of one target does not block or affect another)
-10. **Duplicate protection** (duplicate events do not generate duplicate deliveries)
-11. **REST API handlers** (HTTP status codes, payload formatting, error handling)
-
-### Run Tests Locally
+#### List Sources
 ```bash
+curl http://localhost:8080/sources
+```
+
+#### Enable / Disable Source
+```bash
+curl -X PATCH http://localhost:8080/sources/<SOURCE_ID> \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": false}'
+```
+
+---
+
+### Destinations (`/destinations`)
+
+#### Register a Mirror Destination
+```bash
+curl -X POST http://localhost:8080/destinations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Backup Archive",
+    "telegram_chat_id": "-100999888777"
+  }'
+```
+
+#### Check Bot Access to Destination
+```bash
+curl http://localhost:8080/destinations/<DESTINATION_ID>/access
+```
+
+---
+
+### Routes (`/routes`)
+
+Create a routing relationship between a monitored source and a destination.
+
+#### 1 Source → 1 Destination
+```bash
+curl -X POST http://localhost:8080/routes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_id": "<SOURCE_A_ID>",
+    "destination_id": "<DEST_X_ID>",
+    "enabled": true
+  }'
+```
+
+#### 1 Source → Multiple Destinations (Fan-out)
+Simply create multiple routes with the same `source_id`:
+```bash
+# Route to Backup A
+curl -X POST http://localhost:8080/routes \
+  -H "Content-Type: application/json" \
+  -d '{"source_id": "<SOURCE_A_ID>", "destination_id": "<BACKUP_A_ID>", "enabled": true}'
+
+# Route to Public Mirror
+curl -X POST http://localhost:8080/routes \
+  -H "Content-Type: application/json" \
+  -d '{"source_id": "<SOURCE_A_ID>", "destination_id": "<PUBLIC_MIRROR_ID>", "enabled": true}'
+```
+When an event arrives at Source A, it is persisted once, and separate delivery jobs are enqueued for each configured destination.
+
+---
+
+### Deliveries & Stats (`/deliveries`)
+
+#### View Delivery Statistics
+```bash
+curl http://localhost:8080/deliveries/stats
+```
+Response:
+```json
+{
+  "pending": 0,
+  "processing": 0,
+  "delivered": 1420,
+  "failed": 2,
+  "dead_letter": 0,
+  "total": 1422
+}
+```
+
+#### List Failed Deliveries
+```bash
+curl http://localhost:8080/deliveries/failed
+```
+
+#### Retry a Delivery Job
+```bash
+curl -X POST http://localhost:8080/deliveries/<JOB_ID>/retry
+```
+
+---
+
+### Historical Synchronization (`POST /sources/{id}/sync`)
+
+The default behavior is **only new posts** from the time a channel is registered. To backfill specific historical messages:
+```bash
+curl -X POST http://localhost:8080/sources/<SOURCE_ID>/sync \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message_ids": [1001, 1002, 1003, 1004]
+  }'
+```
+
+---
+
+## 6. Supported Content & Media Types
+
+Damtie mirrors every Telegram message type natively supported by Bot API `copyMessage` and `copyMessages`:
+
+- **Text & Links**: Rich markdown, HTML entities, custom emojis, links, spoilers.
+- **Photos**: Full resolution photos with captions.
+- **Videos & Animations**: MP4 videos, GIFs, animations with captions.
+- **Documents & Files**: PDFs, archives, attachments with file names and captions.
+- **Audio & Voice**: MP3/M4A music, OGG voice notes with durations.
+- **Stickers & Video Notes**: Static, animated, and video stickers, round video notes.
+- **Media Groups (Albums)**: Multi-photo/video albums are aggregated by `media_group_id` and replicated as a unified Telegram album.
+
+---
+
+## 7. Reliability, Rate Limiting & Recovery
+
+1. **Restart Recovery**: The listener saves the confirmed Telegram `last_update_id` in PostgreSQL (`telegram_update_state`). On process restart, it resumes with `offset = last_update_id + 1`, preventing missed or duplicated posts.
+2. **Delivery Idempotency**: Each delivery records the resulting Telegram destination message ID in PostgreSQL (`result`). Retrying a completed or in-doubt job recognizes the recorded result and avoids double-posting.
+3. **Telegram Rate Limiter**: The built-in rate limiter enforces global limits (default 25 requests/sec) and per-chat limits (default 1 request/sec per target chat) to comply with Telegram API constraints.
+4. **Flood Control (429 Retry-After)**: Telegram flood control responses (`retry_after`) are automatically intercepted, delaying retries by the requested duration.
+5. **Worker Pool Concurrency**: Background workers fetch jobs using `FOR UPDATE SKIP LOCKED`, preventing contention across multiple engine replicas.
+
+---
+
+## 8. Configuration Reference
+
+All settings are configured via environment variables or `.env`:
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | `postgres://...` | PostgreSQL connection string |
+| `PORT` | `8080` | REST API HTTP port |
+| `TELEGRAM_BOT_TOKEN` | *required* | Telegram Bot API token from @BotFather |
+| `TELEGRAM_ENABLED` | `true` | Enable or disable the Telegram listener |
+| `TELEGRAM_APIBaseURL` | `""` | Optional custom Bot API endpoint (for local Bot API servers) |
+| `TELEGRAM_POLL_TIMEOUT` | `30` | Long-polling timeout in seconds for `getUpdates` |
+| `TELEGRAM_MEDIA_GROUP_WINDOW` | `1s` | Album buffering window before flushing media groups |
+| `TELEGRAM_RATE_GLOBAL` | `25` | Maximum Telegram requests per second across all chats |
+| `TELEGRAM_RATE_PER_CHAT` | `1` | Maximum Telegram requests per second targeting a single chat |
+| `WORKER_POLL_INTERVAL` | `1s` | Interval for worker job polling |
+| `WORKER_CONCURRENCY` | `4` | Number of concurrent delivery workers |
+| `MAX_RETRIES` | `3` | Max retry attempts before moving a job to `dead_letter` |
+| `INITIAL_BACKOFF` | `2s` | Initial retry backoff delay |
+| `MAX_BACKOFF` | `1m` | Cap on exponential backoff delay |
+| `LOG_LEVEL` | `info` | Logging verbosity (`debug`, `info`, `warn`, `error`) |
+
+---
+
+## 9. Testing
+
+Damtie includes a comprehensive test suite covering the entire pipeline:
+
+```bash
+# Run unit and integration tests
 go test -v ./...
-```
-Output:
-```text
-=== RUN   TestEventNormalization
---- PASS: TestEventNormalization (0.00s)
-=== RUN   TestEventIdempotency
---- PASS: TestEventIdempotency (0.00s)
-=== RUN   TestRouteResolution
---- PASS: TestRouteResolution (0.00s)
-=== RUN   TestDeliveryCreation
---- PASS: TestDeliveryCreation (0.00s)
-=== RUN   TestSuccessfulDelivery
---- PASS: TestSuccessfulDelivery (0.00s)
-=== RUN   TestFailedDelivery
---- PASS: TestFailedDelivery (0.00s)
-=== RUN   TestRetryBehaviorAndDeadLetter
---- PASS: TestRetryBehaviorAndDeadLetter (0.00s)
-=== RUN   TestMultipleDestinations
---- PASS: TestMultipleDestinations (0.00s)
-=== RUN   TestDestinationIsolation
---- PASS: TestDestinationIsolation (0.00s)
-=== RUN   TestDuplicateEventsDoNotCreateDuplicateDeliveries
---- PASS: TestDuplicateEventsDoNotCreateDuplicateDeliveries (0.00s)
-=== RUN   TestAPIEndpoints
---- PASS: TestAPIEndpoints (0.01s)
-PASS
-ok      automation-engine/tests 0.012s
+
+# Run tests with the Go race detector
+go test -race ./...
 ```
 
----
-
-## 13. License
-
-MIT
-
+The test suite validates:
+- **Multi-source routing**: Verifies Source A never leaks into routes for Source B or C.
+- **Fan-out**: Verifies 1 source delivering to N destinations enqueues 1 event and N independent delivery jobs.
+- **Source Deduplication**: Verifies duplicate updates produce exactly 1 event.
+- **Delivery Idempotency**: Verifies retrying an already completed job does not re-post to Telegram.
+- **Album Buffering**: Verifies multiple updates with matching `media_group_id` are combined and delivered via `CopyMessages`.
+- **Restart Recovery**: Simulates crashes and restarts, confirming resume from offset without duplicates.
+- **Rate Limiting & Backoff**: Verifies flood control compliance and exponential backoff.
+# tg-channel-backup
