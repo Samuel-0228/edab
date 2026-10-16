@@ -143,6 +143,10 @@ automation-engine/
 │   ├── engine_test.go           # 10 core requirement test suite
 │   └── api_test.go              # REST API integration test suite
 │
+├── website/                     # Developer landing page (React, Vite, Tailwind CSS)
+│   ├── src/                     # Monochrome UI components & interactive adapter explorer
+│   └── dist/                    # Static production build
+│
 ├── docker-compose.yml           # Multi-container orchestration (PostgreSQL + Engine)
 ├── Dockerfile                   # Multi-stage lightweight Alpine container
 ├── .env.example                 # Configuration template
@@ -594,6 +598,38 @@ ok      automation-engine/tests 0.012s
 
 ---
 
-## 13. License
+## 13. Developer Website & Landing Page
+
+The repository includes a minimalist, developer-focused public landing page located under `website/`.
+
+### Design System & Principles
+- **Monochrome Aesthetic**: Built exclusively with black, white, and neutral greys.
+- **Developer-Centric**: Clear typography, high-contrast monospace code blocks, architectural flow diagrams, and interactive interface explorer.
+- **Zero Distractions**: No gradients, no glassmorphism, no bright accent colors, no AI sparkles.
+- **Full Responsiveness**: Optimized across mobile, tablet, and widescreen monitors.
+
+### Run Website Locally
+
+```bash
+cd website
+npm install
+npm run dev
+```
+
+Visit `http://localhost:5173` to explore the interactive landing page.
+
+### Build Production Bundle
+
+```bash
+npm run build
+npm run preview
+```
+
+The production-optimized static assets are output to `website/dist/`.
+
+---
+
+## 14. License
 
 MIT
+
