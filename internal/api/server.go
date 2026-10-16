@@ -25,7 +25,10 @@ func NewServer(port string, handlers *Handlers) *Server {
 	mux.HandleFunc("POST /sources", handlers.CreateSource)
 	mux.HandleFunc("GET /sources/{id}", handlers.GetSource)
 	mux.HandleFunc("PUT /sources/{id}", handlers.UpdateSource)
+	mux.HandleFunc("PATCH /sources/{id}", handlers.PatchSource)
 	mux.HandleFunc("DELETE /sources/{id}", handlers.DeleteSource)
+	mux.HandleFunc("GET /sources/{id}/access", handlers.CheckSourceAccess)
+	mux.HandleFunc("POST /sources/{id}/sync", handlers.SyncSource)
 	mux.HandleFunc("POST /sources/{id}/ingest", handlers.IngestRawSourceEvent)
 
 	// Destinations endpoints
@@ -33,13 +36,16 @@ func NewServer(port string, handlers *Handlers) *Server {
 	mux.HandleFunc("POST /destinations", handlers.CreateDestination)
 	mux.HandleFunc("GET /destinations/{id}", handlers.GetDestination)
 	mux.HandleFunc("PUT /destinations/{id}", handlers.UpdateDestination)
+	mux.HandleFunc("PATCH /destinations/{id}", handlers.PatchDestination)
 	mux.HandleFunc("DELETE /destinations/{id}", handlers.DeleteDestination)
+	mux.HandleFunc("GET /destinations/{id}/access", handlers.CheckDestinationAccess)
 
 	// Routes endpoints
 	mux.HandleFunc("GET /routes", handlers.ListRoutes)
 	mux.HandleFunc("POST /routes", handlers.CreateRoute)
 	mux.HandleFunc("GET /routes/{id}", handlers.GetRoute)
 	mux.HandleFunc("PUT /routes/{id}", handlers.UpdateRoute)
+	mux.HandleFunc("PATCH /routes/{id}", handlers.PatchRoute)
 	mux.HandleFunc("DELETE /routes/{id}", handlers.DeleteRoute)
 
 	// Events endpoints
@@ -49,8 +55,14 @@ func NewServer(port string, handlers *Handlers) *Server {
 
 	// Deliveries endpoints
 	mux.HandleFunc("GET /deliveries", handlers.ListDeliveries)
+	mux.HandleFunc("GET /deliveries/failed", handlers.ListFailedDeliveries)
+	mux.HandleFunc("GET /deliveries/stats", handlers.DeliveryStats)
 	mux.HandleFunc("GET /deliveries/{id}", handlers.GetDelivery)
 	mux.HandleFunc("POST /deliveries/{id}/retry", handlers.RetryDelivery)
+
+	// Management Dashboard UI
+	mux.HandleFunc("GET /{$}", handlers.DashboardUI)
+	mux.HandleFunc("GET /ui", handlers.DashboardUI)
 
 	loggedHandler := loggingMiddleware(mux)
 

@@ -35,6 +35,12 @@ services:
       MAX_BACKOFF: "1m"
       LOG_LEVEL: "info"
       ENVIRONMENT: "production"
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-true}
+      TELEGRAM_POLL_TIMEOUT: ${TELEGRAM_POLL_TIMEOUT:-30}
+      TELEGRAM_MEDIA_GROUP_WINDOW: ${TELEGRAM_MEDIA_GROUP_WINDOW:-1s}
+      TELEGRAM_RATE_GLOBAL: ${TELEGRAM_RATE_GLOBAL:-25}
+      TELEGRAM_RATE_PER_CHAT: ${TELEGRAM_RATE_PER_CHAT:-1}
     depends_on:
       postgres:
         condition: service_healthy

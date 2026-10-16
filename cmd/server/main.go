@@ -18,6 +18,7 @@ import (
 	"automation-engine/internal/core/routing"
 	"automation-engine/internal/core/workflow"
 	"automation-engine/internal/database"
+	"automation-engine/internal/telegram"
 )
 
 func main() {
@@ -60,11 +61,14 @@ func main() {
 	srcRegistry := sources.NewRegistry()
 	srcRegistry.Register("mock", func() sources.SourceAdapter { return sources.NewMockSourceAdapter() })
 	srcRegistry.Register("webhook", func() sources.SourceAdapter { return sources.NewWebhookSourceAdapter() })
+	srcRegistry.Register("telegram", func() sources.SourceAdapter { return sources.NewTelegramSourceAdapter() })
+	srcRegistry.Register("telegram_public", func() sources.SourceAdapter { return sources.NewTelegramPublicSourceAdapter() })
 
 	destRegistry := destinations.NewRegistry()
 	destRegistry.Register("mock", func() destinations.DestinationAdapter { return destinations.NewMockDestinationAdapter() })
 	destRegistry.Register("webhook", func() destinations.DestinationAdapter { return destinations.NewWebhookDestinationAdapter() })
 	destRegistry.Register("stdout", func() destinations.DestinationAdapter { return destinations.NewStdoutDestinationAdapter() })
+	destRegistry.Register("telegram", func() destinations.DestinationAdapter { return destinations.NewTelegramDestinationAdapter() })
 
 	// 5. Initialize Engine Components
 	routingEngine := routing.NewRoutingEngine(routeStore)
@@ -91,11 +95,64 @@ func main() {
 		},
 	)
 
-	// 6. Start Worker in Background
+	// 6. Start Worker and Telegram Listener in Background
 	rootCtx, stopRoot := context.WithCancel(context.Background())
 	defer stopRoot()
 
 	worker.Start(rootCtx)
+
+	var teleAPI telegram.API
+	var teleListener *telegram.Listener
+	var publicPoller *telegram.PublicPoller
+
+	teleStateStore := telegram.NewPostgresStateStore(db)
+
+	// Public channel poller: scrapes t.me/s/<channel> without needing bot in source channel
+	publicResolver := sources.NewPublicSourceResolver(srcStore)
+	publicPoller = telegram.NewPublicPoller(
+		telegram.NewPublicScraper(),
+		teleStateStore,
+		telegram.IngesterFunc(func(ctx context.Context, sourceID string, rawData []byte) error {
+			_, err := pipeline.IngestRaw(ctx, sourceID, rawData)
+			return err
+		}),
+		publicResolver,
+		cfg.TelegramPublicPollInterval,
+	)
+	publicPoller.Start(rootCtx)
+	slog.Info("telegram public channel poller started", slog.Duration("interval", cfg.TelegramPublicPollInterval))
+
+	if cfg.TelegramEnabled && cfg.TelegramBotToken != "" {
+		teleClient, err := telegram.NewClient(cfg.TelegramBotToken, telegram.ClientOptions{
+			APIBaseURL:  cfg.TelegramAPIBaseURL,
+			GlobalRate:  cfg.TelegramRateGlobal,
+			PerChatRate: cfg.TelegramRatePerChat,
+		})
+		if err != nil {
+			slog.Error("failed to initialize telegram client", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		teleAPI = teleClient
+
+		sourceResolver := sources.NewSourceResolver(srcStore)
+		teleListener = telegram.NewListener(
+			teleClient,
+			telegram.IngesterFunc(func(ctx context.Context, sourceID string, rawData []byte) error {
+				_, err := pipeline.IngestRaw(ctx, sourceID, rawData)
+				return err
+			}),
+			sourceResolver,
+			teleStateStore,
+			telegram.ListenerOptions{
+				PollTimeout:    cfg.TelegramPollTimeout,
+				MediaGroupWait: cfg.TelegramMediaGroupWait,
+			},
+		)
+		teleListener.Start(rootCtx)
+		slog.Info("telegram listener started")
+	} else {
+		slog.Info("telegram listener is inactive (TELEGRAM_BOT_TOKEN not provided or TELEGRAM_ENABLED=false)")
+	}
 
 	// 7. Start REST API Server
 	handlers := api.NewHandlers(
@@ -108,6 +165,9 @@ func main() {
 		srcRegistry,
 		destRegistry,
 	)
+	if teleAPI != nil {
+		handlers.SetTelegramAPI(teleAPI)
+	}
 	server := api.NewServer(cfg.ServerPort, handlers)
 
 	go func() {
@@ -137,6 +197,12 @@ func main() {
 	}
 
 	stopRoot()
+	if publicPoller != nil {
+		publicPoller.Stop()
+	}
+	if teleListener != nil {
+		teleListener.Stop()
+	}
 	worker.Stop()
 
 	slog.Info("automation engine stopped cleanly")

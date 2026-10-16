@@ -13,6 +13,7 @@ import (
 	"automation-engine/internal/core/delivery"
 	"automation-engine/internal/core/event"
 	"automation-engine/internal/core/routing"
+	"automation-engine/internal/telegram"
 )
 
 func setupAPITestServer() (*httptest.Server, *MemoryEventStore, *MemorySourceStore, *MemoryDestinationStore, *MemoryRouteStore, *MemoryDeliveryStore) {
@@ -129,5 +130,122 @@ func TestAPIEndpoints(t *testing.T) {
 	resp, err = client.Post(ts.URL+"/deliveries/"+deliveries[0].ID+"/retry", "application/json", nil)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("POST /deliveries/{id}/retry failed: status=%d", resp.StatusCode)
+	}
+}
+
+func TestAPITelegramAndManagementEndpoints(t *testing.T) {
+	evStore, srcStore, destStore, routeStore, jobStore, srcReg, destReg, _, pipe := setupTestEnvironment()
+	mockAPI := telegram.NewMockAPI()
+
+	handlers := api.NewHandlers(srcStore, destStore, routeStore, evStore, jobStore, pipe, srcReg, destReg)
+	handlers.SetTelegramAPI(mockAPI)
+	server := api.NewServer("0", handlers)
+	ts := httptest.NewServer(server.Handler())
+	defer ts.Close()
+
+	client := ts.Client()
+
+	// 1. Create Telegram Source using convenience format
+	srcPayload := []byte(`{"name": "Channel Alpha", "telegram_chat_id": "-100123456"}`)
+	resp, err := client.Post(ts.URL+"/sources", "application/json", bytes.NewReader(srcPayload))
+	if err != nil || resp.StatusCode != http.StatusCreated {
+		t.Fatalf("convenience POST /sources failed: status=%d err=%v", resp.StatusCode, err)
+	}
+	var src sources.Source
+	_ = json.NewDecoder(resp.Body).Decode(&src)
+	if src.AdapterType != "telegram" {
+		t.Fatalf("expected adapter_type 'telegram', got %s", src.AdapterType)
+	}
+
+	// 2. Check Source Access (GET /sources/{id}/access)
+	resp, err = client.Get(ts.URL + "/sources/" + src.ID + "/access")
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /sources/{id}/access failed: status=%d err=%v", resp.StatusCode, err)
+	}
+	var accessInfo telegram.AccessInfo
+	_ = json.NewDecoder(resp.Body).Decode(&accessInfo)
+	if !accessInfo.Accessible {
+		t.Fatalf("expected accessible=true, got %+v", accessInfo)
+	}
+
+	// 3. PATCH /sources/{id} to toggle enabled
+	patchSrc := []byte(`{"enabled": false}`)
+	req, _ := http.NewRequest(http.MethodPatch, ts.URL+"/sources/"+src.ID, bytes.NewReader(patchSrc))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("PATCH /sources/{id} failed: status=%d err=%v", resp.StatusCode, err)
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&src)
+	if src.Enabled {
+		t.Fatal("expected source to be disabled after PATCH")
+	}
+
+	// 4. Create Telegram Destination using convenience format
+	destPayload := []byte(`{"name": "Backup Target", "telegram_chat_id": "-100987654"}`)
+	resp, err = client.Post(ts.URL+"/destinations", "application/json", bytes.NewReader(destPayload))
+	if err != nil || resp.StatusCode != http.StatusCreated {
+		t.Fatalf("convenience POST /destinations failed: status=%d err=%v", resp.StatusCode, err)
+	}
+	var dest destinations.Destination
+	_ = json.NewDecoder(resp.Body).Decode(&dest)
+	if dest.AdapterType != "telegram" {
+		t.Fatalf("expected adapter_type 'telegram', got %s", dest.AdapterType)
+	}
+
+	// 5. Check Destination Access (GET /destinations/{id}/access)
+	resp, err = client.Get(ts.URL + "/destinations/" + dest.ID + "/access")
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /destinations/{id}/access failed: status=%d err=%v", resp.StatusCode, err)
+	}
+
+	// 6. Create Route
+	routeBody, _ := json.Marshal(map[string]any{
+		"source_id":      src.ID,
+		"destination_id": dest.ID,
+		"enabled":        true,
+	})
+	resp, err = client.Post(ts.URL+"/routes", "application/json", bytes.NewReader(routeBody))
+	if err != nil || resp.StatusCode != http.StatusCreated {
+		t.Fatalf("POST /routes failed: status=%d", resp.StatusCode)
+	}
+	var route routing.Route
+	_ = json.NewDecoder(resp.Body).Decode(&route)
+
+	// 7. PATCH /routes/{id} to disable
+	patchRoute := []byte(`{"enabled": false}`)
+	req, _ = http.NewRequest(http.MethodPatch, ts.URL+"/routes/"+route.ID, bytes.NewReader(patchRoute))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("PATCH /routes/{id} failed: status=%d", resp.StatusCode)
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&route)
+	if route.Enabled {
+		t.Fatal("expected route to be disabled after PATCH")
+	}
+
+	// 8. Delivery Stats (GET /deliveries/stats)
+	resp, err = client.Get(ts.URL + "/deliveries/stats")
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /deliveries/stats failed: status=%d", resp.StatusCode)
+	}
+	var stats delivery.Stats
+	_ = json.NewDecoder(resp.Body).Decode(&stats)
+
+	// 9. Failed Deliveries (GET /deliveries/failed)
+	resp, err = client.Get(ts.URL + "/deliveries/failed")
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /deliveries/failed failed: status=%d", resp.StatusCode)
+	}
+
+	// 10. Dashboard UI (GET / and GET /ui)
+	resp, err = client.Get(ts.URL + "/")
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET / failed: status=%d", resp.StatusCode)
+	}
+	resp, err = client.Get(ts.URL + "/ui")
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /ui failed: status=%d", resp.StatusCode)
 	}
 }

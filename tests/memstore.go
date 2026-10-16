@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"time"
 
@@ -400,6 +401,10 @@ func (m *MemoryDeliveryStore) ClaimNextJob(ctx context.Context) (*delivery.Deliv
 }
 
 func (m *MemoryDeliveryStore) MarkDelivered(ctx context.Context, id string) error {
+	return m.MarkDeliveredWithResult(ctx, id, nil)
+}
+
+func (m *MemoryDeliveryStore) MarkDeliveredWithResult(ctx context.Context, id string, result json.RawMessage) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	j, ok := m.jobs[id]
@@ -407,8 +412,33 @@ func (m *MemoryDeliveryStore) MarkDelivered(ctx context.Context, id string) erro
 		return delivery.ErrJobNotFound
 	}
 	j.Status = delivery.StatusDelivered
-	j.UpdatedAt = time.Now().UTC()
+	j.Result = result
+	now := time.Now().UTC()
+	j.DeliveredAt = &now
+	j.UpdatedAt = now
 	return nil
+}
+
+func (m *MemoryDeliveryStore) Stats(ctx context.Context) (delivery.Stats, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var s delivery.Stats
+	for _, j := range m.jobs {
+		switch j.Status {
+		case delivery.StatusPending:
+			s.Pending++
+		case delivery.StatusProcessing:
+			s.Processing++
+		case delivery.StatusDelivered:
+			s.Delivered++
+		case delivery.StatusFailed:
+			s.Failed++
+		case delivery.StatusDeadLetter:
+			s.DeadLetter++
+		}
+		s.Total++
+	}
+	return s, nil
 }
 
 func (m *MemoryDeliveryStore) MarkFailed(ctx context.Context, id string, errStr string, nextAttempt time.Time) error {
