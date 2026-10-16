@@ -108,6 +108,12 @@ func (m *mockDeliveryStore) ClaimNextJob(ctx context.Context) (*delivery.Deliver
 func (m *mockDeliveryStore) MarkDelivered(ctx context.Context, id string) error {
 	return nil
 }
+func (m *mockDeliveryStore) MarkDeliveredWithResult(ctx context.Context, id string, result json.RawMessage) error {
+	return nil
+}
+func (m *mockDeliveryStore) Stats(ctx context.Context) (delivery.Stats, error) {
+	return delivery.Stats{}, nil
+}
 func (m *mockDeliveryStore) MarkFailed(ctx context.Context, id string, errStr string, nextAttempt time.Time) error {
 	return nil
 }

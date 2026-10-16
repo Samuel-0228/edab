@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
@@ -171,18 +172,40 @@ func (w *Worker) processNextJob(ctx context.Context, workerID int) (bool, error)
 	}
 
 	// Deliver event
-	if err := adapter.Deliver(ctx, ev); err != nil {
-		w.handleDeliveryFailure(ctx, job, err.Error())
+	var result json.RawMessage
+	var deliverErr error
+
+	if len(job.Result) > 0 {
+		slog.Info("delivery job already has destination result, skipping delivery call",
+			slog.String("job_id", job.ID),
+			slog.String("event_id", job.EventID),
+			slog.String("destination_id", job.DestinationID),
+		)
+		result = job.Result
+	} else if reporter, ok := adapter.(destinations.ResultReporter); ok {
+		result, deliverErr = reporter.DeliverWithResult(ctx, ev)
+	} else {
+		deliverErr = adapter.Deliver(ctx, ev)
+	}
+
+	if deliverErr != nil {
+		w.handleDeliveryFailure(ctx, job, deliverErr.Error())
 		return true, nil
 	}
 
 	// Delivery succeeded
-	if err := w.jobStore.MarkDelivered(ctx, job.ID); err != nil {
+	var markErr error
+	if len(result) > 0 {
+		markErr = w.jobStore.MarkDeliveredWithResult(ctx, job.ID, result)
+	} else {
+		markErr = w.jobStore.MarkDelivered(ctx, job.ID)
+	}
+	if markErr != nil {
 		slog.Error("failed to mark delivery job as delivered",
 			slog.String("job_id", job.ID),
-			slog.String("error", err.Error()),
+			slog.String("error", markErr.Error()),
 		)
-		return true, err
+		return true, markErr
 	}
 
 	slog.Info("delivery succeeded",

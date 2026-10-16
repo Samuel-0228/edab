@@ -47,7 +47,7 @@ func TestWorkerCalculateBackoff(t *testing.T) {
 		{attempt: 2, expected: 200 * time.Millisecond},
 		{attempt: 3, expected: 400 * time.Millisecond},
 		{attempt: 4, expected: 800 * time.Millisecond},
-		{attempt: 5, expected: 1000 * time.Millisecond}, // Capped at MaxBackoff
+		{attempt: 5, expected: 1000 * time.Millisecond},  // Capped at MaxBackoff
 		{attempt: 10, expected: 1000 * time.Millisecond}, // Capped at MaxBackoff
 	}
 

@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS delivery_jobs (
     max_attempts INT NOT NULL DEFAULT 3,
     next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_error TEXT,
+    result JSONB,
+    delivered_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_delivery_jobs_event_dest UNIQUE (event_id, destination_id)
@@ -65,3 +67,18 @@ CREATE TABLE IF NOT EXISTS delivery_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_delivery_jobs_status_next_attempt ON delivery_jobs(status, next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_delivery_jobs_event_id ON delivery_jobs(event_id);
+
+-- Telegram Update State: tracks listener offset across restarts
+CREATE TABLE IF NOT EXISTS telegram_update_state (
+    id INT PRIMARY KEY,
+    last_update_id BIGINT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Public Channel State: tracks last scraped message id per public channel
+CREATE TABLE IF NOT EXISTS public_channel_state (
+    channel VARCHAR(255) PRIMARY KEY,
+    last_message_id INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+

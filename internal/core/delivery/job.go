@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -25,16 +26,28 @@ const (
 
 // DeliveryJob represents an individual delivery task targeting one destination for an event.
 type DeliveryJob struct {
-	ID            string    `json:"id"`
-	EventID       string    `json:"event_id"`
-	DestinationID string    `json:"destination_id"`
-	Status        Status    `json:"status"`
-	Attempts      int       `json:"attempts"`
-	MaxAttempts   int       `json:"max_attempts"`
-	NextAttemptAt time.Time `json:"next_attempt_at"`
-	LastError     *string   `json:"last_error,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID            string          `json:"id"`
+	EventID       string          `json:"event_id"`
+	DestinationID string          `json:"destination_id"`
+	Status        Status          `json:"status"`
+	Attempts      int             `json:"attempts"`
+	MaxAttempts   int             `json:"max_attempts"`
+	NextAttemptAt time.Time       `json:"next_attempt_at"`
+	LastError     *string         `json:"last_error,omitempty"`
+	Result        json.RawMessage `json:"result,omitempty"`
+	DeliveredAt   *time.Time      `json:"delivered_at,omitempty"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+}
+
+// Stats summarizes delivery job counts by status.
+type Stats struct {
+	Pending    int `json:"pending"`
+	Processing int `json:"processing"`
+	Delivered  int `json:"delivered"`
+	Failed     int `json:"failed"`
+	DeadLetter int `json:"dead_letter"`
+	Total      int `json:"total"`
 }
 
 // NewJob creates a new pending DeliveryJob.
@@ -73,7 +86,9 @@ type Store interface {
 	List(ctx context.Context, filter ListFilter) ([]*DeliveryJob, error)
 	ClaimNextJob(ctx context.Context) (*DeliveryJob, error)
 	MarkDelivered(ctx context.Context, id string) error
+	MarkDeliveredWithResult(ctx context.Context, id string, result json.RawMessage) error
 	MarkFailed(ctx context.Context, id string, errStr string, nextAttempt time.Time) error
 	MarkDeadLetter(ctx context.Context, id string, errStr string) error
 	ResetForRetry(ctx context.Context, id string) (*DeliveryJob, error)
+	Stats(ctx context.Context) (Stats, error)
 }

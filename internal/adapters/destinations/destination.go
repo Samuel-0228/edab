@@ -37,6 +37,14 @@ type DestinationAdapter interface {
 	Deliver(ctx context.Context, ev *event.Event) error
 }
 
+// ResultReporter is an optional interface for destination adapters that can
+// report a machine-readable delivery result (for example the id of the created
+// Telegram message). Persisting this result lets the delivery worker retry a
+// job idempotently.
+type ResultReporter interface {
+	DeliverWithResult(ctx context.Context, ev *event.Event) (json.RawMessage, error)
+}
+
 // Factory creates a new instance of a DestinationAdapter.
 type Factory func() DestinationAdapter
 
