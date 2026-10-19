@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,6 +35,9 @@ func NewWebhookDestinationAdapter() *WebhookDestinationAdapter {
 	return &WebhookDestinationAdapter{
 		client: &http.Client{
 			Timeout: 10 * time.Second,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return fmt.Errorf("redirects are not allowed for webhook destinations")
+			},
 		},
 	}
 }
@@ -53,16 +59,54 @@ func (w *WebhookDestinationAdapter) Connect(ctx context.Context, config json.Raw
 		if err := json.Unmarshal(config, &cfg); err != nil {
 			return fmt.Errorf("invalid webhook destination config: %w", err)
 		}
+		if err := validateTargetURL(ctx, cfg.TargetURL); err != nil {
+			return err
+		}
 		w.config.TargetURL = cfg.TargetURL
 		w.config.Headers = cfg.Headers
 		if cfg.TimeoutSeconds > 0 {
 			w.config.Timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
 			w.client.Timeout = w.config.Timeout
 		}
+
 	}
 
 	w.connected = true
 	return nil
+}
+
+func validateTargetURL(ctx context.Context, rawURL string) error {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return fmt.Errorf("invalid webhook target URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("webhook target URL must use http or https")
+	}
+	if parsed.User != nil || parsed.Hostname() == "" {
+		return fmt.Errorf("webhook target URL must not contain credentials")
+	}
+
+	host := strings.ToLower(parsed.Hostname())
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") || host == "metadata.google.internal" {
+		return fmt.Errorf("webhook target URL points to a blocked host")
+	}
+
+	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+	if err != nil {
+		return fmt.Errorf("failed to resolve webhook target host: %w", err)
+	}
+	for _, ip := range ips {
+		if isBlockedIP(ip) {
+			return fmt.Errorf("webhook target URL points to a private or local address")
+		}
+	}
+	return nil
+}
+
+func isBlockedIP(ip net.IP) bool {
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+		ip.IsUnspecified() || ip.IsMulticast()
 }
 
 func (w *WebhookDestinationAdapter) Health(ctx context.Context) error {

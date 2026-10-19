@@ -367,6 +367,19 @@ func (h *Handlers) SyncSource(w http.ResponseWriter, r *http.Request) {
 // IngestRawSourceEvent allows external clients / webhooks to push raw data to a source.
 func (h *Handlers) IngestRawSourceEvent(w http.ResponseWriter, r *http.Request) {
 	sourceID := r.PathValue("id")
+	src, err := h.sources.GetByID(r.Context(), sourceID)
+	if errors.Is(err, sources.ErrSourceNotFound) {
+		respondError(w, http.StatusNotFound, "source not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to load source")
+		return
+	}
+	if src.AdapterType != "webhook" {
+		respondError(w, http.StatusForbidden, "raw ingress is only available for webhook sources")
+		return
+	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, 10*1024*1024)) // 10MB limit
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "failed reading body: "+err.Error())
@@ -375,6 +388,12 @@ func (h *Handlers) IngestRawSourceEvent(w http.ResponseWriter, r *http.Request) 
 	if len(body) == 0 {
 		respondError(w, http.StatusBadRequest, "empty request body")
 		return
+	}
+	if src.AdapterType == "webhook" {
+		if err := sources.ValidateRequest(src.Config, r.Header, body); err != nil {
+			respondError(w, http.StatusUnauthorized, err.Error())
+			return
+		}
 	}
 
 	ev, err := h.pipeline.IngestRaw(r.Context(), sourceID, body)

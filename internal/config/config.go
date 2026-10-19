@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -17,13 +18,13 @@ type Config struct {
 	MaxBackoff         time.Duration
 	LogLevel           string
 	Environment        string
+	APIToken           string
 
-	// Telegram integration
-	TelegramBotToken       string
-	TelegramEnabled        bool
-	TelegramAPIBaseURL     string
-	TelegramPollTimeout    int
-	TelegramMediaGroupWait time.Duration
+	TelegramBotToken           string
+	TelegramEnabled            bool
+	TelegramAPIBaseURL         string
+	TelegramPollTimeout        int
+	TelegramMediaGroupWait     time.Duration
 	TelegramRateGlobal         float64
 	TelegramRatePerChat        float64
 	TelegramPublicPollInterval time.Duration
@@ -33,25 +34,43 @@ type Config struct {
 func Load() *Config {
 	botToken := getEnv("TELEGRAM_BOT_TOKEN", "")
 	return &Config{
-		DatabaseURL:        getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/automation?sslmode=disable"),
-		ServerPort:         getEnv("PORT", getEnv("SERVER_PORT", "8080")),
-		WorkerPollInterval: getEnvDuration("WORKER_POLL_INTERVAL", 1*time.Second),
-		WorkerConcurrency:  getEnvInt("WORKER_CONCURRENCY", 4),
-		MaxRetries:         getEnvInt("MAX_RETRIES", 3),
-		InitialBackoff:     getEnvDuration("INITIAL_BACKOFF", 2*time.Second),
-		MaxBackoff:         getEnvDuration("MAX_BACKOFF", 1*time.Minute),
-		LogLevel:           getEnv("LOG_LEVEL", "info"),
-		Environment:        getEnv("ENVIRONMENT", "development"),
-
+		DatabaseURL:                getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/automation?sslmode=disable"),
+		ServerPort:                 getEnv("PORT", getEnv("SERVER_PORT", "8080")),
+		WorkerPollInterval:         getEnvDuration("WORKER_POLL_INTERVAL", time.Second),
+		WorkerConcurrency:          getEnvInt("WORKER_CONCURRENCY", 4),
+		MaxRetries:                 getEnvInt("MAX_RETRIES", 3),
+		InitialBackoff:             getEnvDuration("INITIAL_BACKOFF", 2*time.Second),
+		MaxBackoff:                 getEnvDuration("MAX_BACKOFF", time.Minute),
+		LogLevel:                   getEnv("LOG_LEVEL", "info"),
+		Environment:                getEnv("ENVIRONMENT", "development"),
+		APIToken:                   getEnv("API_TOKEN", ""),
 		TelegramBotToken:           botToken,
 		TelegramEnabled:            getEnvBool("TELEGRAM_ENABLED", botToken != ""),
 		TelegramAPIBaseURL:         getEnv("TELEGRAM_API_BASE_URL", ""),
 		TelegramPollTimeout:        getEnvInt("TELEGRAM_POLL_TIMEOUT", 30),
-		TelegramMediaGroupWait:     getEnvDuration("TELEGRAM_MEDIA_GROUP_WINDOW", 1*time.Second),
+		TelegramMediaGroupWait:     getEnvDuration("TELEGRAM_MEDIA_GROUP_WINDOW", time.Second),
 		TelegramRateGlobal:         getEnvFloat("TELEGRAM_RATE_GLOBAL", 25),
 		TelegramRatePerChat:        getEnvFloat("TELEGRAM_RATE_PER_CHAT", 1),
 		TelegramPublicPollInterval: getEnvDuration("TELEGRAM_PUBLIC_POLL_INTERVAL", 15*time.Second),
 	}
+}
+
+// Validate checks settings that would otherwise allow an unprotected
+// management API in a production deployment.
+func (c *Config) Validate() error {
+	if c.DatabaseURL == "" {
+		return fmt.Errorf("DATABASE_URL is required")
+	}
+	if c.Environment == "production" && c.APIToken == "" {
+		return fmt.Errorf("API_TOKEN is required in production")
+	}
+	if c.WorkerConcurrency < 1 {
+		return fmt.Errorf("WORKER_CONCURRENCY must be at least 1")
+	}
+	if c.MaxRetries < 1 {
+		return fmt.Errorf("MAX_RETRIES must be at least 1")
+	}
+	return nil
 }
 
 func getEnv(key, defaultVal string) string {

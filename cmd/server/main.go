@@ -23,6 +23,10 @@ import (
 
 func main() {
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		slog.Error("invalid configuration", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 	setupLogger(cfg.LogLevel)
 
 	slog.Info("starting automation engine",
@@ -168,7 +172,9 @@ func main() {
 	if teleAPI != nil {
 		handlers.SetTelegramAPI(teleAPI)
 	}
-	server := api.NewServer(cfg.ServerPort, handlers)
+	server := api.NewServerWithOptions(cfg.ServerPort, handlers, api.ServerOptions{
+		APIToken: cfg.APIToken,
+	})
 
 	go func() {
 		if err := server.Start(); err != nil {

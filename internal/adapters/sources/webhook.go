@@ -2,10 +2,13 @@ package sources
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -16,6 +19,40 @@ import (
 type WebhookConfig struct {
 	HeaderSecret string `json:"header_secret,omitempty"`
 	Secret       string `json:"secret,omitempty"`
+}
+
+// ValidateRequest authenticates a webhook before its payload reaches the
+// normalization pipeline. Secret comparison is constant-time.
+func ValidateRequest(config json.RawMessage, headers http.Header, body []byte) error {
+	var cfg WebhookConfig
+	if len(config) > 0 && string(config) != "{}" {
+		if err := json.Unmarshal(config, &cfg); err != nil {
+			return fmt.Errorf("invalid webhook config: %w", err)
+		}
+	}
+	expectedSecret := cfg.Secret
+	if expectedSecret == "" {
+		expectedSecret = cfg.HeaderSecret
+	}
+	if expectedSecret == "" {
+		return nil
+	}
+
+	provided := headers.Get("X-Webhook-Secret")
+	if subtle.ConstantTimeCompare([]byte(provided), []byte(expectedSecret)) != 1 {
+		return fmt.Errorf("invalid webhook secret")
+	}
+
+	signature := headers.Get("X-Webhook-Signature-256")
+	if signature != "" {
+		mac := hmac.New(sha256.New, []byte(expectedSecret))
+		_, _ = mac.Write(body)
+		expected := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+		if subtle.ConstantTimeCompare([]byte(signature), []byte(expected)) != 1 {
+			return fmt.Errorf("invalid webhook signature")
+		}
+	}
+	return nil
 }
 
 // WebhookSourceAdapter ingests raw HTTP push notifications/webhooks.

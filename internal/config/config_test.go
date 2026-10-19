@@ -11,8 +11,9 @@ func TestLoadDefaults(t *testing.T) {
 	envVars := []string{
 		"DATABASE_URL", "PORT", "SERVER_PORT", "WORKER_POLL_INTERVAL",
 		"WORKER_CONCURRENCY", "MAX_RETRIES", "INITIAL_BACKOFF", "MAX_BACKOFF",
-		"LOG_LEVEL", "ENVIRONMENT",
+		"LOG_LEVEL", "ENVIRONMENT", "API_TOKEN",
 	}
+
 	for _, k := range envVars {
 		_ = os.Unsetenv(k)
 	}
@@ -92,6 +93,7 @@ func TestInvalidNumberOrDurationFallback(t *testing.T) {
 	if cfg.WorkerConcurrency != 4 {
 		t.Errorf("expected fallback WorkerConcurrency 4, got %d", cfg.WorkerConcurrency)
 	}
+
 	if cfg.WorkerPollInterval != 1*time.Second {
 		t.Errorf("expected fallback WorkerPollInterval 1s, got %v", cfg.WorkerPollInterval)
 	}

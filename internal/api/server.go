@@ -2,9 +2,11 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -14,6 +16,15 @@ type Server struct {
 }
 
 func NewServer(port string, handlers *Handlers) *Server {
+	return NewServerWithOptions(port, handlers, ServerOptions{})
+}
+
+// ServerOptions controls deployment-sensitive HTTP protections.
+type ServerOptions struct {
+	APIToken string
+}
+
+func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions) *Server {
 	mux := http.NewServeMux()
 
 	// Health check endpoints
@@ -64,7 +75,7 @@ func NewServer(port string, handlers *Handlers) *Server {
 	mux.HandleFunc("GET /{$}", handlers.DashboardUI)
 	mux.HandleFunc("GET /ui", handlers.DashboardUI)
 
-	loggedHandler := loggingMiddleware(mux)
+	loggedHandler := loggingMiddleware(securityMiddleware(authMiddleware(mux, options.APIToken)))
 
 	return &Server{
 		httpServer: &http.Server{
@@ -76,6 +87,34 @@ func NewServer(port string, handlers *Handlers) *Server {
 		},
 		mux: mux,
 	}
+}
+
+func authMiddleware(next http.Handler, token string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		isWebhookIngest := r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/ingest")
+		if token == "" || r.URL.Path == "/health" || r.URL.Path == "/ready" || isWebhookIngest {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		provided := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		if provided == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="kerob"`)
+			respondError(w, http.StatusUnauthorized, "authentication required")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func securityMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) Start() error {

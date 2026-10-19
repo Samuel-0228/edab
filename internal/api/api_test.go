@@ -64,6 +64,7 @@ func TestRespondJSONAndErrorHelpers(t *testing.T) {
 	if w1.Code != http.StatusAccepted {
 		t.Errorf("expected status 202, got %d", w1.Code)
 	}
+
 	if w1.Header().Get("Content-Type") != "application/json" {
 		t.Errorf("expected application/json header, got %s", w1.Header().Get("Content-Type"))
 	}
