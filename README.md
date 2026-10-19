@@ -1,6 +1,6 @@
-# Damtie: Multi-Channel Telegram Mirroring Engine
+# Kerob: Event-Driven Automation Platform
 
-> **Damtie is an event-driven Telegram mirroring engine.** One Telegram bot can monitor multiple Telegram channels and groups, route incoming posts according to configurable rules, and automatically deliver them to one or more destination channels or groups.
+> **Kerob is an event-driven automation platform.** It connects services, normalizes events, routes them through configurable rules, and reliably delivers actions to one or more destinations.
 
 ```text
                      Telegram Bot
@@ -12,7 +12,7 @@
           │               │               │
           └───────────────┼───────────────┘
                           ↓
-                    Damtie Engine
+                    Kerob Engine
                      (Idempotency)
                           │
                     Routing Rules
@@ -23,20 +23,20 @@
     (Backup / Sync) (Archive / Rep) (Public Mirror)
 ```
 
-Damtie is **not** a basic script or a naive polling loop. It is a robust, decoupled, event-driven engine providing persistent state, strict idempotency, album/media-group buffering, exponential backoff retries, dead-letter tracking, Telegram rate limiting, and an operator management API with a live web dashboard.
+Kerob is **not** a basic script or a naive polling loop. It is a robust, decoupled, event-driven engine providing persistent state, strict idempotency, album/media-group buffering, exponential backoff retries, dead-letter tracking, Telegram rate limiting, and an operator management API with a live web dashboard.
 
 ---
 
 ## 1. Core Principles
 
 - **One Bot / Many Channels**: A single bot application connects to Telegram Bot API, monitors N sources, and replicates to N destinations according to dynamic database routes.
-- **Pure Verbatim Mirroring**: Damtie preserves original content as closely as the Telegram API allows. It does **not** introduce AI summarization, text rewriting, opportunity extraction, or automated footers.
-- **Copy vs. Forward**: By default, Damtie uses Telegram's native `copyMessage` and `copyMessages` APIs. This duplicates the message, media, captions, entities, and formatting **without** the "Forwarded from..." banner, so mirrored posts look native.
+- **Pure Verbatim Mirroring**: Kerob preserves original content as closely as the Telegram API allows. It does **not** introduce AI summarization, text rewriting, opportunity extraction, or automated footers.
+- **Copy vs. Forward**: By default, Kerob uses Telegram's native `copyMessage` and `copyMessages` APIs. This duplicates the message, media, captions, entities, and formatting **without** the "Forwarded from..." banner, so mirrored posts look native.
 - **Strict Deduplication & Idempotency**:
   - **Source level**: Uniquely keyed by `telegram:<chat_id>:<message_id>` (or `telegram:<chat_id>:mg:<media_group_id>` for albums). Duplicate updates are ignored.
   - **Destination level**: Unique constraint on `(event_id, destination_id)`. The destination message ID is recorded; if a failed job is retried after delivery, the recorded result prevents duplicate posts.
 - **Album / Media Group Preservation**: Posts sharing a `media_group_id` are buffered within a sliding window and published as a unified Telegram album rather than isolated single posts.
-- **Decoupled Architecture**: Telegram is an adapter layer. The underlying Damtie engine (ingestion, event model, routing, PostgreSQL persistence, worker pool) remains completely reusable.
+- **Decoupled Architecture**: Telegram is an adapter layer. The underlying Kerob engine (ingestion, event model, routing, PostgreSQL persistence, worker pool) remains completely reusable.
 
 ---
 
@@ -47,7 +47,7 @@ Damtie is **not** a basic script or a naive polling loop. It is a robust, decoup
                           │
                           ▼
              ┌─────────────────────────┐
-             │ Damtie Telegram Listener│ (buffers albums & filters monitored chats)
+             │ Kerob Telegram Listener │ (buffers albums & filters monitored chats)
              └────────────┬────────────┘
                           │ RawPost JSON
                           ▼
@@ -94,13 +94,13 @@ flowchart TD
         ChC["Source Channel C"]
     end
 
-    subgraph DamtieIntegration["Telegram Integration Layer"]
+    subgraph KerobIntegration["Telegram Integration Layer"]
         Listener["Telegram Listener\n(Long-poll getUpdates)"]
         Buffer["Media Group Buffer\n(Album Aggregator)"]
         SrcAdp["Telegram Source Adapter\n(Normalize to Event)"]
     end
 
-    subgraph CoreEngine["Damtie Core Engine"]
+    subgraph CoreEngine["Kerob Core Engine"]
         Pipe["Ingestion Pipeline"]
         Router["Routing Engine"]
         Workers["Delivery Worker Pool\n(Exponential Backoff)"]
@@ -167,15 +167,15 @@ To find a chat ID:
 
 ### 1. Clone & Configure
 ```bash
-git clone https://github.com/Samuel-0228/Damtie.git
-cd Damtie
+git clone https://github.com/Samuel-0228/edab.git
+cd edab
 cp .env.example .env
 ```
 
 Edit `.env` and fill in your Bot Token:
 ```env
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
-DATABASE_URL=postgres://postgres:postgres@postgres:5432/automation?sslmode=disable
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/automation?sslmode=disable
 ```
 
 ### 2. Launch Services
@@ -184,7 +184,7 @@ docker compose up -d
 ```
 This spins up:
 - PostgreSQL 16 (with automatic migrations applied on startup)
-- Damtie Engine & Telegram Listener (`http://localhost:8080`)
+- Kerob Engine & Telegram Listener (`http://localhost:8080`)
 
 ### 3. Open the Management Dashboard
 Navigate to `http://localhost:8080/` in your browser to view the technical dashboard showing sources, destinations, active routes, and real-time delivery statistics.
@@ -193,7 +193,7 @@ Navigate to `http://localhost:8080/` in your browser to view the technical dashb
 
 ## 5. Operator Management API
 
-Damtie provides a clean REST API for dynamic source, destination, and route configuration without restarting the service.
+Kerob provides a clean REST API for dynamic source, destination, and route configuration without restarting the service.
 
 ### Sources (`/sources`)
 
@@ -331,7 +331,7 @@ curl -X POST http://localhost:8080/sources/<SOURCE_ID>/sync \
 
 ## 6. Supported Content & Media Types
 
-Damtie mirrors every Telegram message type natively supported by Bot API `copyMessage` and `copyMessages`:
+Kerob mirrors every Telegram message type natively supported by Bot API `copyMessage` and `copyMessages`:
 
 - **Text & Links**: Rich markdown, HTML entities, custom emojis, links, spoilers.
 - **Photos**: Full resolution photos with captions.
@@ -361,6 +361,7 @@ All settings are configured via environment variables or `.env`:
 | :--- | :--- | :--- |
 | `DATABASE_URL` | `postgres://...` | PostgreSQL connection string |
 | `PORT` | `8080` | REST API HTTP port |
+| `API_TOKEN` | *required in production* | Bearer token for management API routes; webhook ingress uses its configured source secret |
 | `TELEGRAM_BOT_TOKEN` | *required* | Telegram Bot API token from @BotFather |
 | `TELEGRAM_ENABLED` | `true` | Enable or disable the Telegram listener |
 | `TELEGRAM_APIBaseURL` | `""` | Optional custom Bot API endpoint (for local Bot API servers) |
@@ -379,7 +380,7 @@ All settings are configured via environment variables or `.env`:
 
 ## 9. Testing
 
-Damtie includes a comprehensive test suite covering the entire pipeline:
+Kerob includes a comprehensive test suite covering the entire pipeline:
 
 ```bash
 # Run unit and integration tests
