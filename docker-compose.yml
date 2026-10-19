@@ -35,6 +35,7 @@ services:
       MAX_BACKOFF: "1m"
       LOG_LEVEL: "info"
       ENVIRONMENT: "production"
+      API_TOKEN: ${API_TOKEN:?set API_TOKEN before starting the production service}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-true}
       TELEGRAM_POLL_TIMEOUT: ${TELEGRAM_POLL_TIMEOUT:-30}
