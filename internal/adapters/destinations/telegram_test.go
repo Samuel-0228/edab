@@ -180,4 +180,3 @@ func TestTelegramDestinationDeliverDirect(t *testing.T) {
 		t.Errorf("expected delivered message id, got %v", res.MessageIDs)
 	}
 }
-

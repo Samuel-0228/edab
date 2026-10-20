@@ -10,19 +10,19 @@ import (
 )
 
 type OverviewResponse struct {
-	Status               string                        `json:"status"`
-	ActiveWorkflows      int                           `json:"active_workflows"`
-	TotalWorkflows       int                           `json:"total_workflows"`
-	ExecutionsTotal      int                           `json:"executions_total"`
-	ExecutionsSuccess    int                           `json:"executions_success"`
-	ExecutionsFailed     int                           `json:"executions_failed"`
-	SuccessRate          float64                       `json:"success_rate"`
-	DeadLetterCount      int                           `json:"dead_letter_count"`
-	ConnectedCredentials int                           `json:"connected_credentials"`
-	RegisteredAdapters   int                           `json:"registered_adapters"`
-	RecentExecutions     []*workflow.Execution         `json:"recent_executions"`
+	Status               string                         `json:"status"`
+	ActiveWorkflows      int                            `json:"active_workflows"`
+	TotalWorkflows       int                            `json:"total_workflows"`
+	ExecutionsTotal      int                            `json:"executions_total"`
+	ExecutionsSuccess    int                            `json:"executions_success"`
+	ExecutionsFailed     int                            `json:"executions_failed"`
+	SuccessRate          float64                        `json:"success_rate"`
+	DeadLetterCount      int                            `json:"dead_letter_count"`
+	ConnectedCredentials int                            `json:"connected_credentials"`
+	RegisteredAdapters   int                            `json:"registered_adapters"`
+	RecentExecutions     []*workflow.Execution          `json:"recent_executions"`
 	Catalog              []adapters.IntegrationMetadata `json:"catalog"`
-	UptimeSeconds        int64                         `json:"uptime_seconds"`
+	UptimeSeconds        int64                          `json:"uptime_seconds"`
 }
 
 var serverStartTime = time.Now()

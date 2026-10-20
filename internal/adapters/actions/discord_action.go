@@ -14,11 +14,11 @@ import (
 )
 
 type DiscordActionConfig struct {
-	WebhookURL string         `json:"webhook_url,omitempty"`
-	Content    string         `json:"content,omitempty"`
-	Username   string         `json:"username,omitempty"`
-	AvatarURL  string         `json:"avatar_url,omitempty"`
-	Embed      *DiscordEmbed  `json:"embed,omitempty"`
+	WebhookURL string        `json:"webhook_url,omitempty"`
+	Content    string        `json:"content,omitempty"`
+	Username   string        `json:"username,omitempty"`
+	AvatarURL  string        `json:"avatar_url,omitempty"`
+	Embed      *DiscordEmbed `json:"embed,omitempty"`
 }
 
 type DiscordEmbed struct {

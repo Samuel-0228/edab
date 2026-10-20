@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Build statically linked binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /app/server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /app/kerob ./cmd/server
 
 # Runtime stage
 FROM alpine:3.20
@@ -22,15 +22,15 @@ FROM alpine:3.20
 WORKDIR /app
 
 RUN apk add --no-cache ca-certificates tzdata curl && \
-    addgroup -S appgroup && adduser -S appuser -G appgroup
+    addgroup -S kerob && adduser -S kerob -G kerob
 
-COPY --from=builder /app/server /app/server
+COPY --from=builder /app/kerob /app/kerob
 
-USER appuser
+USER kerob
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8080/health || exit 1
 
-ENTRYPOINT ["/app/server"]
+ENTRYPOINT ["/app/kerob"]

@@ -825,4 +825,3 @@ func TestPublicTelegramChannelMirroring(t *testing.T) {
 		t.Errorf("expected external id 'telegram:public:technews:101', got %q", evs[0].ExternalEventID)
 	}
 }
-

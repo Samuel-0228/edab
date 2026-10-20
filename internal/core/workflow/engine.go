@@ -21,12 +21,12 @@ type EngineConfig struct {
 
 // Engine coordinates event ingestion, condition evaluation, transformation, and action execution.
 type Engine struct {
-	workflows    Store
-	executions   ExecutionStore
-	deadLetter   DeadLetterStore
-	creds        credentials.Store
-	actions      *ActionRegistry
-	cfg          EngineConfig
+	workflows  Store
+	executions ExecutionStore
+	deadLetter DeadLetterStore
+	creds      credentials.Store
+	actions    *ActionRegistry
+	cfg        EngineConfig
 }
 
 func NewEngine(

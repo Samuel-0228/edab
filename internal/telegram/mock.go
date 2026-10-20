@@ -10,18 +10,18 @@ import (
 type MockAPI struct {
 	mu sync.Mutex
 
-	GetMeFunc         func() (tgbotapi.User, error)
-	GetUpdatesFunc    func(config tgbotapi.UpdateConfig) ([]tgbotapi.Update, error)
-	GetChatFunc       func(config tgbotapi.ChatInfoConfig) (tgbotapi.Chat, error)
-	GetChatMemberFunc func(config tgbotapi.GetChatMemberConfig) (tgbotapi.ChatMember, error)
-	CopyMessageFunc   func(config tgbotapi.CopyMessageConfig) (tgbotapi.MessageID, error)
-	CopyMessagesFunc  func(fromChatID, toChatID int64, messageIDs []int) ([]int, error)
-	SendFunc          func(c tgbotapi.Chattable) (tgbotapi.Message, error)
+	GetMeFunc          func() (tgbotapi.User, error)
+	GetUpdatesFunc     func(config tgbotapi.UpdateConfig) ([]tgbotapi.Update, error)
+	GetChatFunc        func(config tgbotapi.ChatInfoConfig) (tgbotapi.Chat, error)
+	GetChatMemberFunc  func(config tgbotapi.GetChatMemberConfig) (tgbotapi.ChatMember, error)
+	CopyMessageFunc    func(config tgbotapi.CopyMessageConfig) (tgbotapi.MessageID, error)
+	CopyMessagesFunc   func(fromChatID, toChatID int64, messageIDs []int) ([]int, error)
+	SendFunc           func(c tgbotapi.Chattable) (tgbotapi.Message, error)
 	SendMediaGroupFunc func(config tgbotapi.MediaGroupConfig) ([]tgbotapi.Message, error)
 
-	CopiedMessages []tgbotapi.CopyMessageConfig
-	CopiedAlbums   []CopiedAlbumRecord
-	SentChattables []tgbotapi.Chattable
+	CopiedMessages  []tgbotapi.CopyMessageConfig
+	CopiedAlbums    []CopiedAlbumRecord
+	SentChattables  []tgbotapi.Chattable
 	SentMediaGroups []tgbotapi.MediaGroupConfig
 
 	NextMessageID int

@@ -12,11 +12,11 @@ import (
 )
 
 var (
-	ErrBlockedHost       = errors.New("url points to a blocked or restricted host")
-	ErrBlockedIP         = errors.New("url resolves to a private, loopback, or cloud metadata address")
-	ErrInvalidScheme     = errors.New("url scheme must be http or https")
+	ErrBlockedHost      = errors.New("url points to a blocked or restricted host")
+	ErrBlockedIP        = errors.New("url resolves to a private, loopback, or cloud metadata address")
+	ErrInvalidScheme    = errors.New("url scheme must be http or https")
 	ErrCredentialsInURL = errors.New("credentials in url are not permitted")
-	ErrRedirectBlocked   = errors.New("redirect to blocked address was prevented")
+	ErrRedirectBlocked  = errors.New("redirect to blocked address was prevented")
 )
 
 // ValidateURL checks if a raw URL is safe from SSRF attacks.

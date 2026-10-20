@@ -7,8 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
-    name: Build & Test
+  lint-and-test:
+    name: Lint, Test & Build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -23,11 +23,23 @@ jobs:
       - name: Verify dependencies
         run: go mod verify
 
+      - name: Check code formatting (gofmt)
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Unformatted files found:"
+            echo "$unformatted"
+            exit 1
+          fi
+
       - name: Run go vet
         run: go vet ./...
 
-      - name: Run unit & integration tests
+      - name: Run test suite with race detector
         run: go test -v -count=1 -race ./...
 
-      - name: Build server binary
-        run: CGO_ENABLED=0 go build -v -o /dev/null ./cmd/server
+      - name: Build kerob binary
+        run: CGO_ENABLED=0 go build -v -ldflags="-w -s" -o /dev/null ./cmd/server
+
+      - name: Verify Docker build
+        run: docker build -t kerob:test .

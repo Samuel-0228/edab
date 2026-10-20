@@ -19,8 +19,8 @@ type TestActionSpy struct {
 	FailCount       int // fail first N calls
 }
 
-func (s *TestActionSpy) Name() string { return s.IntegrationType }
-func (s *TestActionSpy) Type() string { return s.IntegrationType }
+func (s *TestActionSpy) Name() string                          { return s.IntegrationType }
+func (s *TestActionSpy) Type() string                          { return s.IntegrationType }
 func (s *TestActionSpy) Validate(config json.RawMessage) error { return nil }
 func (s *TestActionSpy) Execute(ctx context.Context, req workflow.ActionRequest) (workflow.ActionResult, error) {
 	s.Calls = append(s.Calls, req)

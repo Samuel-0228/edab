@@ -21,8 +21,8 @@ type MockActionExecutor struct {
 	FailUntil int // fail while Executed < FailUntil
 }
 
-func (m *MockActionExecutor) Name() string { return "mock" }
-func (m *MockActionExecutor) Type() string { return m.TypeStr }
+func (m *MockActionExecutor) Name() string                          { return "mock" }
+func (m *MockActionExecutor) Type() string                          { return m.TypeStr }
 func (m *MockActionExecutor) Validate(config json.RawMessage) error { return nil }
 func (m *MockActionExecutor) Execute(ctx context.Context, req ActionRequest) (ActionResult, error) {
 	m.Executed++

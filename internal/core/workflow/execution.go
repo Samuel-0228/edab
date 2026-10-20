@@ -29,17 +29,17 @@ const (
 // ExecutionStep represents a granular recorded stage of the execution pipeline:
 // trigger -> condition -> transformation -> action.
 type ExecutionStep struct {
-	ID          string     `json:"id"`
-	ExecutionID string     `json:"execution_id"`
-	StepType    string     `json:"step_type"` // "trigger", "condition", "transformation", "action"
-	Name        string     `json:"name"`
-	Status      string     `json:"status"`    // "success", "skipped", "failed"
-	Input       any        `json:"input,omitempty"`
-	Output      any        `json:"output,omitempty"`
-	Error       *string    `json:"error,omitempty"`
-	DurationMs  int64      `json:"duration_ms"`
-	StartedAt   time.Time  `json:"started_at"`
-	CompletedAt time.Time  `json:"completed_at"`
+	ID          string    `json:"id"`
+	ExecutionID string    `json:"execution_id"`
+	StepType    string    `json:"step_type"` // "trigger", "condition", "transformation", "action"
+	Name        string    `json:"name"`
+	Status      string    `json:"status"` // "success", "skipped", "failed"
+	Input       any       `json:"input,omitempty"`
+	Output      any       `json:"output,omitempty"`
+	Error       *string   `json:"error,omitempty"`
+	DurationMs  int64     `json:"duration_ms"`
+	StartedAt   time.Time `json:"started_at"`
+	CompletedAt time.Time `json:"completed_at"`
 }
 
 // Execution represents an end-to-end execution of a workflow against an event.

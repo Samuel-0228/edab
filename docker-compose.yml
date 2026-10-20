@@ -1,18 +1,18 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: automation-postgres
+    container_name: kerob-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: automation
+      POSTGRES_USER: kerob
+      POSTGRES_PASSWORD: kerob_password
+      POSTGRES_DB: kerob
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - kerob_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d automation"]
+      test: ["CMD-SHELL", "pg_isready -U kerob -d kerob"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -21,12 +21,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: kerob
+    container_name: kerob-engine
     restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/automation?sslmode=disable
+      DATABASE_URL: postgres://kerob:kerob_password@postgres:5432/kerob?sslmode=disable
       PORT: "8080"
       WORKER_POLL_INTERVAL: "1s"
       WORKER_CONCURRENCY: "4"
@@ -36,8 +36,9 @@ services:
       LOG_LEVEL: "info"
       ENVIRONMENT: "production"
       API_TOKEN: ${API_TOKEN:?set API_TOKEN before starting the production service}
+      KEROB_ENCRYPTION_KEY: ${KEROB_ENCRYPTION_KEY:-kerob-production-secret-encryption-key-32b}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-      TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-true}
+      TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-false}
       TELEGRAM_POLL_TIMEOUT: ${TELEGRAM_POLL_TIMEOUT:-30}
       TELEGRAM_MEDIA_GROUP_WINDOW: ${TELEGRAM_MEDIA_GROUP_WINDOW:-1s}
       TELEGRAM_RATE_GLOBAL: ${TELEGRAM_RATE_GLOBAL:-25}
@@ -47,4 +48,4 @@ services:
         condition: service_healthy
 
 volumes:
-  pgdata:
+  kerob_pgdata:

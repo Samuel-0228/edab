@@ -15,11 +15,11 @@ import (
 )
 
 var (
-	ErrWebhookNotFound     = errors.New("webhook not found")
-	ErrWebhookDisabled     = errors.New("webhook is disabled")
-	ErrInvalidSecretToken  = errors.New("invalid or missing webhook secret token")
-	ErrPayloadTooLarge     = errors.New("payload exceeds maximum allowed size")
-	ErrRateLimitExceeded   = errors.New("webhook rate limit exceeded")
+	ErrWebhookNotFound    = errors.New("webhook not found")
+	ErrWebhookDisabled    = errors.New("webhook is disabled")
+	ErrInvalidSecretToken = errors.New("invalid or missing webhook secret token")
+	ErrPayloadTooLarge    = errors.New("payload exceeds maximum allowed size")
+	ErrRateLimitExceeded  = errors.New("webhook rate limit exceeded")
 )
 
 const MaxWebhookPayloadBytes = 1024 * 1024 // 1 MB

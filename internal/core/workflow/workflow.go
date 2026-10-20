@@ -50,28 +50,28 @@ func (tc *TriggerConfig) Matches(ev *event.Event) bool {
 // ActionStep represents an individual action task to run within a workflow.
 type ActionStep struct {
 	ID           string          `json:"id"`
-	Integration  string          `json:"integration"`            // "telegram", "discord", "github", "http"
-	ActionType   string          `json:"action_type"`            // e.g. "send_message", "create_issue", "http_request"
+	Integration  string          `json:"integration"`             // "telegram", "discord", "github", "http"
+	ActionType   string          `json:"action_type"`             // e.g. "send_message", "create_issue", "http_request"
 	CredentialID string          `json:"credential_id,omitempty"` // encrypted credentials to inject
-	Config       json.RawMessage `json:"config"`                 // action config (with template variables)
+	Config       json.RawMessage `json:"config"`                  // action config (with template variables)
 	TimeoutSec   int             `json:"timeout_seconds,omitempty"`
 }
 
 // Workflow represents a declarative, event-driven automation pipeline.
 // Structure: WHEN [trigger] IF [conditions] THEN [actions]
 type Workflow struct {
-	ID              string                         `json:"id"`
-	Name            string                         `json:"name"`
-	Description     string                         `json:"description,omitempty"`
-	Enabled         bool                           `json:"enabled"`
-	Trigger         TriggerConfig                  `json:"trigger"`
-	Conditions      *conditions.Condition          `json:"conditions,omitempty"`
+	ID              string                          `json:"id"`
+	Name            string                          `json:"name"`
+	Description     string                          `json:"description,omitempty"`
+	Enabled         bool                            `json:"enabled"`
+	Trigger         TriggerConfig                   `json:"trigger"`
+	Conditions      *conditions.Condition           `json:"conditions,omitempty"`
 	Transformations *transformations.Transformation `json:"transformations,omitempty"`
-	Actions         []ActionStep                   `json:"actions"`
-	MaxRetries      int                            `json:"max_retries"`
-	TimeoutSeconds  int                            `json:"timeout_seconds"`
-	CreatedAt       time.Time                      `json:"created_at"`
-	UpdatedAt       time.Time                      `json:"updated_at"`
+	Actions         []ActionStep                    `json:"actions"`
+	MaxRetries      int                             `json:"max_retries"`
+	TimeoutSeconds  int                             `json:"timeout_seconds"`
+	CreatedAt       time.Time                       `json:"created_at"`
+	UpdatedAt       time.Time                       `json:"updated_at"`
 }
 
 // Validate checks the workflow structure and constraints.

@@ -199,7 +199,6 @@ func (c *Client) SendMediaGroup(config tgbotapi.MediaGroupConfig) ([]tgbotapi.Me
 	return c.bot.SendMediaGroup(config)
 }
 
-
 // RetryAfter extracts the flood-control wait from a Telegram API error.
 func RetryAfter(err error) (int, bool) {
 	var tgErr tgbotapi.Error
