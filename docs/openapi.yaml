@@ -1,0 +1,267 @@
+openapi: 3.0.3
+info:
+  title: Kerob Automation Platform API
+  description: Production-grade event-driven automation platform API.
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+    description: Local Server
+
+paths:
+  /health:
+    get:
+      summary: Liveness health check
+      responses:
+        '200':
+          description: Service is healthy
+
+  /ready:
+    get:
+      summary: Readiness probe
+      responses:
+        '200':
+          description: Service dependencies and workers ready
+
+  /metrics:
+    get:
+      summary: Prometheus metrics endpoint
+      responses:
+        '200':
+          description: Metrics in Prometheus exposition format
+
+  /api/v1/overview:
+    get:
+      summary: Get platform operational overview metrics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Operational status, execution counts, success rates
+
+  /api/v1/workflows:
+    get:
+      summary: List all automations
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Array of workflows
+    post:
+      summary: Create new automation workflow
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Workflow'
+      responses:
+        '201':
+          description: Workflow created
+
+  /api/v1/workflows/{id}:
+    get:
+      summary: Get workflow by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workflow definition
+    patch:
+      summary: Update workflow configuration or toggle enabled state
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Updated workflow
+    delete:
+      summary: Delete workflow
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Workflow deleted
+
+  /api/v1/integrations:
+    get:
+      summary: List integration capabilities catalog
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Catalog of supported integrations
+
+  /api/v1/credentials:
+    get:
+      summary: List stored credentials (masked)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Array of credentials with masked values
+    post:
+      summary: Store encrypted credentials (AES-256-GCM)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, integration, values]
+              properties:
+                name: { type: string }
+                integration: { type: string }
+                values:
+                  type: object
+                  additionalProperties: { type: string }
+      responses:
+        '201':
+          description: Credential securely created
+
+  /api/v1/executions:
+    get:
+      summary: List execution runs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: workflow_id
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: List of execution runs
+
+  /api/v1/executions/{id}:
+    get:
+      summary: Get execution details with step-by-step lifecycle timeline
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Execution run with granular steps
+
+  /api/v1/failures:
+    get:
+      summary: List dead-letter failures
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Unrecoverable execution failures
+
+  /api/v1/failures/{id}/retry:
+    post:
+      summary: Retry a failed dead-letter execution
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Execution reset for retry
+
+  /api/v1/failures/{id}/discard:
+    post:
+      summary: Discard dead-letter failure record
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Failure discarded
+
+  /webhooks/{id}:
+    post:
+      summary: Ingest inbound generic webhook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '202':
+          description: Webhook accepted and queued for workflow execution
+        '401':
+          description: Invalid secret token
+        '413':
+          description: Payload exceeds 1MB limit
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Token
+
+  schemas:
+    Workflow:
+      type: object
+      required: [name, trigger, actions]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        enabled: { type: boolean, default: true }
+        trigger:
+          type: object
+          required: [type]
+          properties:
+            type: { type: string }
+            event_types:
+              type: array
+              items: { type: string }
+        conditions:
+          type: object
+        transformations:
+          type: object
+        actions:
+          type: array
+          items:
+            type: object
+            required: [integration, action_type]
+            properties:
+              integration: { type: string }
+              action_type: { type: string }
+              credential_id: { type: string }
+              config: { type: object }
+        max_retries: { type: integer, default: 3 }
+        timeout_seconds: { type: integer, default: 30 }
