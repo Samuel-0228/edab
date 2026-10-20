@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"automation-engine/internal/core/event"
+	"kerob/internal/core/event"
 )
 
 // WebhookConfig defines configuration options for the generic webhook source adapter.

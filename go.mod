@@ -1,4 +1,4 @@
-module automation-engine
+module kerob
 
 go 1.23.2
 

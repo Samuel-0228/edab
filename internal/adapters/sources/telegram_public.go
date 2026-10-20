@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"automation-engine/internal/core/event"
-	"automation-engine/internal/telegram"
+	"kerob/internal/core/event"
+	"kerob/internal/telegram"
 )
 
 // TelegramPublicSourceConfig is stored in a Source's config for public telegram channel sources.

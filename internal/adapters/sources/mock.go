@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"automation-engine/internal/core/event"
+	"kerob/internal/core/event"
 )
 
 // MockSourceAdapter is a flexible source adapter used for testing and synthetic event generation.

@@ -21,7 +21,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: automation-engine
+    container_name: kerob
     restart: unless-stopped
     ports:
       - "8080:8080"

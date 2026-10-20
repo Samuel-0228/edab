@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"automation-engine/internal/core/event"
+	"kerob/internal/core/event"
 )
 
 // WebhookConfig defines options for dispatching events to an HTTP endpoint.
@@ -140,7 +140,7 @@ func (w *WebhookDestinationAdapter) Deliver(ctx context.Context, ev *event.Event
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "automation-engine/1.0")
+	req.Header.Set("User-Agent", "kerob/1.0")
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}

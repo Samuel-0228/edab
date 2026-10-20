@@ -8,14 +8,14 @@ import (
 	"time"
 )
 
-// PublicSourceInfo pairs a Damtie source ID with a normalized public Telegram channel username.
+// PublicSourceInfo pairs a Kerob source ID with a normalized public Telegram channel username.
 type PublicSourceInfo struct {
 	SourceID string
 	Channel  string
 }
 
 // PublicPoller periodically scrapes registered public Telegram channels and
-// ingests new posts into the Damtie pipeline.
+// ingests new posts into the Kerob pipeline.
 type PublicPoller struct {
 	scraper    *PublicScraper
 	stateStore PublicChannelStateStore

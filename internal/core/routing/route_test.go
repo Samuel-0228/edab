@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"automation-engine/internal/core/event"
+	"kerob/internal/core/event"
 )
 
 func TestRouteMatches(t *testing.T) {

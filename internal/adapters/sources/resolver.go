@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"automation-engine/internal/telegram"
+	"kerob/internal/telegram"
 )
 
 // NewSourceResolver returns a telegram.SourceResolver that checks a sources.Store

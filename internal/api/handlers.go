@@ -9,13 +9,13 @@ import (
 	"strconv"
 	"strings"
 
-	"automation-engine/internal/adapters/destinations"
-	"automation-engine/internal/adapters/sources"
-	"automation-engine/internal/core/delivery"
-	"automation-engine/internal/core/event"
-	"automation-engine/internal/core/routing"
-	"automation-engine/internal/core/workflow"
-	"automation-engine/internal/telegram"
+	"kerob/internal/adapters/destinations"
+	"kerob/internal/adapters/sources"
+	"kerob/internal/core/delivery"
+	"kerob/internal/core/event"
+	"kerob/internal/core/routing"
+	"kerob/internal/core/workflow"
+	"kerob/internal/telegram"
 )
 
 type Handlers struct {
@@ -888,7 +888,7 @@ const dashboardHTML = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Damtie - Telegram Mirroring Engine</title>
+  <title>Kerob - Telegram Mirroring Engine</title>
   <style>
     :root {
       --bg: #0d1117;
@@ -965,7 +965,7 @@ const dashboardHTML = `<!DOCTYPE html>
 <body>
   <header>
     <div>
-      <h1>Damtie Telegram Mirroring Engine</h1>
+      <h1>Kerob Telegram Mirroring Engine</h1>
       <span style="font-size: 12px; color: var(--text-muted);">Multi-Channel Autonomous Channel/Group Synchronizer</span>
     </div>
     <span class="badge badge-ok">System Active</span>

@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"automation-engine/internal/adapters/destinations"
-	"automation-engine/internal/adapters/sources"
-	"automation-engine/internal/core/delivery"
-	"automation-engine/internal/core/event"
-	"automation-engine/internal/core/routing"
-	"automation-engine/internal/core/workflow"
+	"kerob/internal/adapters/destinations"
+	"kerob/internal/adapters/sources"
+	"kerob/internal/core/delivery"
+	"kerob/internal/core/event"
+	"kerob/internal/core/routing"
+	"kerob/internal/core/workflow"
 )
 
 func setupTestEnvironment() (

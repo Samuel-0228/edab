@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"automation-engine/internal/adapters/destinations"
-	"automation-engine/internal/adapters/sources"
+	"kerob/internal/adapters/destinations"
+	"kerob/internal/adapters/sources"
 )
 
 func TestHealthAndReadyEndpoints(t *testing.T) {

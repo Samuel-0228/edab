@@ -12,7 +12,7 @@ import (
 )
 
 // Ingester is the minimal interface the Telegram listener needs to push
-// normalized raw posts into the Damtie workflow engine.
+// normalized raw posts into the Kerob workflow engine.
 type Ingester interface {
 	IngestRaw(ctx context.Context, sourceID string, rawData []byte) error
 }
@@ -55,7 +55,7 @@ func DefaultListenerOptions() ListenerOptions {
 
 // Listener receives updates from the Telegram Bot API via long-polling,
 // filters for registered sources, buffers media groups, and feeds posts
-// to Damtie's ingestion pipeline.
+// to Kerob's ingestion pipeline.
 type Listener struct {
 	api            API
 	ingester       Ingester

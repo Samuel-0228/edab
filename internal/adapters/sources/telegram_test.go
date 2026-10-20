@@ -7,7 +7,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
-	"automation-engine/internal/telegram"
+	"kerob/internal/telegram"
 )
 
 func TestTelegramSourceAdapterLifecycle(t *testing.T) {

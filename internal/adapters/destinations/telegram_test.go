@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"automation-engine/internal/core/event"
-	"automation-engine/internal/telegram"
+	"kerob/internal/core/event"
+	"kerob/internal/telegram"
 )
 
 func TestTelegramDestinationAdapterLifecycle(t *testing.T) {

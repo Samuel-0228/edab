@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"automation-engine/internal/core/event"
+	"kerob/internal/core/event"
 )
 
 // StdoutDestinationAdapter formats and writes delivered events to logs/stdout.

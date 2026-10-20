@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sync"
 
-	"automation-engine/internal/core/event"
+	"kerob/internal/core/event"
 )
 
 // MockConfig allows configuring MockDestinationAdapter behavior via config JSON or programmatically.

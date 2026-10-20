@@ -50,8 +50,8 @@ func (m *MockAPI) GetMe() (tgbotapi.User, error) {
 	return tgbotapi.User{
 		ID:        999999,
 		IsBot:     true,
-		FirstName: "DamtieBot",
-		UserName:  "damtie_mirror_bot",
+		FirstName: "KerobBot",
+		UserName:  "kerob_mirror_bot",
 	}, nil
 }
 

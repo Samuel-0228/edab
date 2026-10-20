@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"automation-engine/migrations"
+	"kerob/migrations"
 )
 
 // Migrate applies all pending .up.sql migrations from the embedded filesystem.

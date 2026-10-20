@@ -10,8 +10,8 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
-	"automation-engine/internal/core/event"
-	"automation-engine/internal/telegram"
+	"kerob/internal/core/event"
+	"kerob/internal/telegram"
 )
 
 // TelegramSourceConfig is stored in a Source's config for telegram sources.

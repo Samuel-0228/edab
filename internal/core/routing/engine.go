@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"automation-engine/internal/core/event"
+	"kerob/internal/core/event"
 )
 
 // RoutingEngine determines which destinations should receive an event.

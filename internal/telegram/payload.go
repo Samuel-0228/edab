@@ -1,5 +1,5 @@
 // Package telegram contains the Telegram integration primitives used by the
-// Damtie adapters and ingestion listener: a thin Bot API client, a rate limiter,
+// Kerob adapters and ingestion listener: a thin Bot API client, a rate limiter,
 // the normalized event payload schema, and listener state persistence.
 //
 // The package deliberately has no dependency on the core engine so that the

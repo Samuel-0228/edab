@@ -7,13 +7,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"automation-engine/internal/adapters/destinations"
-	"automation-engine/internal/adapters/sources"
-	"automation-engine/internal/api"
-	"automation-engine/internal/core/delivery"
-	"automation-engine/internal/core/event"
-	"automation-engine/internal/core/routing"
-	"automation-engine/internal/telegram"
+	"kerob/internal/adapters/destinations"
+	"kerob/internal/adapters/sources"
+	"kerob/internal/api"
+	"kerob/internal/core/delivery"
+	"kerob/internal/core/event"
+	"kerob/internal/core/routing"
+	"kerob/internal/telegram"
 )
 
 func setupAPITestServer() (*httptest.Server, *MemoryEventStore, *MemorySourceStore, *MemoryDestinationStore, *MemoryRouteStore, *MemoryDeliveryStore) {

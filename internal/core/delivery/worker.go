@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"automation-engine/internal/adapters/destinations"
-	"automation-engine/internal/core/event"
+	"kerob/internal/adapters/destinations"
+	"kerob/internal/core/event"
 )
 
 // WorkerConfig defines parameters for background job execution and retries.

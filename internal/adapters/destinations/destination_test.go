@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"automation-engine/internal/core/event"
+	"kerob/internal/core/event"
 )
 
 func TestDestinationRegistry(t *testing.T) {

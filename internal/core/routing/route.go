@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"automation-engine/internal/core/event"
+	"kerob/internal/core/event"
 )
 
 var (
