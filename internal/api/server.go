@@ -27,11 +27,64 @@ type ServerOptions struct {
 func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions) *Server {
 	mux := http.NewServeMux()
 
-	// Health check endpoints
+	// Health and Observability
 	mux.HandleFunc("GET /health", handlers.Health)
 	mux.HandleFunc("GET /ready", handlers.Ready)
+	mux.HandleFunc("GET /metrics", handlers.Metrics)
 
-	// Sources endpoints
+	// Dashboard UI
+	mux.HandleFunc("GET /{$}", handlers.DashboardUI)
+	mux.HandleFunc("GET /ui", handlers.DashboardUI)
+
+	// Overview API
+	mux.HandleFunc("GET /api/v1/overview", handlers.Overview)
+	mux.HandleFunc("GET /api/v1/stats", handlers.Overview)
+
+	// Workflows API
+	mux.HandleFunc("GET /api/v1/workflows", handlers.ListWorkflows)
+	mux.HandleFunc("POST /api/v1/workflows", handlers.CreateWorkflow)
+	mux.HandleFunc("GET /api/v1/workflows/{id}", handlers.GetWorkflow)
+	mux.HandleFunc("PUT /api/v1/workflows/{id}", handlers.UpdateWorkflow)
+	mux.HandleFunc("PATCH /api/v1/workflows/{id}", handlers.PatchWorkflow)
+	mux.HandleFunc("DELETE /api/v1/workflows/{id}", handlers.DeleteWorkflow)
+
+	// Integrations Catalog
+	mux.HandleFunc("GET /api/v1/integrations", handlers.ListIntegrations)
+	mux.HandleFunc("GET /api/v1/integrations/{id}", handlers.GetIntegration)
+
+	// Credentials API (AES-256 encrypted at rest, never exposes raw secrets)
+	mux.HandleFunc("GET /api/v1/credentials", handlers.ListCredentials)
+	mux.HandleFunc("POST /api/v1/credentials", handlers.CreateCredential)
+	mux.HandleFunc("GET /api/v1/credentials/{id}", handlers.GetCredential)
+	mux.HandleFunc("PUT /api/v1/credentials/{id}", handlers.UpdateCredential)
+	mux.HandleFunc("DELETE /api/v1/credentials/{id}", handlers.DeleteCredential)
+
+	// Executions API
+	mux.HandleFunc("GET /api/v1/executions", handlers.ListExecutions)
+	mux.HandleFunc("GET /api/v1/executions/{id}", handlers.GetExecution)
+	mux.HandleFunc("POST /api/v1/executions/{id}/retry", handlers.RetryExecution)
+
+	// Failures / Dead-Letter Queue
+	mux.HandleFunc("GET /api/v1/failures", handlers.ListFailures)
+	mux.HandleFunc("GET /api/v1/failures/{id}", handlers.GetFailure)
+	mux.HandleFunc("POST /api/v1/failures/{id}/discard", handlers.DiscardFailure)
+	mux.HandleFunc("POST /api/v1/failures/{id}/retry", handlers.RetryFailure)
+
+	// Webhooks Endpoints
+	mux.HandleFunc("GET /api/v1/webhooks", handlers.ListWebhooks)
+	mux.HandleFunc("POST /api/v1/webhooks", handlers.CreateWebhook)
+	mux.HandleFunc("GET /api/v1/webhooks/{id}", handlers.GetWebhook)
+	mux.HandleFunc("PUT /api/v1/webhooks/{id}", handlers.UpdateWebhook)
+	mux.HandleFunc("DELETE /api/v1/webhooks/{id}", handlers.DeleteWebhook)
+	mux.HandleFunc("POST /webhooks/{id}", handlers.ReceiveWebhook)
+	mux.HandleFunc("POST /api/v1/webhooks/{id}/ingest", handlers.ReceiveWebhook)
+
+	// Events API
+	mux.HandleFunc("GET /api/v1/events", handlers.ListEvents)
+	mux.HandleFunc("POST /api/v1/events", handlers.IngestEvent)
+	mux.HandleFunc("GET /api/v1/events/{id}", handlers.GetEvent)
+
+	// Legacy routes for backwards compatibility
 	mux.HandleFunc("GET /sources", handlers.ListSources)
 	mux.HandleFunc("POST /sources", handlers.CreateSource)
 	mux.HandleFunc("GET /sources/{id}", handlers.GetSource)
@@ -42,7 +95,6 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("POST /sources/{id}/sync", handlers.SyncSource)
 	mux.HandleFunc("POST /sources/{id}/ingest", handlers.IngestRawSourceEvent)
 
-	// Destinations endpoints
 	mux.HandleFunc("GET /destinations", handlers.ListDestinations)
 	mux.HandleFunc("POST /destinations", handlers.CreateDestination)
 	mux.HandleFunc("GET /destinations/{id}", handlers.GetDestination)
@@ -51,7 +103,6 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("DELETE /destinations/{id}", handlers.DeleteDestination)
 	mux.HandleFunc("GET /destinations/{id}/access", handlers.CheckDestinationAccess)
 
-	// Routes endpoints
 	mux.HandleFunc("GET /routes", handlers.ListRoutes)
 	mux.HandleFunc("POST /routes", handlers.CreateRoute)
 	mux.HandleFunc("GET /routes/{id}", handlers.GetRoute)
@@ -59,21 +110,15 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("PATCH /routes/{id}", handlers.PatchRoute)
 	mux.HandleFunc("DELETE /routes/{id}", handlers.DeleteRoute)
 
-	// Events endpoints
 	mux.HandleFunc("GET /events", handlers.ListEvents)
 	mux.HandleFunc("POST /events", handlers.IngestEvent)
 	mux.HandleFunc("GET /events/{id}", handlers.GetEvent)
 
-	// Deliveries endpoints
 	mux.HandleFunc("GET /deliveries", handlers.ListDeliveries)
 	mux.HandleFunc("GET /deliveries/failed", handlers.ListFailedDeliveries)
 	mux.HandleFunc("GET /deliveries/stats", handlers.DeliveryStats)
 	mux.HandleFunc("GET /deliveries/{id}", handlers.GetDelivery)
 	mux.HandleFunc("POST /deliveries/{id}/retry", handlers.RetryDelivery)
-
-	// Management Dashboard UI
-	mux.HandleFunc("GET /{$}", handlers.DashboardUI)
-	mux.HandleFunc("GET /ui", handlers.DashboardUI)
 
 	loggedHandler := loggingMiddleware(securityMiddleware(authMiddleware(mux, options.APIToken)))
 
@@ -91,8 +136,11 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 
 func authMiddleware(next http.Handler, token string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		isWebhookIngest := r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/ingest")
-		if token == "" || r.URL.Path == "/health" || r.URL.Path == "/ready" || isWebhookIngest {
+		isWebhookIngest := r.Method == http.MethodPost && (strings.HasPrefix(r.URL.Path, "/webhooks/") || strings.HasSuffix(r.URL.Path, "/ingest"))
+		isUI := r.URL.Path == "/" || r.URL.Path == "/ui"
+		isHealth := r.URL.Path == "/health" || r.URL.Path == "/ready" || r.URL.Path == "/metrics"
+
+		if token == "" || isHealth || isUI || isWebhookIngest {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -151,18 +199,15 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			ResponseWriter: w,
 			statusCode:     http.StatusOK,
 		}
-
 		next.ServeHTTP(rec, r)
+		duration := time.Since(start)
 
-		// Don't spam health check polling in logs
-		if r.URL.Path != "/health" && r.URL.Path != "/ready" {
-			slog.Info("http request",
-				slog.String("method", r.Method),
-				slog.String("path", r.URL.Path),
-				slog.Int("status", rec.statusCode),
-				slog.Duration("duration", time.Since(start)),
-				slog.String("remote_addr", r.RemoteAddr),
-			)
-		}
+		slog.Info("http request",
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.Int("status", rec.statusCode),
+			slog.Duration("duration", duration),
+			slog.String("remote_addr", r.RemoteAddr),
+		)
 	})
 }

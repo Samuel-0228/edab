@@ -9,13 +9,16 @@ import (
 	"syscall"
 	"time"
 
+	"kerob/internal/adapters/actions"
 	"kerob/internal/adapters/destinations"
 	"kerob/internal/adapters/sources"
 	"kerob/internal/api"
 	"kerob/internal/config"
+	"kerob/internal/core/credentials"
 	"kerob/internal/core/delivery"
 	"kerob/internal/core/event"
 	"kerob/internal/core/routing"
+	"kerob/internal/core/webhooks"
 	"kerob/internal/core/workflow"
 	"kerob/internal/database"
 	"kerob/internal/telegram"
@@ -29,7 +32,7 @@ func main() {
 	}
 	setupLogger(cfg.LogLevel)
 
-	slog.Info("starting automation engine",
+	slog.Info("starting kerob automation engine",
 		slog.String("environment", cfg.Environment),
 		slog.String("port", cfg.ServerPort),
 	)
@@ -55,6 +58,13 @@ func main() {
 	slog.Info("database migrations verified successfully")
 
 	// 3. Initialize Stores
+	encKey := credentials.DeriveKey(cfg.EncryptionKey)
+	credStore := credentials.NewPostgresStore(db, encKey)
+	wfStore := workflow.NewPostgresStore(db)
+	execStore := workflow.NewPostgresExecutionStore(db)
+	dlStore := workflow.NewPostgresDeadLetterStore(db)
+	whStore := webhooks.NewPostgresStore(db)
+
 	srcStore := sources.NewPostgresStore(db)
 	destStore := destinations.NewPostgresStore(db)
 	routeStore := routing.NewPostgresStore(db)
@@ -74,7 +84,41 @@ func main() {
 	destRegistry.Register("stdout", func() destinations.DestinationAdapter { return destinations.NewStdoutDestinationAdapter() })
 	destRegistry.Register("telegram", func() destinations.DestinationAdapter { return destinations.NewTelegramDestinationAdapter() })
 
-	// 5. Initialize Engine Components
+	// 5. Initialize Workflow Action Registry & Engine
+	actionRegistry := workflow.NewActionRegistry()
+	actionRegistry.Register(actions.NewHTTPActionExecutor())
+	actionRegistry.Register(actions.NewDiscordActionExecutor())
+	actionRegistry.Register(actions.NewGitHubActionExecutor())
+
+	var teleAPI telegram.API
+	if cfg.TelegramEnabled && cfg.TelegramBotToken != "" {
+		teleClient, err := telegram.NewClient(cfg.TelegramBotToken, telegram.ClientOptions{
+			APIBaseURL:  cfg.TelegramAPIBaseURL,
+			GlobalRate:  cfg.TelegramRateGlobal,
+			PerChatRate: cfg.TelegramRatePerChat,
+		})
+		if err != nil {
+			slog.Error("failed to initialize telegram client", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		teleAPI = teleClient
+	}
+
+	actionRegistry.Register(actions.NewTelegramActionExecutor(teleAPI))
+
+	wfEngine := workflow.NewEngine(
+		wfStore,
+		execStore,
+		dlStore,
+		credStore,
+		actionRegistry,
+		workflow.EngineConfig{
+			BaseBackoff: cfg.InitialBackoff,
+			MaxBackoff:  cfg.MaxBackoff,
+		},
+	)
+
+	// 6. Initialize Engine Pipeline & Delivery Worker
 	routingEngine := routing.NewRoutingEngine(routeStore)
 	pipeline := workflow.NewPipeline(
 		srcStore,
@@ -99,52 +143,45 @@ func main() {
 		},
 	)
 
-	// 6. Start Worker and Telegram Listener in Background
+	// 7. Start Worker and Telegram Listeners in Background
 	rootCtx, stopRoot := context.WithCancel(context.Background())
 	defer stopRoot()
 
 	worker.Start(rootCtx)
 
-	var teleAPI telegram.API
 	var teleListener *telegram.Listener
 	var publicPoller *telegram.PublicPoller
 
 	teleStateStore := telegram.NewPostgresStateStore(db)
+
+	ingestCallback := func(ctx context.Context, sourceID string, rawData []byte) error {
+		ev, err := pipeline.IngestRaw(ctx, sourceID, rawData)
+		if err != nil {
+			return err
+		}
+		if ev != nil && wfEngine != nil {
+			_, _ = wfEngine.ProcessEvent(ctx, ev)
+		}
+		return nil
+	}
 
 	// Public channel poller: scrapes t.me/s/<channel> without needing bot in source channel
 	publicResolver := sources.NewPublicSourceResolver(srcStore)
 	publicPoller = telegram.NewPublicPoller(
 		telegram.NewPublicScraper(),
 		teleStateStore,
-		telegram.IngesterFunc(func(ctx context.Context, sourceID string, rawData []byte) error {
-			_, err := pipeline.IngestRaw(ctx, sourceID, rawData)
-			return err
-		}),
+		telegram.IngesterFunc(ingestCallback),
 		publicResolver,
 		cfg.TelegramPublicPollInterval,
 	)
 	publicPoller.Start(rootCtx)
 	slog.Info("telegram public channel poller started", slog.Duration("interval", cfg.TelegramPublicPollInterval))
 
-	if cfg.TelegramEnabled && cfg.TelegramBotToken != "" {
-		teleClient, err := telegram.NewClient(cfg.TelegramBotToken, telegram.ClientOptions{
-			APIBaseURL:  cfg.TelegramAPIBaseURL,
-			GlobalRate:  cfg.TelegramRateGlobal,
-			PerChatRate: cfg.TelegramRatePerChat,
-		})
-		if err != nil {
-			slog.Error("failed to initialize telegram client", slog.String("error", err.Error()))
-			os.Exit(1)
-		}
-		teleAPI = teleClient
-
+	if teleAPI != nil {
 		sourceResolver := sources.NewSourceResolver(srcStore)
 		teleListener = telegram.NewListener(
-			teleClient,
-			telegram.IngesterFunc(func(ctx context.Context, sourceID string, rawData []byte) error {
-				_, err := pipeline.IngestRaw(ctx, sourceID, rawData)
-				return err
-			}),
+			teleAPI,
+			telegram.IngesterFunc(ingestCallback),
 			sourceResolver,
 			teleStateStore,
 			telegram.ListenerOptions{
@@ -153,25 +190,32 @@ func main() {
 			},
 		)
 		teleListener.Start(rootCtx)
-		slog.Info("telegram listener started")
+		slog.Info("telegram bot listener started")
 	} else {
-		slog.Info("telegram listener is inactive (TELEGRAM_BOT_TOKEN not provided or TELEGRAM_ENABLED=false)")
+		slog.Info("telegram bot listener is inactive (TELEGRAM_BOT_TOKEN not provided or TELEGRAM_ENABLED=false)")
 	}
 
-	// 7. Start REST API Server
-	handlers := api.NewHandlers(
-		srcStore,
-		destStore,
-		routeStore,
-		eventStore,
-		deliveryStore,
-		pipeline,
-		srcRegistry,
-		destRegistry,
-	)
-	if teleAPI != nil {
-		handlers.SetTelegramAPI(teleAPI)
-	}
+	// 8. Start REST API Server
+	handlers := api.NewHandlersFromConfig(api.Config{
+		Workflows:      wfStore,
+		Executions:     execStore,
+		DeadLetters:    dlStore,
+		WorkflowEngine: wfEngine,
+		ActionReg:      actionRegistry,
+		Creds:          credStore,
+		WebhookStore:   whStore,
+
+		Sources:      srcStore,
+		Destinations: destStore,
+		Routes:       routeStore,
+		Events:       eventStore,
+		Deliveries:   deliveryStore,
+		Pipeline:     pipeline,
+		SourceReg:    srcRegistry,
+		DestReg:      destRegistry,
+		TelegramAPI:  teleAPI,
+	})
+
 	server := api.NewServerWithOptions(cfg.ServerPort, handlers, api.ServerOptions{
 		APIToken: cfg.APIToken,
 	})
@@ -183,7 +227,7 @@ func main() {
 		}
 	}()
 
-	// 8. Graceful Shutdown on SIGINT / SIGTERM
+	// 9. Graceful Shutdown on SIGINT / SIGTERM
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
@@ -197,7 +241,7 @@ func main() {
 	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelShutdown()
 
-	slog.Info("shutting down engine gracefully...")
+	slog.Info("shutting down kerob engine gracefully...")
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		slog.Error("error during server shutdown", slog.String("error", err.Error()))
 	}
@@ -211,7 +255,7 @@ func main() {
 	}
 	worker.Stop()
 
-	slog.Info("automation engine stopped cleanly")
+	slog.Info("kerob engine stopped cleanly")
 }
 
 func setupLogger(levelStr string) {

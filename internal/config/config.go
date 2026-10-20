@@ -19,6 +19,8 @@ type Config struct {
 	LogLevel           string
 	Environment        string
 	APIToken           string
+	EncryptionKey      string
+	SchedulerInterval  time.Duration
 
 	TelegramBotToken           string
 	TelegramEnabled            bool
@@ -44,6 +46,8 @@ func Load() *Config {
 		LogLevel:                   getEnv("LOG_LEVEL", "info"),
 		Environment:                getEnv("ENVIRONMENT", "development"),
 		APIToken:                   getEnv("API_TOKEN", ""),
+		EncryptionKey:              getEnv("KEROB_ENCRYPTION_KEY", getEnv("ENCRYPTION_KEY", "kerob-default-local-encryption-key-32bytes!!")),
+		SchedulerInterval:          getEnvDuration("SCHEDULER_INTERVAL", 10*time.Second),
 		TelegramBotToken:           botToken,
 		TelegramEnabled:            getEnvBool("TELEGRAM_ENABLED", botToken != ""),
 		TelegramAPIBaseURL:         getEnv("TELEGRAM_API_BASE_URL", ""),
@@ -98,19 +102,19 @@ func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
 	return defaultVal
 }
 
-func getEnvBool(key string, defaultVal bool) bool {
-	if val, ok := os.LookupEnv(key); ok && val != "" {
-		if b, err := strconv.ParseBool(val); err == nil {
-			return b
+func getEnvFloat(key string, defaultVal float64) float64 {
+	if val, ok := os.LookupEnv(key); ok {
+		if f, err := strconv.ParseFloat(val, 64); err == nil {
+			return f
 		}
 	}
 	return defaultVal
 }
 
-func getEnvFloat(key string, defaultVal float64) float64 {
-	if val, ok := os.LookupEnv(key); ok && val != "" {
-		if f, err := strconv.ParseFloat(val, 64); err == nil {
-			return f
+func getEnvBool(key string, defaultVal bool) bool {
+	if val, ok := os.LookupEnv(key); ok {
+		if b, err := strconv.ParseBool(val); err == nil {
+			return b
 		}
 	}
 	return defaultVal
