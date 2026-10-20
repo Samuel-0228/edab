@@ -1,0 +1,6 @@
+DROP TABLE IF EXISTS webhooks;
+DROP TABLE IF EXISTS dead_letter;
+DROP TABLE IF EXISTS execution_steps;
+DROP TABLE IF EXISTS executions;
+DROP TABLE IF EXISTS workflows;
+DROP TABLE IF EXISTS credentials;
