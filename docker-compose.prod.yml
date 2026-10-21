@@ -1,0 +1,16 @@
+# ==============================================================================
+# Kerob Automation Platform - Production Docker Compose Override
+# ==============================================================================
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Enforces mandatory API_TOKEN and KEROB_ENCRYPTION_KEY at Compose interpolation time.
+# ==============================================================================
+
+services:
+  engine:
+    restart: always
+    environment:
+      ENVIRONMENT: "production"
+      API_TOKEN: ${API_TOKEN:?set API_TOKEN before starting the production service}
+      KEROB_ENCRYPTION_KEY: ${KEROB_ENCRYPTION_KEY:?set KEROB_ENCRYPTION_KEY before starting the production service}

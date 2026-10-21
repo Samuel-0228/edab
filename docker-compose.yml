@@ -33,10 +33,10 @@ services:
       MAX_RETRIES: "3"
       INITIAL_BACKOFF: "2s"
       MAX_BACKOFF: "1m"
-      LOG_LEVEL: "info"
-      ENVIRONMENT: "production"
-      API_TOKEN: ${API_TOKEN:?set API_TOKEN before starting the production service}
-      KEROB_ENCRYPTION_KEY: ${KEROB_ENCRYPTION_KEY:-kerob-production-secret-encryption-key-32b}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      API_TOKEN: ${API_TOKEN:-}
+      KEROB_ENCRYPTION_KEY: ${KEROB_ENCRYPTION_KEY:-kerob-default-local-encryption-key-32bytes!!}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-false}
       TELEGRAM_POLL_TIMEOUT: ${TELEGRAM_POLL_TIMEOUT:-30}

@@ -92,13 +92,14 @@ cd kerob
 cp .env.example .env
 ```
 
-Edit `.env` to configure your API token and optional encryption key:
+`API_TOKEN` is optional in development. Optionally edit `.env` if you wish to configure custom credentials, ports, or integration tokens:
 ```env
-API_TOKEN=your-secure-admin-token
-KEROB_ENCRYPTION_KEY=your-random-32-byte-secret-key!!
+# Optional in development; required in production
+API_TOKEN=
+KEROB_ENCRYPTION_KEY=
 ```
 
-### 2. Launch Services
+### 2. Launch Services (Development)
 ```bash
 docker compose up -d
 ```
@@ -106,7 +107,16 @@ This spins up:
 - **PostgreSQL 16** with automated database migrations applied at startup.
 - **Kerob Engine & Dashboard** (`http://localhost:8080`).
 
-### 3. Open the Developer Dashboard
+### 3. Production Deployment
+For production deployments, `API_TOKEN` (minimum 16 characters) is strictly mandatory:
+```bash
+export ENVIRONMENT=production
+export API_TOKEN="your-strong-production-api-token"
+export KEROB_ENCRYPTION_KEY="your-random-32-byte-secret-key!!"
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+### 4. Open the Developer Dashboard
 Open [http://localhost:8080](http://localhost:8080) in your browser:
 - **Overview**: Real operational metrics, success rate, and active automations.
 - **Automations**: Create, enable/disable, and inspect workflow definitions.
@@ -119,7 +129,7 @@ Open [http://localhost:8080](http://localhost:8080) in your browser:
 
 ## 4. REST API Reference (v1)
 
-When `API_TOKEN` is configured, send requests with `Authorization: Bearer <API_TOKEN>`.
+When `API_TOKEN` is configured (or in production mode), send requests with `Authorization: Bearer <API_TOKEN>`. In development mode when `API_TOKEN` is unset, management endpoints can be accessed without authentication headers.
 
 ### Overview & Health
 | Method | Endpoint | Description |
