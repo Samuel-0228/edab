@@ -97,8 +97,8 @@ func (s *Scheduler) tick(ctx context.Context, now time.Time) {
 
 			go func(w *Workflow, t time.Time) {
 				payload := map[string]any{
-					"scheduled_at": t.Format(time.RFC3339),
-					"workflow_id":  w.ID,
+					"scheduled_at":  t.Format(time.RFC3339),
+					"workflow_id":   w.ID,
 					"workflow_name": w.Name,
 				}
 				extID := fmt.Sprintf("sched:%s:%d", w.ID, t.Unix())

@@ -234,4 +234,3 @@ func (h *Handlers) TestWorkflow(w http.ResponseWriter, r *http.Request) {
 		"execution": executed,
 	})
 }
-
