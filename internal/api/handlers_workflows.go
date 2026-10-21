@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"kerob/internal/core/event"
 	"kerob/internal/core/workflow"
 )
 
@@ -157,3 +158,80 @@ func (h *Handlers) DeleteWorkflow(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+type testWorkflowInput struct {
+	EventType string          `json:"event_type,omitempty"`
+	SourceID  string          `json:"source_id,omitempty"`
+	Payload   json.RawMessage `json:"payload,omitempty"`
+	Metadata  json.RawMessage `json:"metadata,omitempty"`
+}
+
+// TestWorkflow executes a workflow on-demand with synthetic or provided event payload.
+func (h *Handlers) TestWorkflow(w http.ResponseWriter, r *http.Request) {
+	if h.workflows == nil || h.workflowEngine == nil {
+		respondError(w, http.StatusInternalServerError, "workflow engine or store not initialized")
+		return
+	}
+
+	id := r.PathValue("id")
+	wf, err := h.workflows.GetByID(r.Context(), id)
+	if errors.Is(err, workflow.ErrWorkflowNotFound) {
+		respondError(w, http.StatusNotFound, "workflow not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var input testWorkflowInput
+	_ = json.NewDecoder(r.Body).Decode(&input)
+
+	eventType := input.EventType
+	if eventType == "" {
+		if len(wf.Trigger.EventTypes) > 0 && wf.Trigger.EventTypes[0] != "*" {
+			eventType = wf.Trigger.EventTypes[0]
+		} else {
+			eventType = wf.Trigger.Type + ".test"
+		}
+	}
+
+	sourceID := input.SourceID
+	if sourceID == "" {
+		sourceID = "manual_test_" + wf.Trigger.Type
+	}
+
+	payload := input.Payload
+	if len(payload) == 0 {
+		payload = json.RawMessage(`{"text":"Kerob manual test message","title":"Test Event","author":"operator"}`)
+	}
+
+	ev, err := event.New(sourceID, "test_"+wf.ID, eventType, payload, input.Metadata)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "failed to construct test event: "+err.Error())
+		return
+	}
+
+	// Create test execution
+	exec := &workflow.Execution{
+		WorkflowID: wf.ID,
+		EventID:    ev.ID,
+		Status:     workflow.ExecutionPending,
+	}
+
+	executed, err := h.workflowEngine.ExecuteWorkflow(r.Context(), wf, ev, exec)
+	if err != nil {
+		respondJSON(w, http.StatusOK, map[string]any{
+			"status":    "error",
+			"error":     err.Error(),
+			"execution": executed,
+		})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]any{
+		"status":    "success",
+		"execution": executed,
+	})
+}
+

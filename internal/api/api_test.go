@@ -296,3 +296,62 @@ func TestAuthMiddlewareDevelopmentWithoutToken(t *testing.T) {
 		t.Fatalf("expected management endpoint to return 200 OK in development, got %d", wMgmt.Code)
 	}
 }
+
+func TestWorkflowTestEndpoint(t *testing.T) {
+	wfStore := workflow.NewMemoryStore()
+	execStore := workflow.NewMemoryExecutionStore()
+	dlStore := workflow.NewMemoryDeadLetterStore()
+	credStore := credentials.NewMemoryStore(credentials.DeriveKey("test-secret-key-32-bytes-long!"))
+	actionReg := workflow.NewActionRegistry()
+	engine := workflow.NewEngine(wfStore, execStore, dlStore, credStore, actionReg)
+
+	handlers := NewHandlersFromConfig(Config{
+		Workflows:      wfStore,
+		Executions:     execStore,
+		DeadLetters:    dlStore,
+		WorkflowEngine: engine,
+		ActionReg:      actionReg,
+		Creds:          credStore,
+	})
+
+	server := NewServer("0", handlers)
+	handler := server.Handler()
+
+	// 1. Create a workflow
+	wf, err := wfStore.Create(context.Background(), &workflow.Workflow{
+		Name:    "Testable Workflow",
+		Enabled: true,
+		Trigger: workflow.TriggerConfig{
+			Type: "webhook",
+		},
+		Actions: []workflow.ActionStep{
+			{
+				Integration: "http",
+				ActionType:  "http_request",
+				Config:      json.RawMessage(`{"url":"https://api.example.com"}`),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create workflow: %v", err)
+	}
+
+	// 2. Invoke /api/v1/workflows/{id}/test
+	testBody := `{"payload":{"text":"automated trigger test"}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+wf.ID+"/test", strings.NewReader(testBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var res map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatalf("failed to parse test response: %v", err)
+	}
+	if res["status"] == "" {
+		t.Fatalf("expected non-empty status in test response")
+	}
+}

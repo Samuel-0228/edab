@@ -47,6 +47,7 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("PUT /api/v1/workflows/{id}", handlers.UpdateWorkflow)
 	mux.HandleFunc("PATCH /api/v1/workflows/{id}", handlers.PatchWorkflow)
 	mux.HandleFunc("DELETE /api/v1/workflows/{id}", handlers.DeleteWorkflow)
+	mux.HandleFunc("POST /api/v1/workflows/{id}/test", handlers.TestWorkflow)
 
 	// Integrations Catalog
 	mux.HandleFunc("GET /api/v1/integrations", handlers.ListIntegrations)
