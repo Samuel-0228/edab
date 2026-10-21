@@ -1,0 +1,217 @@
+:root {
+  /* Color Palette: Technical Dark Palette */
+  --bg-deep: #07080a;
+  --bg-canvas: #0c0d12;
+  --bg-surface: #12141a;
+  --bg-surface-elevated: #181b24;
+  --bg-surface-hover: #1e222e;
+  --bg-surface-active: #242836;
+
+  --border-subtle: #1c202a;
+  --border-default: #262a38;
+  --border-strong: #363c50;
+  --border-focus: #00e599;
+
+  --text-primary: #f0f2f7;
+  --text-secondary: #9ea5b7;
+  --text-muted: #6b7285;
+  --text-faint: #444a59;
+
+  /* Technical Accents */
+  --accent-emerald: #00e599;
+  --accent-emerald-dim: rgba(0, 229, 153, 0.12);
+  --accent-emerald-border: rgba(0, 229, 153, 0.35);
+
+  --accent-cyan: #00d2ff;
+  --accent-cyan-dim: rgba(0, 210, 255, 0.12);
+  --accent-cyan-border: rgba(0, 210, 255, 0.35);
+
+  --accent-amber: #f59e0b;
+  --accent-amber-dim: rgba(245, 158, 11, 0.12);
+  --accent-amber-border: rgba(245, 158, 11, 0.35);
+
+  --accent-crimson: #ff3355;
+  --accent-crimson-dim: rgba(255, 51, 85, 0.12);
+  --accent-crimson-border: rgba(255, 51, 85, 0.35);
+
+  --accent-purple: #a855f7;
+  --accent-purple-dim: rgba(168, 85, 247, 0.12);
+  --accent-purple-border: rgba(168, 85, 247, 0.35);
+
+  /* Fonts */
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: 'Space Grotesk', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /* Sizing and Layout */
+  --sidebar-width: 250px;
+  --header-height: 54px;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Shadows - Minimal & Technical */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-modal: 0 16px 36px rgba(0, 0, 0, 0.8), 0 0 0 1px var(--border-strong);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+/* Subtle Technical Grid Background */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Subtle Film Grain */
+.noise-overlay {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 50% 0%, rgba(0, 229, 153, 0.02) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Typography Defaults */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.015em;
+}
+
+code, pre, .mono {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+code {
+  background: var(--bg-surface-elevated);
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+a {
+  color: var(--accent-emerald);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  border: none;
+  background: none;
+}
+
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: var(--radius-xs);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+/* Common App Layout */
+.app-shell {
+  position: relative;
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.main-viewport {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-canvas);
+}
+
+.page-content-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px 48px;
+}
+
+/* Utility Layout Grids */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 1080px) {
+  .grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .grid-3 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
