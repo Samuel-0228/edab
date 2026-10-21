@@ -265,3 +265,34 @@ func TestAuthMiddlewareProtection(t *testing.T) {
 		t.Fatalf("expected /health to be public, got %d", wHealth.Code)
 	}
 }
+
+func TestAuthMiddlewareDevelopmentWithoutToken(t *testing.T) {
+	wfStore := workflow.NewMemoryStore()
+	handlers := &Handlers{
+		workflows: wfStore,
+	}
+	// In development, API_TOKEN is empty/optional
+	server := NewServerWithOptions("0", handlers, ServerOptions{
+		APIToken: "",
+	})
+	handler := server.Handler()
+
+	// 1. Health endpoint remains public
+	reqHealth := httptest.NewRequest(http.MethodGet, "/health", nil)
+	wHealth := httptest.NewRecorder()
+	handler.ServeHTTP(wHealth, reqHealth)
+	if wHealth.Code != http.StatusOK {
+		t.Fatalf("expected /health to be public, got %d", wHealth.Code)
+	}
+
+	// 2. Management endpoints must be accessible without Authorization header in dev
+	reqMgmt := httptest.NewRequest(http.MethodGet, "/api/v1/workflows", nil)
+	wMgmt := httptest.NewRecorder()
+	handler.ServeHTTP(wMgmt, reqMgmt)
+	if wMgmt.Code == http.StatusUnauthorized {
+		t.Fatalf("expected management endpoint to allow access without token in development, got 401 Unauthorized")
+	}
+	if wMgmt.Code != http.StatusOK {
+		t.Fatalf("expected management endpoint to return 200 OK in development, got %d", wMgmt.Code)
+	}
+}

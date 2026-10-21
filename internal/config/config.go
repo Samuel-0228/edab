@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -59,14 +60,52 @@ func Load() *Config {
 	}
 }
 
+// IsProduction reports whether the engine is configured to run in production mode.
+func (c *Config) IsProduction() bool {
+	env := strings.ToLower(strings.TrimSpace(c.Environment))
+	return env == "production" || env == "prod"
+}
+
+// IsDevelopment reports whether the engine is configured to run in development mode.
+func (c *Config) IsDevelopment() bool {
+	env := strings.ToLower(strings.TrimSpace(c.Environment))
+	return env == "development" || env == "dev" || env == "" || env == "local"
+}
+
+var knownInsecureTokens = map[string]bool{
+	"your-random-production-api-token-here":             true,
+	"your-secure-admin-token":                           true,
+	"replace-with-a-secure-random-32-byte-secret-key!!": true,
+	"changeme": true,
+	"admin":    true,
+	"password": true,
+	"secret":   true,
+	"12345678": true,
+	"token":    true,
+	"default":  true,
+}
+
+func isPlaceholderToken(token string) bool {
+	return knownInsecureTokens[strings.ToLower(strings.TrimSpace(token))]
+}
+
 // Validate checks settings that would otherwise allow an unprotected
-// management API in a production deployment.
+// management API in a production deployment or invalid runtime constraints.
 func (c *Config) Validate() error {
 	if c.DatabaseURL == "" {
 		return fmt.Errorf("DATABASE_URL is required")
 	}
-	if c.Environment == "production" && c.APIToken == "" {
-		return fmt.Errorf("API_TOKEN is required in production")
+	if c.IsProduction() {
+		token := strings.TrimSpace(c.APIToken)
+		if token == "" {
+			return fmt.Errorf("API_TOKEN is required in production")
+		}
+		if isPlaceholderToken(token) {
+			return fmt.Errorf("API_TOKEN cannot be a placeholder or default value in production")
+		}
+		if len(token) < 16 {
+			return fmt.Errorf("API_TOKEN must be at least 16 characters in production")
+		}
 	}
 	if c.WorkerConcurrency < 1 {
 		return fmt.Errorf("WORKER_CONCURRENCY must be at least 1")
