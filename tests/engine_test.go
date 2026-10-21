@@ -314,7 +314,7 @@ func TestRetryBehaviorAndDeadLetter(t *testing.T) {
 	jobID := jobs[0].ID
 
 	// Process Attempt 1
-	worker.ProcessNextJob(ctx)
+	_, _ = worker.ProcessNextJob(ctx)
 	j1, _ := jobStore.GetByID(ctx, jobID)
 	if j1.Status != delivery.StatusFailed || j1.Attempts != 1 {
 		t.Fatalf("attempt 1 failed: status=%s attempts=%d", j1.Status, j1.Attempts)
@@ -323,7 +323,7 @@ func TestRetryBehaviorAndDeadLetter(t *testing.T) {
 	// Advance time for attempt 2
 	j1.NextAttemptAt = time.Now().UTC().Add(-time.Second)
 	// Process Attempt 2
-	worker.ProcessNextJob(ctx)
+	_, _ = worker.ProcessNextJob(ctx)
 	j2, _ := jobStore.GetByID(ctx, jobID)
 	if j2.Status != delivery.StatusFailed || j2.Attempts != 2 {
 		t.Fatalf("attempt 2 failed: status=%s attempts=%d", j2.Status, j2.Attempts)
@@ -332,7 +332,7 @@ func TestRetryBehaviorAndDeadLetter(t *testing.T) {
 	// Advance time for attempt 3 (max_attempts = 3)
 	j2.NextAttemptAt = time.Now().UTC().Add(-time.Second)
 	// Process Attempt 3 -> should become dead_letter!
-	worker.ProcessNextJob(ctx)
+	_, _ = worker.ProcessNextJob(ctx)
 	j3, _ := jobStore.GetByID(ctx, jobID)
 	if j3.Status != delivery.StatusDeadLetter {
 		t.Fatalf("attempt 3 should transition to dead_letter, got status: %s", j3.Status)
@@ -416,9 +416,9 @@ func TestDestinationIsolation(t *testing.T) {
 	})
 
 	// Process first job
-	worker.ProcessNextJob(ctx)
+	_, _ = worker.ProcessNextJob(ctx)
 	// Process second job
-	worker.ProcessNextJob(ctx)
+	_, _ = worker.ProcessNextJob(ctx)
 
 	// Check jobs status
 	jobs, _ := jobStore.List(ctx, delivery.ListFilter{EventID: persisted.ID})

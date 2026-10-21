@@ -153,7 +153,7 @@ func (s *PostgresStore) List(ctx context.Context) ([]*Source, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sources: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var list []*Source
 	for rows.Next() {

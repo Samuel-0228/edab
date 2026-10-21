@@ -97,7 +97,7 @@ func TestPublicScraper_FetchPosts(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`
+		_, _ = w.Write([]byte(`
 <div class="tgme_widget_message_wrap">
   <div class="tgme_widget_message" data-post="testchannel/55">
     <div class="tgme_widget_message_text">Hello test</div>

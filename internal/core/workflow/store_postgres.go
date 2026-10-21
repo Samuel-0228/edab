@@ -154,7 +154,7 @@ func (s *PostgresStore) queryList(ctx context.Context, query string) ([]*Workflo
 	if err != nil {
 		return nil, fmt.Errorf("failed to query workflows: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var list []*Workflow
 	for rows.Next() {
@@ -426,7 +426,7 @@ func (s *PostgresExecutionStore) List(ctx context.Context, filter ExecutionFilte
 	if err != nil {
 		return nil, fmt.Errorf("failed to query executions: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var list []*Execution
 	for rows.Next() {
@@ -590,7 +590,7 @@ func (s *PostgresExecutionStore) getExecutionSteps(ctx context.Context, executio
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var steps []ExecutionStep
 	for rows.Next() {
@@ -702,7 +702,7 @@ func (s *PostgresDeadLetterStore) List(ctx context.Context, includeDiscarded boo
 	if err != nil {
 		return nil, fmt.Errorf("failed to query dead letters: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var list []*DeadLetterRecord
 	for rows.Next() {

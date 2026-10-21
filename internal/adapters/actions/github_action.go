@@ -106,7 +106,7 @@ func (g *GitHubActionExecutor) Execute(ctx context.Context, req workflow.ActionR
 	if err != nil {
 		return workflow.ActionResult{Success: false}, fmt.Errorf("github api request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 16*1024))
 

@@ -28,7 +28,6 @@ type Worker struct {
 	destStore    destinations.Store
 	destRegistry *destinations.Registry
 	cfg          WorkerConfig
-	adapterCache sync.Map // cached destination adapters
 	wg           sync.WaitGroup
 	stopChan     chan struct{}
 }

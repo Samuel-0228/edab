@@ -135,5 +135,12 @@ func (a *TelegramPublicSourceAdapter) Normalize(ctx context.Context, sourceID st
 		metadata["media_count"] = len(post.Media)
 	}
 
-	return event.New(sourceID, externalID, eventType, payload, metadata)
+	evt, err := event.New(sourceID, externalID, eventType, payload, metadata)
+	if err != nil {
+		return nil, err
+	}
+	if !createdAt.IsZero() {
+		evt.CreatedAt = createdAt
+	}
+	return evt, nil
 }

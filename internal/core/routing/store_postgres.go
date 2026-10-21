@@ -98,7 +98,7 @@ func (s *PostgresStore) GetBySourceID(ctx context.Context, sourceID string) ([]*
 	if err != nil {
 		return nil, fmt.Errorf("failed to get routes by source id: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var list []*Route
 	for rows.Next() {
@@ -188,7 +188,7 @@ func (s *PostgresStore) List(ctx context.Context) ([]*Route, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list routes: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var list []*Route
 	for rows.Next() {

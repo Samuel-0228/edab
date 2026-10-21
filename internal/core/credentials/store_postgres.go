@@ -143,7 +143,7 @@ func (s *PostgresStore) List(ctx context.Context) ([]*Credential, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list credentials: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var list []*Credential
 	for rows.Next() {

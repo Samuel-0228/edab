@@ -132,7 +132,7 @@ func (h *HTTPActionExecutor) Execute(ctx context.Context, req workflow.ActionReq
 	if err != nil {
 		return workflow.ActionResult{Success: false}, fmt.Errorf("http request execution failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 16*1024)) // limit to 16 KB
 

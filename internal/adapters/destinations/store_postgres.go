@@ -153,7 +153,7 @@ func (s *PostgresStore) List(ctx context.Context) ([]*Destination, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list destinations: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var list []*Destination
 	for rows.Next() {

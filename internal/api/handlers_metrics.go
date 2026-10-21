@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"sync/atomic"
 )
 
@@ -48,27 +49,30 @@ func (h *Handlers) Metrics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	fmt.Fprintf(w, "# HELP kerob_workflow_executions_total Total number of workflow executions\n")
-	fmt.Fprintf(w, "# TYPE kerob_workflow_executions_total counter\n")
-	fmt.Fprintf(w, "kerob_workflow_executions_total %d\n\n", globalMetrics.workflowExecutions.Load())
+	var b strings.Builder
+	fmt.Fprintf(&b, "# HELP kerob_workflow_executions_total Total number of workflow executions\n")
+	fmt.Fprintf(&b, "# TYPE kerob_workflow_executions_total counter\n")
+	fmt.Fprintf(&b, "kerob_workflow_executions_total %d\n\n", globalMetrics.workflowExecutions.Load())
 
-	fmt.Fprintf(w, "# HELP kerob_workflow_successes_total Total successful workflow executions\n")
-	fmt.Fprintf(w, "# TYPE kerob_workflow_successes_total counter\n")
-	fmt.Fprintf(w, "kerob_workflow_successes_total %d\n\n", globalMetrics.workflowSuccesses.Load())
+	fmt.Fprintf(&b, "# HELP kerob_workflow_successes_total Total successful workflow executions\n")
+	fmt.Fprintf(&b, "# TYPE kerob_workflow_successes_total counter\n")
+	fmt.Fprintf(&b, "kerob_workflow_successes_total %d\n\n", globalMetrics.workflowSuccesses.Load())
 
-	fmt.Fprintf(w, "# HELP kerob_workflow_failures_total Total failed workflow executions\n")
-	fmt.Fprintf(w, "# TYPE kerob_workflow_failures_total counter\n")
-	fmt.Fprintf(w, "kerob_workflow_failures_total %d\n\n", globalMetrics.workflowFailures.Load())
+	fmt.Fprintf(&b, "# HELP kerob_workflow_failures_total Total failed workflow executions\n")
+	fmt.Fprintf(&b, "# TYPE kerob_workflow_failures_total counter\n")
+	fmt.Fprintf(&b, "kerob_workflow_failures_total %d\n\n", globalMetrics.workflowFailures.Load())
 
-	fmt.Fprintf(w, "# HELP kerob_events_processed_total Total normalized events ingested\n")
-	fmt.Fprintf(w, "# TYPE kerob_events_processed_total counter\n")
-	fmt.Fprintf(w, "kerob_events_processed_total %d\n\n", globalMetrics.eventsProcessed.Load())
+	fmt.Fprintf(&b, "# HELP kerob_events_processed_total Total normalized events ingested\n")
+	fmt.Fprintf(&b, "# TYPE kerob_events_processed_total counter\n")
+	fmt.Fprintf(&b, "kerob_events_processed_total %d\n\n", globalMetrics.eventsProcessed.Load())
 
-	fmt.Fprintf(w, "# HELP kerob_active_workflows Number of active workflows\n")
-	fmt.Fprintf(w, "# TYPE kerob_active_workflows gauge\n")
-	fmt.Fprintf(w, "kerob_active_workflows %d\n\n", activeWorkflows)
+	fmt.Fprintf(&b, "# HELP kerob_active_workflows Number of active workflows\n")
+	fmt.Fprintf(&b, "# TYPE kerob_active_workflows gauge\n")
+	fmt.Fprintf(&b, "kerob_active_workflows %d\n\n", activeWorkflows)
 
-	fmt.Fprintf(w, "# HELP kerob_dead_letter_count Number of unresolved dead-letter failures\n")
-	fmt.Fprintf(w, "# TYPE kerob_dead_letter_count gauge\n")
-	fmt.Fprintf(w, "kerob_dead_letter_count %d\n", deadLetters)
+	fmt.Fprintf(&b, "# HELP kerob_dead_letter_count Number of unresolved dead-letter failures\n")
+	fmt.Fprintf(&b, "# TYPE kerob_dead_letter_count gauge\n")
+	fmt.Fprintf(&b, "kerob_dead_letter_count %d\n", deadLetters)
+
+	_, _ = w.Write([]byte(b.String()))
 }

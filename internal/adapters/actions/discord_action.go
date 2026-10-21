@@ -122,7 +122,7 @@ func (d *DiscordActionExecutor) Execute(ctx context.Context, req workflow.Action
 	if err != nil {
 		return workflow.ActionResult{Success: false}, fmt.Errorf("discord webhook request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 

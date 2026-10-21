@@ -129,7 +129,7 @@ func (s *PublicScraper) FetchPosts(ctx context.Context, channelName string) ([]*
 	if err != nil {
 		return nil, fmt.Errorf("request to %s failed: %w", reqURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code %d fetching %s", resp.StatusCode, reqURL)
@@ -288,7 +288,7 @@ func DownloadMedia(ctx context.Context, client *http.Client, mediaURL string, ma
 	if err != nil {
 		return nil, fmt.Errorf("failed to download media from %s: %w", mediaURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status %d downloading media from %s", resp.StatusCode, mediaURL)

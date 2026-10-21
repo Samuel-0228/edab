@@ -95,7 +95,7 @@ func (s *PostgresStore) CreateJobs(ctx context.Context, jobs []*DeliveryJob) err
 	if err != nil {
 		return fmt.Errorf("failed to begin tx for delivery jobs: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO delivery_jobs (
@@ -106,7 +106,7 @@ func (s *PostgresStore) CreateJobs(ctx context.Context, jobs []*DeliveryJob) err
 	if err != nil {
 		return fmt.Errorf("failed to prepare delivery job insert: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	for _, job := range jobs {
 		var resultParam any
@@ -165,7 +165,7 @@ func (s *PostgresStore) List(ctx context.Context, filter ListFilter) ([]*Deliver
 	if err != nil {
 		return nil, fmt.Errorf("failed to list delivery jobs: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var jobs []*DeliveryJob
 	for rows.Next() {
@@ -283,7 +283,7 @@ func (s *PostgresStore) Stats(ctx context.Context) (Stats, error) {
 	if err != nil {
 		return Stats{}, fmt.Errorf("failed to query delivery stats: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var stats Stats
 	for rows.Next() {

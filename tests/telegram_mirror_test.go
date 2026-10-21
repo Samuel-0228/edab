@@ -719,7 +719,7 @@ func TestPublicTelegramChannelMirroring(t *testing.T) {
 `
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(htmlContent))
+		_, _ = w.Write([]byte(htmlContent))
 	}))
 	defer ts.Close()
 
@@ -800,7 +800,11 @@ func TestPublicTelegramChannelMirroring(t *testing.T) {
 	sentCount := len(mockAPI.SentChattables)
 	var sentMsg tgbotapi.MessageConfig
 	if sentCount > 0 {
-		sentMsg = mockAPI.SentChattables[0].(tgbotapi.MessageConfig)
+		if msg, ok := mockAPI.SentChattables[0].(tgbotapi.MessageConfig); ok {
+			sentMsg = msg
+		} else {
+			t.Fatalf("expected tgbotapi.MessageConfig, got %T", mockAPI.SentChattables[0])
+		}
 	}
 
 	if sentCount != 1 {

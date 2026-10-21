@@ -45,7 +45,7 @@ func main() {
 		slog.Error("failed to connect to database", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// 2. Run Database Migrations
 	migrationCtx, cancelMigration := context.WithTimeout(context.Background(), 30*time.Second)
