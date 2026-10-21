@@ -355,3 +355,89 @@ func TestWorkflowTestEndpoint(t *testing.T) {
 		t.Fatalf("expected non-empty status in test response")
 	}
 }
+
+func TestAPIValidationTableDriven(t *testing.T) {
+	wfStore := workflow.NewMemoryStore()
+	handlers := NewHandlersFromConfig(Config{
+		Workflows: wfStore,
+	})
+	server := NewServer("0", handlers)
+	handler := server.Handler()
+
+	tests := []struct {
+		name           string
+		method         string
+		path           string
+		body           string
+		expectedStatus int
+		expectedError  string
+	}{
+		{
+			name:           "Create workflow with invalid JSON",
+			method:         http.MethodPost,
+			path:           "/api/v1/workflows",
+			body:           `{invalid json`,
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "invalid json body",
+		},
+		{
+			name:           "Create workflow missing name",
+			method:         http.MethodPost,
+			path:           "/api/v1/workflows",
+			body:           `{"trigger":{"type":"webhook"},"actions":[{"integration":"discord","action_type":"send_message"}]}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "workflow name is required",
+		},
+		{
+			name:           "Create workflow missing trigger type",
+			method:         http.MethodPost,
+			path:           "/api/v1/workflows",
+			body:           `{"name":"Invalid Workflow","trigger":{},"actions":[{"integration":"discord","action_type":"send_message"}]}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "workflow trigger.type is required",
+		},
+		{
+			name:           "Create workflow missing actions",
+			method:         http.MethodPost,
+			path:           "/api/v1/workflows",
+			body:           `{"name":"No Actions Workflow","trigger":{"type":"webhook"},"actions":[]}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "workflow must define at least one action",
+		},
+		{
+			name:           "Create workflow with action missing integration",
+			method:         http.MethodPost,
+			path:           "/api/v1/workflows",
+			body:           `{"name":"Bad Action","trigger":{"type":"webhook"},"actions":[{"action_type":"send_message"}]}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "integration is required",
+		},
+		{
+			name:           "Get non-existent workflow returns 404",
+			method:         http.MethodGet,
+			path:           "/api/v1/workflows/non-existent-uuid",
+			body:           "",
+			expectedStatus: http.StatusNotFound,
+			expectedError:  "workflow not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, strings.NewReader(tt.body))
+			if tt.body != "" {
+				req.Header.Set("Content-Type", "application/json")
+			}
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			if w.Code != tt.expectedStatus {
+				t.Fatalf("expected status %d, got %d: %s", tt.expectedStatus, w.Code, w.Body.String())
+			}
+
+			if tt.expectedError != "" && !strings.Contains(w.Body.String(), tt.expectedError) {
+				t.Errorf("expected error %q in response, got %s", tt.expectedError, w.Body.String())
+			}
+		})
+	}
+}
