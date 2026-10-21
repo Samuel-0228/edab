@@ -116,14 +116,36 @@ export KEROB_ENCRYPTION_KEY="your-random-32-byte-secret-key!!"
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-### 4. Open the Developer Dashboard
-Open [http://localhost:8080](http://localhost:8080) in your browser:
+### 4. Open the Kerob Control Dashboard
+Open [http://localhost:8080](http://localhost:8080) (or `/ui`) in your browser to access the technical Svelte 5 + TypeScript control plane:
 - **Overview**: Real operational metrics, success rate, and active automations.
-- **Automations**: Create, enable/disable, and inspect workflow definitions.
+- **Automations**: Create, edit, enable/disable, test, and delete workflow definitions.
+- **Schedules**: Periodic cron routines and interval execution controller.
 - **Integrations**: Catalog of Telegram, Discord, RSS, GitHub, Webhooks, and HTTP API.
-- **Executions**: Inspect execution runs and view granular step timelines.
-- **Dead-Letter**: Review unrecoverable failures, inspect errors, and retry.
+- **Executions**: Audit logs and granular step-by-step lifecycle outputs.
+- **Dead-Letter**: Review unrecoverable failures, inspect errors, and retry/discard.
 - **Events**: Stream of normalized incoming events and payloads.
+- **Inbound Endpoints**: Create and manage HTTP webhook ingestion endpoints.
+- **Credentials Vault**: AES-256-GCM encrypted tokens for external API authorizations.
+- **Live Logs**: Terminal-style structured execution, event, and failure log stream.
+- **System Health**: Health probes, Prometheus metrics gauges, and SSRF policies.
+- **Settings**: Bearer API token configuration and connection diagnostics.
+
+#### Frontend Development & Build
+The frontend is a dedicated Svelte 5 + TypeScript application located in `frontend/`:
+```bash
+# Run tests
+cd frontend && npm test
+
+# Typecheck
+npm run check
+
+# Dev server with proxy to backend
+npm run dev
+
+# Production build (bundles and updates embedded backend dashboard)
+npm run build
+```
 
 ---
 

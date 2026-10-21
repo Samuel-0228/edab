@@ -1,4 +1,14 @@
-# Build stage
+# Stage 1: Build Svelte frontend
+FROM node:22-alpine AS frontend-builder
+WORKDIR /app
+
+COPY frontend/package*.json ./frontend/
+RUN cd frontend && npm install
+
+COPY frontend/ ./frontend/
+RUN cd frontend && npm run build
+
+# Stage 2: Build Go backend binary
 FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
@@ -13,10 +23,14 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+# Copy built frontend assets into internal/api package for embedding
+COPY --from=frontend-builder /app/internal/api/dashboard.html ./internal/api/dashboard.html
+COPY --from=frontend-builder /app/internal/api/kerob_logo.png ./internal/api/kerob_logo.png
+
 # Build statically linked binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /app/kerob ./cmd/server
 
-# Runtime stage
+# Stage 3: Runtime stage
 FROM alpine:3.20
 
 WORKDIR /app
