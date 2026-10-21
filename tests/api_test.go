@@ -3,8 +3,10 @@ package tests
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"kerob/internal/adapters/destinations"
@@ -239,13 +241,49 @@ func TestAPITelegramAndManagementEndpoints(t *testing.T) {
 		t.Fatalf("GET /deliveries/failed failed: status=%d", resp.StatusCode)
 	}
 
-	// 10. Dashboard UI (GET / and GET /ui)
+	// 10. Dashboard UI (GET /, GET /ui, and GET /ui/{path...})
 	resp, err = client.Get(ts.URL + "/")
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET / failed: status=%d", resp.StatusCode)
 	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if !strings.Contains(string(body), "Kerob Engine Control") || !strings.Contains(string(body), `id="app"`) {
+		t.Fatalf("GET / did not serve Svelte dashboard application")
+	}
+
 	resp, err = client.Get(ts.URL + "/ui")
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /ui failed: status=%d", resp.StatusCode)
 	}
+	body, _ = io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if !strings.Contains(string(body), "Kerob Engine Control") {
+		t.Fatalf("GET /ui did not serve Svelte dashboard application")
+	}
+
+	resp, err = client.Get(ts.URL + "/ui/workflows")
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /ui/workflows failed: status=%d", resp.StatusCode)
+	}
+	_ = resp.Body.Close()
+
+	// 11. Static assets (logo and favicon)
+	resp, err = client.Get(ts.URL + "/kerob_logo.png")
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /kerob_logo.png failed: status=%d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "image/png" {
+		t.Fatalf("GET /kerob_logo.png invalid Content-Type: %s", ct)
+	}
+	_ = resp.Body.Close()
+
+	resp, err = client.Get(ts.URL + "/favicon.ico")
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /favicon.ico failed: status=%d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "image/png" {
+		t.Fatalf("GET /favicon.ico invalid Content-Type: %s", ct)
+	}
+	_ = resp.Body.Close()
 }

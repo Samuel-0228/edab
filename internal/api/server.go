@@ -32,9 +32,12 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("GET /ready", handlers.Ready)
 	mux.HandleFunc("GET /metrics", handlers.Metrics)
 
-	// Dashboard UI
+	// Dashboard UI & Static Assets
 	mux.HandleFunc("GET /{$}", handlers.DashboardUI)
 	mux.HandleFunc("GET /ui", handlers.DashboardUI)
+	mux.HandleFunc("GET /ui/{path...}", handlers.DashboardUI)
+	mux.HandleFunc("GET /kerob_logo.png", handlers.DashboardLogo)
+	mux.HandleFunc("GET /favicon.ico", handlers.DashboardLogo)
 
 	// Overview API
 	mux.HandleFunc("GET /api/v1/overview", handlers.Overview)
@@ -138,7 +141,7 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 func authMiddleware(next http.Handler, token string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		isWebhookIngest := r.Method == http.MethodPost && (strings.HasPrefix(r.URL.Path, "/webhooks/") || strings.HasSuffix(r.URL.Path, "/ingest"))
-		isUI := r.URL.Path == "/" || r.URL.Path == "/ui"
+		isUI := r.URL.Path == "/" || r.URL.Path == "/ui" || strings.HasPrefix(r.URL.Path, "/ui/")
 		isHealth := r.URL.Path == "/health" || r.URL.Path == "/ready" || r.URL.Path == "/metrics"
 
 		if token == "" || isHealth || isUI || isWebhookIngest {
