@@ -3,96 +3,205 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kerob — Event-Driven Automation Platform</title>
+  <title>Kerob &mdash; Automation Engine &amp; Operations Control</title>
   <style>
     :root {
       --bg: #09090b;
-      --sidebar: #121214;
-      --card: #18181b;
-      --card-hover: #202024;
-      --border: #27272a;
+      --sidebar: #0e0e11;
+      --panel: #131316;
+      --card: #18181c;
+      --card-hover: #1f1f24;
+      --border: #26262b;
+      --border-subtle: #1c1c21;
+      --border-focus: #3f3f46;
       --text: #f4f4f5;
-      --text-muted: #a1a1aa;
-      --accent: #10b981;
-      --accent-dim: rgba(16, 185, 129, 0.15);
-      --accent-hover: #059669;
+      --text-muted: #8e8e98;
+      --text-faint: #52525b;
+      --accent: #22c55e;
+      --accent-dim: rgba(34, 197, 94, 0.12);
+      --accent-hover: #16a34a;
+      --accent-border: rgba(34, 197, 94, 0.35);
       --danger: #ef4444;
-      --danger-dim: rgba(239, 68, 68, 0.15);
+      --danger-dim: rgba(239, 68, 68, 0.12);
+      --danger-border: rgba(239, 68, 68, 0.35);
       --warning: #f59e0b;
-      --warning-dim: rgba(245, 158, 11, 0.15);
+      --warning-dim: rgba(245, 158, 11, 0.12);
+      --warning-border: rgba(245, 158, 11, 0.35);
       --blue: #3b82f6;
-      --blue-dim: rgba(59, 130, 246, 0.15);
+      --blue-dim: rgba(59, 130, 246, 0.12);
+      --blue-border: rgba(59, 130, 246, 0.35);
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", monospace;
+      font-family: var(--font-sans);
       display: flex;
       height: 100vh;
       overflow: hidden;
       font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
+
+    /* Subtle Technical Noise Background */
+    .noise-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.028;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    /* Sidebar Navigation */
     aside {
-      width: 240px;
+      width: 250px;
       background: var(--sidebar);
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
+      user-select: none;
     }
-    .brand {
-      padding: 20px 18px;
+
+    .brand-section {
+      padding: 18px 20px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 100%);
     }
-    .brand-logo {
-      width: 22px;
-      height: 22px;
-      background: var(--accent);
+
+    .brand-icon {
+      width: 26px;
+      height: 26px;
+      background: #000;
+      border: 1px solid var(--border-focus);
       border-radius: 4px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: 800;
-      color: #000;
-      font-size: 13px;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 12px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
     }
+
+    .brand-meta {
+      display: flex;
+      flex-direction: column;
+    }
+
     .brand-title {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
       letter-spacing: -0.3px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
+
+    .brand-badge {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.08);
+      color: var(--text-muted);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .brand-subtitle {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      letter-spacing: 0.3px;
+    }
+
+    .nav-group-title {
+      padding: 16px 20px 6px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-faint);
+    }
+
     .nav-links {
-      padding: 14px 10px;
+      padding: 6px 12px;
       display: flex;
       flex-direction: column;
       gap: 2px;
       flex: 1;
       overflow-y: auto;
     }
+
     .nav-item {
       display: flex;
       align-items: center;
+      gap: 10px;
       padding: 8px 12px;
-      border-radius: 5px;
+      border-radius: 4px;
       color: var(--text-muted);
       cursor: pointer;
       text-decoration: none;
       font-weight: 500;
-      transition: all 0.15s ease;
+      font-size: 12.5px;
+      transition: background 0.12s ease, color 0.12s ease;
+      position: relative;
     }
+
+    .nav-item svg {
+      width: 15px;
+      height: 15px;
+      stroke-width: 1.75;
+      stroke: currentColor;
+      fill: none;
+      opacity: 0.8;
+      flex-shrink: 0;
+    }
+
     .nav-item:hover {
       color: var(--text);
       background: var(--card);
     }
+
     .nav-item.active {
       color: var(--text);
       background: var(--card);
-      border-left: 2px solid var(--accent);
+      font-weight: 600;
     }
+
+    .nav-item.active::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 6px;
+      bottom: 6px;
+      width: 3px;
+      border-radius: 0 2px 2px 0;
+      background: var(--accent);
+    }
+
+    .nav-item .badge-count {
+      margin-left: auto;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.06);
+      color: var(--text-muted);
+    }
+
     .sidebar-footer {
       padding: 14px 18px;
       border-top: 1px solid var(--border);
@@ -101,7 +210,26 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      background: var(--panel);
     }
+
+    .live-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+    }
+
+    /* Main Content Area */
     main {
       flex: 1;
       display: flex;
@@ -109,72 +237,166 @@
       overflow-y: auto;
       background: var(--bg);
     }
+
     header {
       padding: 16px 28px;
       border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: var(--sidebar);
+      background: var(--panel);
+      position: sticky;
+      top: 0;
+      z-index: 50;
     }
-    .header-title h2 { font-size: 16px; font-weight: 600; letter-spacing: -0.3px; }
-    .header-title p { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-    .content { padding: 28px; display: flex; flex-direction: column; gap: 24px; }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 7px;
-      border-radius: 4px;
-      font-size: 11px;
+
+    .header-left {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header-title {
+      font-size: 16px;
       font-weight: 600;
-      letter-spacing: 0.3px;
+      letter-spacing: -0.3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-    .badge-success { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent); }
-    .badge-failed { background: var(--danger-dim); color: var(--danger); border: 1px solid var(--danger); }
-    .badge-running { background: var(--blue-dim); color: var(--blue); border: 1px solid var(--blue); }
-    .badge-warning { background: var(--warning-dim); color: var(--warning); border: 1px solid var(--warning); }
-    .grid-stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 14px;
+
+    .header-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
     }
-    .stat-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 16px;
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
-    .stat-label { font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
-    .stat-val { font-size: 26px; font-weight: 700; margin-top: 4px; }
+
+    .content {
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* Component System: Cards, Grids, Panels */
     .card {
-      background: var(--card);
+      background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: 4px;
       padding: 20px;
+      position: relative;
     }
+
     .card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 16px;
     }
-    .card-title { font-size: 14px; font-weight: 600; }
-    table { width: 100%; border-collapse: collapse; text-align: left; }
-    th {
-      padding: 10px 12px;
+
+    .card-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-desc {
+      font-size: 12px;
       color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    .grid-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px;
+    }
+
+    .stat-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card::after {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 100%);
+    }
+
+    .stat-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .stat-label {
       font-size: 11px;
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      border-bottom: 1px solid var(--border);
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
     }
-    td {
-      padding: 12px;
-      border-bottom: 1px solid var(--border);
-      vertical-align: middle;
+
+    .stat-icon {
+      width: 16px;
+      height: 16px;
+      stroke: var(--text-faint);
     }
-    tr:last-child td { border-bottom: none; }
-    tbody tr:hover { background: var(--card-hover); }
+
+    .stat-val {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-top: 8px;
+      font-family: var(--font-mono);
+    }
+
+    .stat-footer {
+      font-size: 11px;
+      color: var(--text-faint);
+      margin-top: 6px;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      font-family: var(--font-mono);
+      white-space: nowrap;
+    }
+
+    .badge-success { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent-border); }
+    .badge-failed { background: var(--danger-dim); color: var(--danger); border: 1px solid var(--danger-border); }
+    .badge-running { background: var(--blue-dim); color: var(--blue); border: 1px solid var(--blue-border); }
+    .badge-warning { background: var(--warning-dim); color: var(--warning); border: 1px solid var(--warning-border); }
+    .badge-neutral { background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--border); }
+
+    /* Buttons */
     .btn {
       background: var(--card);
       border: 1px solid var(--border);
@@ -186,42 +408,244 @@
       cursor: pointer;
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: 6px;
-      transition: all 0.15s;
+      font-family: var(--font-sans);
+      transition: all 0.12s ease;
+      user-select: none;
     }
-    .btn:hover { background: var(--border); }
-    .btn-primary { background: var(--accent); color: #000; border: none; font-weight: 600; }
-    .btn-primary:hover { background: var(--accent-hover); }
-    .btn-danger { color: var(--danger); }
-    .btn-danger:hover { background: var(--danger-dim); }
+
+    .btn svg {
+      width: 13px;
+      height: 13px;
+      stroke-width: 2;
+      stroke: currentColor;
+      fill: none;
+    }
+
+    .btn:hover {
+      background: var(--card-hover);
+      border-color: var(--border-focus);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn-sm {
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #050505;
+      border: 1px solid var(--accent-hover);
+      font-weight: 600;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+      color: #000;
+    }
+
+    .btn-danger {
+      color: var(--danger);
+      background: var(--panel);
+      border-color: var(--border);
+    }
+
+    .btn-danger:hover {
+      background: var(--danger-dim);
+      border-color: var(--danger-border);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border-color: transparent;
+      color: var(--text-muted);
+    }
+
+    .btn-ghost:hover {
+      background: var(--card);
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    /* Tables */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--panel);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 12.5px;
+    }
+
+    th {
+      padding: 10px 14px;
+      color: var(--text-muted);
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,0.25);
+    }
+
+    td {
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      vertical-align: middle;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--card); }
+
+    code {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      background: rgba(0,0,0,0.3);
+      padding: 2px 5px;
+      border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.06);
+      color: #e4e4e7;
+    }
+
+    /* Pipeline Flow Stepper */
+    .lifecycle-bar {
+      display: flex;
+      align-items: center;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 12px 16px;
+      gap: 12px;
+      overflow-x: auto;
+    }
+
+    .lifecycle-stage {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      color: var(--text-muted);
+    }
+
+    .lifecycle-stage.active {
+      color: var(--text);
+    }
+
+    .stage-tag {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 5px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      text-transform: uppercase;
+    }
+
+    .stage-tag.trigger { background: var(--blue-dim); color: var(--blue); border: 1px solid var(--blue-border); }
+    .stage-tag.condition { background: var(--warning-dim); color: var(--warning); border: 1px solid var(--warning-border); }
+    .stage-tag.transform { background: rgba(168, 85, 247, 0.12); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35); }
+    .stage-tag.action { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent-border); }
+
+    .lifecycle-arrow {
+      color: var(--text-faint);
+      font-size: 11px;
+    }
+
+    /* Form Controls */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    input, select, textarea {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      padding: 8px 12px;
+      font-size: 12.5px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.12s ease;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 1px var(--border-focus);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 85px;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.4;
+    }
+
+    .input-hint {
+      font-size: 11px;
+      color: var(--text-faint);
+    }
+
+    /* Modals & Drawers */
     .modal-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.75);
+      background: rgba(0,0,0,0.8);
       display: none;
       align-items: center;
       justify-content: center;
       z-index: 1000;
       padding: 20px;
+      backdrop-filter: blur(2px);
     }
+
     .modal {
-      background: var(--sidebar);
+      background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 4px;
       width: 100%;
-      max-width: 620px;
+      max-width: 680px;
       max-height: 90vh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      box-shadow: 0 16px 36px rgba(0,0,0,0.6);
     }
+
     .modal-header {
       padding: 16px 20px;
       border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
+      background: var(--card);
     }
+
     .modal-body {
       padding: 20px;
       overflow-y: auto;
@@ -229,48 +653,46 @@
       flex-direction: column;
       gap: 16px;
     }
+
     .modal-footer {
       padding: 14px 20px;
       border-top: 1px solid var(--border);
       display: flex;
       justify-content: flex-end;
       gap: 10px;
-    }
-    .form-group { display: flex; flex-direction: column; gap: 6px; }
-    label { font-size: 12px; font-weight: 500; color: var(--text-muted); }
-    input, select, textarea {
       background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      color: var(--text);
-      padding: 8px 10px;
-      font-size: 13px;
-      font-family: inherit;
-      outline: none;
     }
-    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
-    textarea { resize: vertical; min-height: 80px; font-family: monospace; font-size: 12px; }
+
+    /* Code Box & Timeline */
     .code-box {
       background: #000;
       border: 1px solid var(--border);
       border-radius: 4px;
       padding: 12px;
-      font-family: monospace;
+      font-family: var(--font-mono);
       font-size: 11px;
       overflow-x: auto;
       white-space: pre-wrap;
       color: #38bdf8;
+      line-height: 1.4;
     }
-    .timeline { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+
+    .timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
     .timeline-step {
       border: 1px solid var(--border);
-      border-radius: 5px;
+      border-radius: 4px;
       padding: 12px;
       background: var(--card);
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 8px;
     }
+
     .timeline-step-header {
       display: flex;
       justify-content: space-between;
@@ -278,125 +700,554 @@
       font-weight: 600;
       font-size: 12px;
     }
-    .catalog-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+
+    /* Guided Tour Banner */
+    .tour-banner {
+      background: linear-gradient(90deg, #18181c 0%, #141416 100%);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 4px;
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       gap: 16px;
     }
-    .catalog-card {
+
+    .tour-content h4 {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .tour-content p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Guided Tour Walkthrough Modal */
+    .tour-step-card {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: 4px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .tour-step-number {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    /* Catalog Grid */
+    .catalog-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+      gap: 16px;
+    }
+
+    .catalog-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
       padding: 18px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      gap: 12px;
+      gap: 14px;
+      transition: border-color 0.12s ease;
     }
-    .catalog-card h3 { font-size: 15px; font-weight: 600; }
-    .catalog-card p { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+
+    .catalog-card:hover {
+      border-color: var(--border-focus);
+    }
+
+    .catalog-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 6px;
+    }
+
+    .catalog-title {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+    }
+
+    .catalog-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+
+    .catalog-meta-box {
+      background: var(--card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 3px;
+      padding: 8px 10px;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* Filter & Search Bar */
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .filter-input {
+      flex: 1;
+      min-width: 220px;
+    }
+
+    /* Empty and Error States */
+    .state-container {
+      padding: 40px 20px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: var(--text-muted);
+    }
+
+    .state-icon {
+      width: 32px;
+      height: 32px;
+      stroke: var(--text-faint);
+      margin-bottom: 4px;
+    }
+
+    .state-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .state-desc {
+      font-size: 12px;
+      max-width: 400px;
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body>
+  <div class="noise-overlay"></div>
+
+  <!-- Sidebar -->
   <aside>
-    <div class="brand">
-      <div class="brand-logo">K</div>
-      <div class="brand-title">Kerob</div>
+    <div class="brand-section">
+      <div class="brand-icon">K</div>
+      <div class="brand-meta">
+        <div class="brand-title">
+          Kerob
+          <span class="brand-badge">Core</span>
+        </div>
+        <div class="brand-subtitle">Automation Platform</div>
+      </div>
     </div>
+
+    <div class="nav-group-title">Engine Control</div>
     <div class="nav-links">
-      <div class="nav-item active" onclick="switchTab('overview')">Overview</div>
-      <div class="nav-item" onclick="switchTab('workflows')">Automations</div>
-      <div class="nav-item" onclick="switchTab('integrations')">Integrations</div>
-      <div class="nav-item" onclick="switchTab('executions')">Executions</div>
-      <div class="nav-item" onclick="switchTab('failures')">Dead-Letter</div>
-      <div class="nav-item" onclick="switchTab('events')">Events</div>
-      <div class="nav-item" onclick="switchTab('credentials')">Credentials</div>
-      <div class="nav-item" onclick="switchTab('settings')">Settings</div>
+      <div class="nav-item active" onclick="switchTab('overview')">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        Overview
+      </div>
+      <div class="nav-item" onclick="switchTab('workflows')">
+        <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+        Automations
+        <span class="badge-count" id="count-workflows">-</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('integrations')">
+        <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+        Integrations
+        <span class="badge-count" id="count-integrations">6</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('executions')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        Executions
+      </div>
+      <div class="nav-item" onclick="switchTab('failures')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        Dead-Letter
+        <span class="badge-count" id="count-failures" style="color:var(--danger)">-</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('events')">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        Events Stream
+      </div>
+      <div class="nav-item" onclick="switchTab('webhooks')">
+        <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+        Inbound Endpoints
+      </div>
+      <div class="nav-item" onclick="switchTab('credentials')">
+        <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        Credentials
+      </div>
+      <div class="nav-item" onclick="switchTab('settings')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        System Settings
+      </div>
     </div>
+
     <div class="sidebar-footer">
-      <span>v0.1.0 • Engine Ready</span>
-      <span class="badge badge-success">Live</span>
+      <div class="live-status">
+        <div class="status-dot"></div>
+        <span>OPERATIONAL</span>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="startGuidedTour()" title="Guided Tour">Tour</button>
     </div>
   </aside>
 
+  <!-- Main View -->
   <main>
     <header>
-      <div class="header-title">
-        <h2 id="page-title">Overview</h2>
-        <p id="page-subtitle">Platform operational state & execution metrics</p>
+      <div class="header-left">
+        <div class="header-title" id="page-title">Overview</div>
+        <div class="header-subtitle" id="page-subtitle">Platform operational state &amp; real-time execution metrics</div>
       </div>
-      <div style="display:flex; gap:10px;">
-        <button class="btn" onclick="refreshCurrentTab()">Refresh</button>
-        <button class="btn btn-primary" onclick="openCreateWorkflowModal()">+ New Automation</button>
+      <div class="header-actions">
+        <button class="btn" onclick="refreshCurrentTab()">
+          <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          Refresh
+        </button>
+        <button class="btn btn-primary" onclick="openCreateWorkflowModal()">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          New Automation
+        </button>
       </div>
     </header>
 
     <div class="content" id="main-content">
-      <!-- Injected dynamically by switchTab() -->
+      <!-- Injected by tab controller -->
     </div>
   </main>
 
-  <!-- Create Workflow Modal -->
-  <div class="modal-overlay" id="workflow-modal">
-    <div class="modal">
+  <!-- Full Guided Tour Modal -->
+  <div class="modal-overlay" id="tour-modal">
+    <div class="modal" style="max-width: 620px;">
       <div class="modal-header">
-        <h3 id="modal-title">Create Automation Workflow</h3>
-        <button class="btn" onclick="closeModal('workflow-modal')">✕</button>
+        <h3 id="tour-step-title">Kerob Architectural Walkthrough</h3>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('tour-modal')">&times;</button>
       </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label>Workflow Name</label>
-          <input type="text" id="wf-name" placeholder="e.g. Telegram Jobs to Discord">
-        </div>
-        <div class="form-group">
-          <label>Description</label>
-          <input type="text" id="wf-desc" placeholder="Forward tech job openings...">
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <div class="form-group">
-            <label>WHEN Trigger</label>
-            <select id="wf-trigger-type">
-              <option value="telegram">Telegram (Messages & Albums)</option>
-              <option value="github">GitHub Webhook</option>
-              <option value="rss">RSS / Atom Feed</option>
-              <option value="webhook">Inbound Webhook</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>THEN Action</label>
-            <select id="wf-action-type">
-              <option value="discord">Discord (Webhook Embed)</option>
-              <option value="telegram">Telegram (Message / Copy)</option>
-              <option value="http">Generic HTTP Request</option>
-              <option value="github">GitHub Create Issue</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>IF Conditions (JSON Rule, optional)</label>
-          <textarea id="wf-conditions" placeholder='{"field":"payload.text","operator":"contains","value":"job"}'></textarea>
-        </div>
-        <div class="form-group">
-          <label>Action Configuration (JSON)</label>
-          <textarea id="wf-action-config" placeholder='{"webhook_url":"https://discord.com/api/webhooks/...","content":"{{payload.text}}"}'></textarea>
-        </div>
+      <div class="modal-body" id="tour-step-content">
+        <!-- Rendered by tour engine -->
       </div>
-      <div class="modal-footer">
-        <button class="btn" onclick="closeModal('workflow-modal')">Cancel</button>
-        <button class="btn btn-primary" onclick="submitCreateWorkflow()">Create Automation</button>
+      <div class="modal-footer" id="tour-step-footer">
+        <button class="btn" onclick="closeModal('tour-modal')">Exit Tour</button>
+        <button class="btn btn-primary" id="tour-next-btn" onclick="nextTourStep()">Next</button>
       </div>
     </div>
   </div>
 
-  <!-- Execution Details Modal -->
-  <div class="modal-overlay" id="execution-modal">
-    <div class="modal" style="max-width:720px;">
+  <!-- Create/Edit Automation Workflow Modal -->
+  <div class="modal-overlay" id="workflow-modal">
+    <div class="modal" style="max-width: 760px;">
       <div class="modal-header">
-        <h3>Execution Timeline</h3>
-        <button class="btn" onclick="closeModal('execution-modal')">✕</button>
+        <h3 id="wf-modal-title">Create Automation Workflow</h3>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('workflow-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="wf-edit-id" value="">
+        
+        <div class="lifecycle-bar">
+          <div class="lifecycle-stage active">
+            <span class="stage-tag trigger">WHEN</span>
+            Trigger
+          </div>
+          <span class="lifecycle-arrow">&rarr;</span>
+          <div class="lifecycle-stage active">
+            <span class="stage-tag condition">IF</span>
+            Condition
+          </div>
+          <span class="lifecycle-arrow">&rarr;</span>
+          <div class="lifecycle-stage active">
+            <span class="stage-tag transform">TRANSFORM</span>
+            Transform
+          </div>
+          <span class="lifecycle-arrow">&rarr;</span>
+          <div class="lifecycle-stage active">
+            <span class="stage-tag action">THEN</span>
+            Action
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+          <div class="form-group">
+            <label>Automation Name *</label>
+            <input type="text" id="wf-name" placeholder="e.g. Forward Urgent GitHub Issues to Discord">
+          </div>
+          <div class="form-group">
+            <label>Status On Creation</label>
+            <select id="wf-enabled">
+              <option value="true">Active (Enabled)</option>
+              <option value="false">Inactive (Disabled)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Description</label>
+          <input type="text" id="wf-desc" placeholder="Filter and route events with normalized transformations...">
+        </div>
+
+        <!-- WHEN TRIGGER -->
+        <div class="card" style="padding:14px; background:var(--card);">
+          <div style="font-weight:600; font-size:12px; margin-bottom:10px; color:var(--blue); display:flex; align-items:center; gap:6px;">
+            <span class="stage-tag trigger">WHEN</span> Trigger Configuration
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label>Service Adapter</label>
+              <select id="wf-trigger-type" onchange="updateTriggerOptions()">
+                <option value="telegram">Telegram (Bot Messages &amp; Public Posts)</option>
+                <option value="github">GitHub (Issues, Pull Requests, Push)</option>
+                <option value="webhook">Inbound Webhook</option>
+                <option value="rss">RSS / Atom Feed Poller</option>
+                <option value="discord">Discord Interactions</option>
+                <option value="all">Any Ingested Event</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Event Type Pattern</label>
+              <input type="text" id="wf-trigger-event-type" value="*" placeholder="e.g. * or telegram.message">
+              <span class="input-hint">Use * to match all event types from this trigger adapter.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- IF CONDITIONS -->
+        <div class="card" style="padding:14px; background:var(--card);">
+          <div style="font-weight:600; font-size:12px; margin-bottom:10px; color:var(--warning); display:flex; align-items:center; gap:6px;">
+            <span class="stage-tag condition">IF</span> Evaluation Conditions (Optional)
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+            <div class="form-group">
+              <label>Payload Field Path</label>
+              <input type="text" id="wf-cond-field" placeholder="e.g. payload.text or payload.title">
+            </div>
+            <div class="form-group">
+              <label>Operator</label>
+              <select id="wf-cond-op">
+                <option value="">(No Condition - Passthrough)</option>
+                <option value="contains">contains</option>
+                <option value="equals">equals</option>
+                <option value="not_equals">not equals</option>
+                <option value="not_contains">not contains</option>
+                <option value="starts_with">starts with</option>
+                <option value="ends_with">ends with</option>
+                <option value="matches">regex matches</option>
+                <option value="exists">field exists</option>
+                <option value="greater_than">&gt; greater than</option>
+                <option value="less_than">&lt; less than</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Target Value</label>
+              <input type="text" id="wf-cond-val" placeholder="e.g. urgent or job">
+            </div>
+          </div>
+          <div class="input-hint">Or supply advanced nested JSON rules in raw mode below.</div>
+        </div>
+
+        <!-- TRANSFORM -->
+        <div class="card" style="padding:14px; background:var(--card);">
+          <div style="font-weight:600; font-size:12px; margin-bottom:10px; color:#c084fc; display:flex; align-items:center; gap:6px;">
+            <span class="stage-tag transform">TRANSFORM</span> Deterministic Data Formatting
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr 2fr; gap: 10px;">
+            <div class="form-group">
+              <label>Transform Mode</label>
+              <select id="wf-transform-type">
+                <option value="passthrough">Passthrough (Preserve Raw Event)</option>
+                <option value="template">Template String</option>
+                <option value="mapping">Field Map Dictionary</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Template Expression / Field Map</label>
+              <input type="text" id="wf-transform-template" placeholder="[{{event.source_id}}] {{payload.title}} &mdash; {{payload.author}}">
+            </div>
+          </div>
+        </div>
+
+        <!-- THEN ACTION -->
+        <div class="card" style="padding:14px; background:var(--card);">
+          <div style="font-weight:600; font-size:12px; margin-bottom:10px; color:var(--accent); display:flex; align-items:center; gap:6px;">
+            <span class="stage-tag action">THEN</span> Action Execution
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px;">
+            <div class="form-group">
+              <label>Integration Adapter</label>
+              <select id="wf-action-integration" onchange="updateActionConfigTemplate()">
+                <option value="discord">Discord (Channel Webhook / Embed)</option>
+                <option value="telegram">Telegram (Send / Copy Message)</option>
+                <option value="http">Generic REST HTTP API (SSRF Safe)</option>
+                <option value="github">GitHub API (Create Issue / Comment)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Action Operation</label>
+              <select id="wf-action-type">
+                <option value="send_message">send_message</option>
+                <option value="send_embed">send_embed</option>
+                <option value="http_request">http_request</option>
+                <option value="create_issue">create_issue</option>
+                <option value="copy_message">copy_message</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Action Configuration (JSON Parameters)</label>
+            <textarea id="wf-action-config" placeholder='{"webhook_url":"https://discord.com/api/webhooks/...","content":"{{payload.text}}"}'></textarea>
+            <span class="input-hint">Templated variables like <code>{{payload.title}}</code> are resolved during workflow execution.</span>
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+            <div class="form-group">
+              <label>Encrypted Credential (Optional)</label>
+              <select id="wf-action-cred">
+                <option value="">(None / Inline Credentials)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Max Retry Attempts</label>
+              <input type="number" id="wf-max-retries" value="3" min="1" max="10">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal('workflow-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitSaveWorkflow()">Save Automation</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Manual Event Dispatch / Test Modal -->
+  <div class="modal-overlay" id="dispatch-modal">
+    <div class="modal" style="max-width: 640px;">
+      <div class="modal-header">
+        <h3 id="dispatch-modal-title">Trigger Manual Test Event</h3>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('dispatch-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="input-hint">Inject a real normalized event to test trigger matching, condition evaluation, and action execution lifecycle.</p>
+        <input type="hidden" id="dispatch-target-wf-id" value="">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="form-group">
+            <label>Source Identifier</label>
+            <input type="text" id="dispatch-source-id" value="manual_tester">
+          </div>
+          <div class="form-group">
+            <label>Event Type</label>
+            <input type="text" id="dispatch-event-type" value="telegram.message">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Event Payload (JSON)</label>
+          <textarea id="dispatch-payload" style="min-height:120px;">{
+  "text": "Urgent technical alert: deployment status update",
+  "title": "System Diagnostic Event",
+  "author": "ops_engineer"
+}</textarea>
+        </div>
+        <div id="dispatch-result-box" style="display:none;" class="code-box"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal('dispatch-modal')">Close</button>
+        <button class="btn btn-primary" id="dispatch-submit-btn" onclick="submitDispatchEvent()">Dispatch Event</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Credential Modal -->
+  <div class="modal-overlay" id="cred-modal">
+    <div class="modal" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3>Store Encrypted Credential</h3>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('cred-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Credential Name *</label>
+          <input type="text" id="cred-name" placeholder="e.g. Production Telegram Bot Token">
+        </div>
+        <div class="form-group">
+          <label>Target Integration *</label>
+          <select id="cred-integration">
+            <option value="telegram">Telegram (bot_token)</option>
+            <option value="discord">Discord (webhook_url, bot_token)</option>
+            <option value="github">GitHub (personal_access_token, webhook_secret)</option>
+            <option value="http">Generic HTTP (api_key)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Key Name</label>
+          <input type="text" id="cred-key" placeholder="e.g. bot_token or api_key">
+        </div>
+        <div class="form-group">
+          <label>Secret Value *</label>
+          <input type="password" id="cred-val" placeholder="Secret token (encrypted with AES-256-GCM at rest)">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal('cred-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitCreateCredential()">Encrypt &amp; Store</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Inbound Webhook Modal -->
+  <div class="modal-overlay" id="webhook-modal">
+    <div class="modal" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3>Create Inbound Webhook Endpoint</h3>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('webhook-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Endpoint Name *</label>
+          <input type="text" id="wh-name" placeholder="e.g. Stripe Payment Ingestion">
+        </div>
+        <div class="form-group">
+          <label>Event Type Tag *</label>
+          <input type="text" id="wh-event-type" value="webhook.received" placeholder="e.g. payment.success">
+        </div>
+        <div class="form-group">
+          <label>Secret Token (Optional Authentication)</label>
+          <input type="password" id="wh-secret" placeholder="Optional bearer or query secret">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal('webhook-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitCreateWebhook()">Create Endpoint</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Execution Timeline Details Modal -->
+  <div class="modal-overlay" id="execution-modal">
+    <div class="modal" style="max-width: 780px;">
+      <div class="modal-header">
+        <h3>Execution Audit &amp; Step Lifecycle</h3>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('execution-modal')">&times;</button>
       </div>
       <div class="modal-body" id="execution-detail-body">
-        <!-- Rendered dynamically -->
+        <!-- Injected dynamically -->
       </div>
       <div class="modal-footer">
         <button class="btn" onclick="closeModal('execution-modal')">Close</button>
@@ -406,22 +1257,28 @@
 
   <script>
     let currentTab = 'overview';
+    let cachedCredentials = [];
+    let cachedCatalog = [];
 
+    // Navigation and Page Header Mapping
     function switchTab(tab) {
       currentTab = tab;
       document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-      const activeNav = Array.from(document.querySelectorAll('.nav-item')).find(el => el.textContent.toLowerCase().includes(tab.toLowerCase()));
+      const activeNav = Array.from(document.querySelectorAll('.nav-item')).find(el => 
+        el.textContent.trim().toLowerCase().startsWith(tab.toLowerCase())
+      );
       if (activeNav) activeNav.classList.add('active');
 
       const titleMap = {
-        overview: ['Overview', 'Platform operational state & execution metrics'],
-        workflows: ['Automations', 'Active event-driven workflow rules'],
-        integrations: ['Integrations Catalog', 'Supported source adapters and delivery actions'],
-        executions: ['Execution History', 'Audit logs and granular step timelines'],
-        failures: ['Dead-Letter Queue', 'Unrecovered executions requiring inspection or retry'],
-        events: ['Events Stream', 'Normalized incoming events and payload inspector'],
-        credentials: ['Credentials Store', 'AES-256 encrypted integration tokens'],
-        settings: ['System Settings', 'Liveness, Prometheus metrics, and runtime status']
+        overview: ['Overview', 'Platform operational state & real-time execution metrics'],
+        workflows: ['Automations', 'Active event-driven workflow rules and pipelines'],
+        integrations: ['Integrations Catalog', 'Supported source adapters, triggers, and execution actions'],
+        executions: ['Execution History', 'Audit logs and granular step lifecycle inspection'],
+        failures: ['Dead-Letter Queue', 'Unrecovered executions requiring diagnosis, retry, or discard'],
+        events: ['Events Stream', 'Normalized incoming event log and payload inspector'],
+        webhooks: ['Inbound Endpoints', 'Configured HTTP webhook ingestion endpoints'],
+        credentials: ['Credentials Store', 'AES-256-GCM encrypted integration credentials'],
+        settings: ['System Settings', 'Liveness probes, Prometheus metrics, and runtime parameters']
       };
 
       const [title, sub] = titleMap[tab] || ['Kerob', 'Automation Platform'];
@@ -442,6 +1299,7 @@
           const err = await res.json().catch(() => ({error: res.statusText}));
           throw new Error(err.error || res.statusText);
         }
+        if (res.status === 204) return null;
         return await res.json();
       } catch (e) {
         console.error('API Error:', e);
@@ -451,7 +1309,7 @@
 
     async function renderTab(tab) {
       const container = document.getElementById('main-content');
-      container.innerHTML = '<div style="color:var(--text-muted)">Loading platform data...</div>';
+      container.innerHTML = '<div class="state-container"><div class="stat-label">Synchronizing with Kerob Engine...</div></div>';
 
       try {
         if (tab === 'overview') await renderOverview(container);
@@ -460,369 +1318,1205 @@
         else if (tab === 'executions') await renderExecutions(container);
         else if (tab === 'failures') await renderFailures(container);
         else if (tab === 'events') await renderEvents(container);
+        else if (tab === 'webhooks') await renderWebhooks(container);
         else if (tab === 'credentials') await renderCredentials(container);
         else if (tab === 'settings') await renderSettings(container);
       } catch (err) {
-        container.innerHTML = '<div class="card" style="border-color:var(--danger); color:var(--danger)">Error loading data: ' + err.message + '</div>';
+        container.innerHTML = `
+          <div class="card" style="border-color:var(--danger-border); background:var(--danger-dim);">
+            <div style="font-weight:600; color:var(--danger); margin-bottom:4px;">Failed to load ${tab} data</div>
+            <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-muted)">${escapeHTML(err.message)}</div>
+            <button class="btn btn-sm" style="margin-top:12px;" onclick="refreshCurrentTab()">Retry Request</button>
+          </div>
+        `;
       }
     }
 
+    // 1. OVERVIEW VIEW
     async function renderOverview(container) {
       const data = await fetchAPI('/api/v1/overview');
+      
+      // Update sidebar counts
+      document.getElementById('count-workflows').textContent = data.active_workflows;
+      document.getElementById('count-failures').textContent = data.dead_letter_count;
+
+      const hasExecutions = data.recent_executions && data.recent_executions.length > 0;
+
       container.innerHTML = `
+        <!-- Guided Tour Trigger Banner -->
+        <div class="tour-banner">
+          <div class="tour-content">
+            <h4>Welcome to Kerob Automation Platform</h4>
+            <p>Connect messaging networks, HTTP APIs, and webhooks with deterministic condition evaluation and guaranteed idempotency.</p>
+          </div>
+          <button class="btn btn-sm" onclick="startGuidedTour()">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            Explore Platform Architecture
+          </button>
+        </div>
+
+        <!-- Metric Cards Grid -->
         <div class="grid-stats">
           <div class="stat-card">
-            <div class="stat-label">Active Automations</div>
-            <div class="stat-val" style="color:var(--accent)">${data.active_workflows}</div>
+            <div class="stat-top">
+              <span class="stat-label">Active Automations</span>
+              <svg class="stat-icon" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+            </div>
+            <div class="stat-val" style="color:var(--accent);">${data.active_workflows} <span style="font-size:13px; color:var(--text-muted); font-weight:400;">/ ${data.total_workflows} total</span></div>
+            <div class="stat-footer">Live rules evaluating triggers</div>
           </div>
+
           <div class="stat-card">
-            <div class="stat-label">Total Executions</div>
+            <div class="stat-top">
+              <span class="stat-label">Total Executions</span>
+              <svg class="stat-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </div>
             <div class="stat-val">${data.executions_total}</div>
+            <div class="stat-footer">${data.executions_success} delivered &bull; ${data.executions_failed} failed</div>
           </div>
+
           <div class="stat-card">
-            <div class="stat-label">Success Rate</div>
-            <div class="stat-val" style="color:var(--accent)">${data.success_rate.toFixed(1)}%</div>
+            <div class="stat-top">
+              <span class="stat-label">Success Rate</span>
+              <svg class="stat-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <div class="stat-val" style="color:${data.success_rate >= 95 ? 'var(--accent)' : 'var(--warning)'};">${data.success_rate.toFixed(1)}%</div>
+            <div class="stat-footer">Delivery reliability index</div>
           </div>
+
           <div class="stat-card">
-            <div class="stat-label">Dead-Letter Failures</div>
-            <div class="stat-val" style="color:${data.dead_letter_count > 0 ? 'var(--danger)' : 'var(--text-muted)'}">${data.dead_letter_count}</div>
+            <div class="stat-top">
+              <span class="stat-label">Dead-Letter Queue</span>
+              <svg class="stat-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            </div>
+            <div class="stat-val" style="color:${data.dead_letter_count > 0 ? 'var(--danger)' : 'var(--text-muted)'};">${data.dead_letter_count}</div>
+            <div class="stat-footer">Requires operator action</div>
           </div>
         </div>
 
+        <!-- Engine Lifecycle Reference Card -->
         <div class="card">
           <div class="card-header">
-            <div class="card-title">Recent Workflow Executions</div>
-            <button class="btn" onclick="switchTab('executions')">View All</button>
+            <div>
+              <div class="card-title">Engine Execution Pipeline</div>
+              <div class="card-desc">Every event processed by Kerob strictly traverses these deterministic stages.</div>
+            </div>
+            <button class="btn btn-sm" onclick="openDispatchModal()">Test Pipeline</button>
           </div>
-          <table>
-            <thead>
-              <tr><th>Workflow ID</th><th>Event ID</th><th>Status</th><th>Duration</th><th>Completed At</th><th>Action</th></tr>
-            </thead>
-            <tbody>
-              ${(data.recent_executions && data.recent_executions.length > 0) ? data.recent_executions.map(e => `
+          <div class="lifecycle-bar">
+            <div class="lifecycle-stage active">
+              <span class="stage-tag trigger">TRIGGER</span>
+              Telegram / GitHub / RSS / Webhook
+            </div>
+            <span class="lifecycle-arrow">&rarr;</span>
+            <div class="lifecycle-stage active">
+              <span class="stage-tag" style="background:rgba(255,255,255,0.08);">NORMALIZE</span>
+              event.Event Schema
+            </div>
+            <span class="lifecycle-arrow">&rarr;</span>
+            <div class="lifecycle-stage active">
+              <span class="stage-tag condition">CONDITION</span>
+              Regex &bull; JSON &bull; Comparison
+            </div>
+            <span class="lifecycle-arrow">&rarr;</span>
+            <div class="lifecycle-stage active">
+              <span class="stage-tag transform">TRANSFORM</span>
+              Templates &bull; Mapping
+            </div>
+            <span class="lifecycle-arrow">&rarr;</span>
+            <div class="lifecycle-stage active">
+              <span class="stage-tag action">ACTION</span>
+              Discord / HTTP / Telegram
+            </div>
+            <span class="lifecycle-arrow">&rarr;</span>
+            <div class="lifecycle-stage active">
+              <span class="stage-tag" style="background:var(--accent-dim); color:var(--accent);">OBSERVE</span>
+              Audit Trail &amp; Metrics
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Executions Table -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Recent Lifecycle Executions</div>
+              <div class="card-desc">Audit logs for real-time trigger matching and action delivery.</div>
+            </div>
+            <button class="btn btn-sm" onclick="switchTab('executions')">View Full History</button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
                 <tr>
-                  <td><code>${e.workflow_id.slice(0,8)}...</code></td>
-                  <td><code>${e.event_id.slice(0,8)}...</code></td>
-                  <td><span class="badge badge-${e.status === 'success' ? 'success' : (e.status === 'failed' ? 'failed' : 'running')}">${e.status}</span></td>
-                  <td>${e.duration_ms} ms</td>
-                  <td>${e.completed_at ? new Date(e.completed_at).toLocaleTimeString() : 'In Progress'}</td>
-                  <td><button class="btn" onclick="inspectExecution('${e.id}')">Inspect Timeline</button></td>
+                  <th>Execution ID</th>
+                  <th>Workflow ID</th>
+                  <th>Event ID</th>
+                  <th>Status</th>
+                  <th>Duration</th>
+                  <th>Completed At</th>
+                  <th>Action</th>
                 </tr>
-              `).join('') : '<tr><td colspan="6" style="color:var(--text-muted); text-align:center;">No executions recorded yet. Connect a trigger to start automating!</td></tr>'}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${hasExecutions ? data.recent_executions.map(e => `
+                  <tr>
+                    <td><code>${e.id.slice(0, 8)}...</code></td>
+                    <td><code>${e.workflow_id ? e.workflow_id.slice(0, 8) + '...' : 'n/a'}</code></td>
+                    <td><code>${e.event_id ? e.event_id.slice(0, 8) + '...' : 'n/a'}</code></td>
+                    <td><span class="badge badge-${e.status === 'success' ? 'success' : (e.status === 'failed' ? 'failed' : 'running')}">${e.status}</span></td>
+                    <td style="font-family:var(--font-mono)">${e.duration_ms} ms</td>
+                    <td style="color:var(--text-muted)">${e.completed_at ? new Date(e.completed_at).toLocaleTimeString() : 'In Flight'}</td>
+                    <td><button class="btn btn-sm" onclick="inspectExecution('${e.id}')">Inspect Audit</button></td>
+                  </tr>
+                `).join('') : `
+                  <tr>
+                    <td colspan="7">
+                      <div class="state-container">
+                        <div class="state-title">No executions recorded yet</div>
+                        <div class="state-desc">Ingest an event or trigger a test automation to view the step execution lifecycle.</div>
+                        <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="openDispatchModal()">Dispatch Test Event</button>
+                      </div>
+                    </td>
+                  </tr>
+                `}
+              </tbody>
+            </table>
+          </div>
         </div>
       `;
     }
 
+    // 2. AUTOMATIONS VIEW
     async function renderWorkflows(container) {
       const list = await fetchAPI('/api/v1/workflows');
+      document.getElementById('count-workflows').textContent = list.filter(w => w.enabled).length;
+
       container.innerHTML = `
         <div class="card">
           <div class="card-header">
-            <div class="card-title">Configured Workflows (${list.length})</div>
-            <button class="btn btn-primary" onclick="openCreateWorkflowModal()">+ New Automation</button>
+            <div>
+              <div class="card-title">Configured Workflows (${list.length})</div>
+              <div class="card-desc">Declarative WHEN &rarr; IF &rarr; TRANSFORM &rarr; THEN automation pipelines.</div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-sm" onclick="openDispatchModal()">Test Trigger</button>
+              <button class="btn btn-primary btn-sm" onclick="openCreateWorkflowModal()">+ New Automation</button>
+            </div>
           </div>
-          <table>
-            <thead>
-              <tr><th>Name</th><th>WHEN Trigger</th><th>THEN Actions</th><th>Status</th><th>Created</th><th>Actions</th></tr>
-            </thead>
-            <tbody>
-              ${list.length > 0 ? list.map(wf => `
+
+          <div class="table-container">
+            <table>
+              <thead>
                 <tr>
-                  <td><strong>${wf.name}</strong><br><span style="color:var(--text-muted); font-size:11px;">${wf.description || 'No description'}</span></td>
-                  <td><code>${wf.trigger.type}</code></td>
-                  <td>${wf.actions.map(a => `<code>${a.integration}</code>`).join(', ')}</td>
-                  <td><span class="badge badge-${wf.enabled ? 'success' : 'warning'}">${wf.enabled ? 'Active' : 'Disabled'}</span></td>
-                  <td>${new Date(wf.created_at).toLocaleDateString()}</td>
-                  <td>
-                    <button class="btn" onclick="toggleWorkflow('${wf.id}', ${!wf.enabled})">${wf.enabled ? 'Disable' : 'Enable'}</button>
-                    <button class="btn btn-danger" onclick="deleteWorkflow('${wf.id}')">Delete</button>
-                  </td>
+                  <th>Automation Rule</th>
+                  <th>WHEN Trigger</th>
+                  <th>IF Condition</th>
+                  <th>THEN Actions</th>
+                  <th>Status</th>
+                  <th>Retries</th>
+                  <th>Actions</th>
                 </tr>
-              `).join('') : '<tr><td colspan="6" style="color:var(--text-muted); text-align:center;">No workflows created yet. Click "+ New Automation" to build one!</td></tr>'}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${list.length > 0 ? list.map(wf => `
+                  <tr>
+                    <td>
+                      <div style="font-weight:600; color:var(--text)">${escapeHTML(wf.name)}</div>
+                      <div style="font-size:11px; color:var(--text-muted)">${escapeHTML(wf.description || 'No description')}</div>
+                      <div style="font-size:10px; color:var(--text-faint); margin-top:2px;">ID: <code>${wf.id.slice(0,8)}...</code></div>
+                    </td>
+                    <td>
+                      <span class="badge badge-neutral"><span class="stage-tag trigger" style="font-size:8px;">WHEN</span> ${wf.trigger.type}</span>
+                      ${wf.trigger.event_types && wf.trigger.event_types[0] !== '*' ? `<br><span style="font-size:10px; color:var(--text-muted)">[${wf.trigger.event_types.join(', ')}]</span>` : ''}
+                    </td>
+                    <td>
+                      ${wf.conditions && wf.conditions.operator ? `
+                        <span class="badge badge-neutral"><span class="stage-tag condition" style="font-size:8px;">IF</span> ${escapeHTML(wf.conditions.field)} ${wf.conditions.operator} "${escapeHTML(String(wf.conditions.value || ''))}"</span>
+                      ` : '<span style="color:var(--text-faint)">&mdash; Always True &mdash;</span>'}
+                    </td>
+                    <td>
+                      ${wf.actions.map(a => `
+                        <span class="badge badge-neutral" style="margin-bottom:2px;"><span class="stage-tag action" style="font-size:8px;">THEN</span> ${a.integration}:${a.action_type}</span>
+                      `).join('<br>')}
+                    </td>
+                    <td>
+                      <span class="badge badge-${wf.enabled ? 'success' : 'warning'}">${wf.enabled ? 'Active' : 'Disabled'}</span>
+                    </td>
+                    <td style="font-family:var(--font-mono)">${wf.max_retries || 3}x</td>
+                    <td>
+                      <div style="display:flex; gap:6px;">
+                        <button class="btn btn-sm" onclick="runWorkflowTest('${wf.id}', '${escapeHTML(wf.name)}')">Test</button>
+                        <button class="btn btn-sm" onclick="toggleWorkflow('${wf.id}', ${!wf.enabled})">${wf.enabled ? 'Disable' : 'Enable'}</button>
+                        <button class="btn btn-sm" onclick="editWorkflow('${wf.id}')">Edit</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteWorkflow('${wf.id}')">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                `).join('') : `
+                  <tr>
+                    <td colspan="7">
+                      <div class="state-container">
+                        <div class="state-title">No automations configured yet</div>
+                        <div class="state-desc">Create your first automation workflow to route messages, execute HTTP requests, or publish embeds.</div>
+                        <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="openCreateWorkflowModal()">Create Automation</button>
+                      </div>
+                    </td>
+                  </tr>
+                `}
+              </tbody>
+            </table>
+          </div>
         </div>
       `;
     }
 
+    // 3. INTEGRATIONS CATALOG VIEW
     async function renderIntegrations(container) {
       const catalog = await fetchAPI('/api/v1/integrations');
-      container.innerHTML = `
-        <div class="catalog-grid">
-          ${catalog.map(item => `
-            <div class="catalog-card">
-              <div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                  <h3>${item.name}</h3>
-                  <span class="badge badge-success">Ready</span>
-                </div>
-                <p>${item.description}</p>
-                <div style="margin-top:12px; font-size:11px; color:var(--text-muted)">
-                  <strong>Triggers:</strong> ${item.triggers.length > 0 ? item.triggers.map(t => t.name).join(', ') : 'None'}<br>
-                  <strong>Actions:</strong> ${item.actions.length > 0 ? item.actions.map(a => a.name).join(', ') : 'None'}
-                </div>
-              </div>
-              <div style="margin-top:10px;">
-                <button class="btn" style="width:100%" onclick="switchTab('credentials')">Manage Credentials</button>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      `;
-    }
+      cachedCatalog = catalog;
 
-    async function renderExecutions(container) {
-      const list = await fetchAPI('/api/v1/executions?limit=50');
       container.innerHTML = `
         <div class="card">
           <div class="card-header">
-            <div class="card-title">Execution Runs (${list.length})</div>
-          </div>
-          <table>
-            <thead>
-              <tr><th>Execution ID</th><th>Workflow</th><th>Event</th><th>Status</th><th>Attempts</th><th>Duration</th><th>Started At</th><th>Details</th></tr>
-            </thead>
-            <tbody>
-              ${list.length > 0 ? list.map(e => `
-                <tr>
-                  <td><code>${e.id.slice(0,8)}...</code></td>
-                  <td><code>${e.workflow_id.slice(0,8)}...</code></td>
-                  <td><code>${e.event_id.slice(0,8)}...</code></td>
-                  <td><span class="badge badge-${e.status === 'success' ? 'success' : (e.status === 'failed' ? 'failed' : 'running')}">${e.status}</span></td>
-                  <td>${e.attempts} / ${e.max_attempts}</td>
-                  <td>${e.duration_ms} ms</td>
-                  <td>${new Date(e.started_at).toLocaleTimeString()}</td>
-                  <td><button class="btn" onclick="inspectExecution('${e.id}')">Timeline</button></td>
-                </tr>
-              `).join('') : '<tr><td colspan="8" style="color:var(--text-muted); text-align:center;">No executions recorded yet.</td></tr>'}
-            </tbody>
-          </table>
-        </div>
-      `;
-    }
-
-    async function inspectExecution(id) {
-      const exec = await fetchAPI('/api/v1/executions/' + id);
-      const modal = document.getElementById('execution-detail-body');
-
-      modal.innerHTML = `
-        <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
-          <div>
-            <strong>Execution:</strong> <code>${exec.id}</code><br>
-            <span style="font-size:11px; color:var(--text-muted)">Workflow: ${exec.workflow_id} | Event: ${exec.event_id}</span>
-          </div>
-          <div><span class="badge badge-${exec.status === 'success' ? 'success' : 'failed'}">${exec.status}</span></div>
-        </div>
-
-        ${exec.error ? '<div class="card" style="border-color:var(--danger); color:var(--danger); margin-bottom:12px;">Error: ' + exec.error + '</div>' : ''}
-
-        <h4 style="font-size:13px; margin-bottom:8px;">Execution Lifecycle Timeline</h4>
-        <div class="timeline">
-          ${(exec.steps && exec.steps.length > 0) ? exec.steps.map(s => `
-            <div class="timeline-step">
-              <div class="timeline-step-header">
-                <span>[${s.step_type.toUpperCase()}] ${s.name}</span>
-                <span class="badge badge-${s.status === 'success' ? 'success' : (s.status === 'skipped' ? 'warning' : 'failed')}">${s.status} (${s.duration_ms} ms)</span>
-              </div>
-              ${s.error ? '<div style="color:var(--danger); font-size:11px;">Error: ' + s.error + '</div>' : ''}
-              ${s.output ? '<div class="code-box">' + JSON.stringify(s.output, null, 2) + '</div>' : ''}
+            <div>
+              <div class="card-title">Available Integration Adapters (${catalog.length})</div>
+              <div class="card-desc">Every service plugs into the Kerob core via a unified adapter contract.</div>
             </div>
-          `).join('') : '<div style="color:var(--text-muted)">No granular steps recorded.</div>'}
+            <button class="btn btn-sm" onclick="switchTab('credentials')">Manage Credentials Store</button>
+          </div>
+
+          <div class="catalog-grid">
+            ${catalog.map(item => `
+              <div class="catalog-card">
+                <div>
+                  <div class="catalog-top">
+                    <div class="catalog-title">${escapeHTML(item.name)}</div>
+                    <span class="badge badge-success">Production Ready</span>
+                  </div>
+                  <p class="catalog-desc">${escapeHTML(item.description)}</p>
+                  
+                  <div style="display:flex; flex-direction:column; gap:6px; margin-top:14px;">
+                    <div class="catalog-meta-box">
+                      <strong>Supported Triggers:</strong>
+                      ${item.triggers.length > 0 ? item.triggers.map(t => `&bull; <code>${t.type}</code> &mdash; ${escapeHTML(t.name)}`).join('<br>') : '<span style="color:var(--text-faint)">None (Action destination only)</span>'}
+                    </div>
+
+                    <div class="catalog-meta-box">
+                      <strong>Supported Actions:</strong>
+                      ${item.actions.length > 0 ? item.actions.map(a => `&bull; <code>${a.type}</code> &mdash; ${escapeHTML(a.name)}`).join('<br>') : '<span style="color:var(--text-faint)">None (Source trigger only)</span>'}
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                  <button class="btn btn-sm" style="flex:1;" onclick="openCreateWorkflowWithIntegration('${item.id}')">+ Use in Automation</button>
+                  ${item.credentials.length > 0 ? `
+                    <button class="btn btn-sm" onclick="openAddCredentialModal('${item.id}')">Configure Token</button>
+                  ` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
         </div>
       `;
-
-      openModal('execution-modal');
     }
 
+    // 4. EXECUTIONS AUDIT VIEW
+    async function renderExecutions(container) {
+      const list = await fetchAPI('/api/v1/executions?limit=100');
+
+      container.innerHTML = `
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Execution Audit Runs (${list.length})</div>
+              <div class="card-desc">Detailed step-level recording of trigger matches, condition evaluations, and actions.</div>
+            </div>
+            <button class="btn btn-sm" onclick="refreshCurrentTab()">Refresh Log</button>
+          </div>
+
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Execution ID</th>
+                  <th>Workflow ID</th>
+                  <th>Event ID</th>
+                  <th>Status</th>
+                  <th>Attempts</th>
+                  <th>Duration</th>
+                  <th>Started At</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${list.length > 0 ? list.map(e => `
+                  <tr>
+                    <td><code>${e.id.slice(0, 10)}...</code></td>
+                    <td><code>${e.workflow_id.slice(0, 8)}...</code></td>
+                    <td><code>${e.event_id.slice(0, 8)}...</code></td>
+                    <td><span class="badge badge-${e.status === 'success' ? 'success' : (e.status === 'failed' ? 'failed' : 'running')}">${e.status}</span></td>
+                    <td style="font-family:var(--font-mono)">${e.attempts} / ${e.max_attempts}</td>
+                    <td style="font-family:var(--font-mono)">${e.duration_ms} ms</td>
+                    <td style="color:var(--text-muted)">${new Date(e.started_at).toLocaleString()}</td>
+                    <td>
+                      <div style="display:flex; gap:6px;">
+                        <button class="btn btn-sm" onclick="inspectExecution('${e.id}')">Timeline</button>
+                        ${e.status === 'failed' ? `
+                          <button class="btn btn-sm btn-primary" onclick="retryExecution('${e.id}')">Retry</button>
+                        ` : ''}
+                      </div>
+                    </td>
+                  </tr>
+                `).join('') : `
+                  <tr>
+                    <td colspan="8">
+                      <div class="state-container">
+                        <div class="state-title">No executions found</div>
+                        <div class="state-desc">Executions are generated when matching triggers fire.</div>
+                      </div>
+                    </td>
+                  </tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    // 5. DEAD-LETTER QUEUE VIEW
     async function renderFailures(container) {
       const list = await fetchAPI('/api/v1/failures');
+      document.getElementById('count-failures').textContent = list.length;
+
       container.innerHTML = `
         <div class="card">
           <div class="card-header">
-            <div class="card-title">Dead-Letter Failures (${list.length})</div>
+            <div>
+              <div class="card-title">Dead-Letter Queue (${list.length})</div>
+              <div class="card-desc">Failed executions with exhausted retries requiring operator inspection or recovery.</div>
+            </div>
+            <button class="btn btn-sm" onclick="refreshCurrentTab()">Refresh</button>
           </div>
-          <table>
-            <thead>
-              <tr><th>Failed At</th><th>Workflow ID</th><th>Execution ID</th><th>Error</th><th>Attempts</th><th>Actions</th></tr>
-            </thead>
-            <tbody>
-              ${list.length > 0 ? list.map(f => `
+
+          <div class="table-container">
+            <table>
+              <thead>
                 <tr>
-                  <td>${new Date(f.failed_at).toLocaleTimeString()}</td>
-                  <td><code>${f.workflow_id.slice(0,8)}...</code></td>
-                  <td><code>${f.execution_id.slice(0,8)}...</code></td>
-                  <td style="color:var(--danger); font-family:monospace; font-size:11px;">${f.error}</td>
-                  <td>${f.attempts}</td>
-                  <td>
-                    <button class="btn btn-primary" onclick="retryFailure('${f.id}')">Retry</button>
-                    <button class="btn btn-danger" onclick="discardFailure('${f.id}')">Discard</button>
-                  </td>
+                  <th>Timestamp</th>
+                  <th>Workflow ID</th>
+                  <th>Execution ID</th>
+                  <th>Failure Reason</th>
+                  <th>Attempts</th>
+                  <th>Recovery</th>
                 </tr>
-              `).join('') : '<tr><td colspan="6" style="color:var(--text-muted); text-align:center;">No unresolved failures in dead-letter queue. Clean state!</td></tr>'}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${list.length > 0 ? list.map(f => `
+                  <tr>
+                    <td style="color:var(--text-muted)">${new Date(f.failed_at).toLocaleTimeString()}</td>
+                    <td><code>${f.workflow_id.slice(0, 8)}...</code></td>
+                    <td><code>${f.execution_id.slice(0, 8)}...</code></td>
+                    <td style="color:var(--danger); font-family:var(--font-mono); font-size:11.5px; max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHTML(f.error)}</td>
+                    <td style="font-family:var(--font-mono)">${f.attempts}</td>
+                    <td>
+                      <div style="display:flex; gap:6px;">
+                        <button class="btn btn-sm btn-primary" onclick="retryFailure('${f.id}')">Retry Delivery</button>
+                        <button class="btn btn-sm btn-danger" onclick="discardFailure('${f.id}')">Discard</button>
+                      </div>
+                    </td>
+                  </tr>
+                `).join('') : `
+                  <tr>
+                    <td colspan="6">
+                      <div class="state-container">
+                        <svg class="state-icon" viewBox="0 0 24 24" style="stroke:var(--accent);"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <div class="state-title">Dead-Letter Queue is Clean</div>
+                        <div class="state-desc">All executions have processed cleanly or are actively succeeding within retry limits.</div>
+                      </div>
+                    </td>
+                  </tr>
+                `}
+              </tbody>
+            </table>
+          </div>
         </div>
       `;
     }
 
+    // 6. EVENTS STREAM VIEW
     async function renderEvents(container) {
       const list = await fetchAPI('/api/v1/events?limit=50');
+
       container.innerHTML = `
         <div class="card">
           <div class="card-header">
-            <div class="card-title">Normalized Events Stream (${list.length})</div>
+            <div>
+              <div class="card-title">Normalized Events Stream (${list.length})</div>
+              <div class="card-desc">Real-time immutable event log ingested into Kerob.</div>
+            </div>
+            <button class="btn btn-sm" onclick="openDispatchModal()">+ Inject Event</button>
           </div>
-          <table>
-            <thead>
-              <tr><th>Timestamp</th><th>Event Type</th><th>Source ID</th><th>External ID</th><th>Payload Preview</th></tr>
-            </thead>
-            <tbody>
-              ${list.length > 0 ? list.map(ev => `
+
+          <div class="table-container">
+            <table>
+              <thead>
                 <tr>
-                  <td>${new Date(ev.created_at).toLocaleTimeString()}</td>
-                  <td><code>${ev.event_type}</code></td>
-                  <td><code>${ev.source_id}</code></td>
-                  <td><code>${ev.external_event_id}</code></td>
-                  <td><div class="code-box" style="max-height:80px">${JSON.stringify(ev.payload)}</div></td>
+                  <th>Timestamp</th>
+                  <th>Event Type</th>
+                  <th>Source Identifier</th>
+                  <th>External Event ID</th>
+                  <th>Normalized Payload</th>
                 </tr>
-              `).join('') : '<tr><td colspan="5" style="color:var(--text-muted); text-align:center;">No events recorded yet.</td></tr>'}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${list.length > 0 ? list.map(ev => `
+                  <tr>
+                    <td style="color:var(--text-muted); white-space:nowrap;">${new Date(ev.created_at).toLocaleTimeString()}</td>
+                    <td><span class="badge badge-neutral">${ev.event_type}</span></td>
+                    <td><code>${escapeHTML(ev.source_id)}</code></td>
+                    <td><code>${escapeHTML(ev.external_event_id)}</code></td>
+                    <td>
+                      <div class="code-box" style="max-height:85px; font-size:10.5px;">${escapeHTML(JSON.stringify(ev.payload, null, 2))}</div>
+                    </td>
+                  </tr>
+                `).join('') : `
+                  <tr>
+                    <td colspan="5">
+                      <div class="state-container">
+                        <div class="state-title">No events recorded yet</div>
+                        <div class="state-desc">Events from Telegram, webhooks, or GitHub will appear here.</div>
+                      </div>
+                    </td>
+                  </tr>
+                `}
+              </tbody>
+            </table>
+          </div>
         </div>
       `;
     }
 
+    // 7. INBOUND WEBHOOKS VIEW
+    async function renderWebhooks(container) {
+      const list = await fetchAPI('/api/v1/webhooks');
+
+      container.innerHTML = `
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Inbound Webhook Endpoints (${list.length})</div>
+              <div class="card-desc">Receive HTTP POST payloads from third-party services and convert them into normalized events.</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openCreateWebhookModal()">+ Create Webhook</button>
+          </div>
+
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Ingestion URL</th>
+                  <th>Event Type Emitted</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${list.length > 0 ? list.map(wh => `
+                  <tr>
+                    <td>
+                      <div style="font-weight:600">${escapeHTML(wh.name)}</div>
+                      <div style="font-size:11px; color:var(--text-muted)">ID: <code>${wh.id}</code></div>
+                    </td>
+                    <td>
+                      <code>POST /api/v1/webhooks/${wh.id}/ingest</code>
+                      <button class="btn btn-sm btn-ghost" style="margin-left:6px;" onclick="copyText(window.location.origin + '/api/v1/webhooks/${wh.id}/ingest')">Copy</button>
+                    </td>
+                    <td><span class="badge badge-neutral">${wh.event_type}</span></td>
+                    <td><span class="badge badge-${wh.enabled ? 'success' : 'warning'}">${wh.enabled ? 'Active' : 'Disabled'}</span></td>
+                    <td>
+                      <button class="btn btn-sm btn-danger" onclick="deleteWebhook('${wh.id}')">Delete</button>
+                    </td>
+                  </tr>
+                `).join('') : `
+                  <tr>
+                    <td colspan="5">
+                      <div class="state-container">
+                        <div class="state-title">No inbound webhooks configured</div>
+                        <div class="state-desc">Create a webhook endpoint to receive real-time webhooks from Stripe, GitHub, or any custom service.</div>
+                        <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="openCreateWebhookModal()">Create Webhook</button>
+                      </div>
+                    </td>
+                  </tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    // 8. CREDENTIALS VIEW
     async function renderCredentials(container) {
       const list = await fetchAPI('/api/v1/credentials');
+      cachedCredentials = list;
+
       container.innerHTML = `
         <div class="card">
           <div class="card-header">
-            <div class="card-title">Stored Credentials (${list.length})</div>
+            <div>
+              <div class="card-title">Credentials Vault (${list.length})</div>
+              <div class="card-desc">AES-256-GCM encrypted integration tokens. Secrets are never exposed in logs or normal API responses.</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openAddCredentialModal()">+ Add Credential</button>
           </div>
-          <table>
-            <thead>
-              <tr><th>Name</th><th>Integration</th><th>Key ID</th><th>Masked Secrets</th><th>Created At</th><th>Action</th></tr>
-            </thead>
-            <tbody>
-              ${list.length > 0 ? list.map(c => `
+
+          <div class="table-container">
+            <table>
+              <thead>
                 <tr>
-                  <td><strong>${c.name}</strong></td>
-                  <td><code>${c.integration}</code></td>
-                  <td>${c.key_id}</td>
-                  <td><div class="code-box">${JSON.stringify(c.masked_fields)}</div></td>
-                  <td>${new Date(c.created_at).toLocaleDateString()}</td>
-                  <td><button class="btn btn-danger" onclick="deleteCredential('${c.id}')">Delete</button></td>
+                  <th>Credential Name</th>
+                  <th>Integration</th>
+                  <th>Key ID</th>
+                  <th>Masked Secrets</th>
+                  <th>Created</th>
+                  <th>Actions</th>
                 </tr>
-              `).join('') : '<tr><td colspan="6" style="color:var(--text-muted); text-align:center;">No stored credentials. Added credentials are AES-256 encrypted at rest.</td></tr>'}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${list.length > 0 ? list.map(c => `
+                  <tr>
+                    <td>
+                      <div style="font-weight:600">${escapeHTML(c.name)}</div>
+                      <div style="font-size:11px; color:var(--text-muted)">ID: <code>${c.id.slice(0, 8)}...</code></div>
+                    </td>
+                    <td><span class="badge badge-neutral">${c.integration}</span></td>
+                    <td style="font-family:var(--font-mono)">${escapeHTML(c.key_id)}</td>
+                    <td><div class="code-box" style="padding:4px 8px; font-size:11px;">${escapeHTML(JSON.stringify(c.masked_fields))}</div></td>
+                    <td style="color:var(--text-muted)">${new Date(c.created_at).toLocaleDateString()}</td>
+                    <td><button class="btn btn-sm btn-danger" onclick="deleteCredential('${c.id}')">Delete</button></td>
+                  </tr>
+                `).join('') : `
+                  <tr>
+                    <td colspan="6">
+                      <div class="state-container">
+                        <div class="state-title">Vault is Empty</div>
+                        <div class="state-desc">Encrypted tokens can be referenced safely in workflows by ID without revealing keys.</div>
+                        <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="openAddCredentialModal()">Add Credential</button>
+                      </div>
+                    </td>
+                  </tr>
+                `}
+              </tbody>
+            </table>
+          </div>
         </div>
       `;
     }
 
+    // 9. SETTINGS & OBSERVABILITY VIEW
     async function renderSettings(container) {
       const health = await fetchAPI('/health');
       const ready = await fetchAPI('/ready');
+      const overview = await fetchAPI('/api/v1/overview');
+
       container.innerHTML = `
-        <div class="card" style="display:flex; flex-direction:column; gap:14px;">
-          <div class="card-title">System Status & Observability</div>
-          <div><strong>Liveness (/health):</strong> <span class="badge badge-success">${health.status}</span></div>
-          <div><strong>Readiness (/ready):</strong> <span class="badge badge-success">${ready.status}</span></div>
-          <div><strong>Metrics Endpoint:</strong> <a href="/metrics" target="_blank" style="color:var(--accent)">/metrics (Prometheus Format)</a></div>
-          <div><strong>Platform Version:</strong> <code>v0.1.0 (Production Architecture)</code></div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+          <div class="card">
+            <div class="card-title" style="margin-bottom:14px;">Runtime Health &amp; Readiness</div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-subtle); padding-bottom:8px;">
+                <span style="color:var(--text-muted)">Liveness Probe (/health)</span>
+                <span class="badge badge-success">${health.status}</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-subtle); padding-bottom:8px;">
+                <span style="color:var(--text-muted)">Readiness Probe (/ready)</span>
+                <span class="badge badge-success">${ready.status}</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-subtle); padding-bottom:8px;">
+                <span style="color:var(--text-muted)">Engine Uptime</span>
+                <span style="font-family:var(--font-mono)">${Math.floor(overview.uptime_seconds / 60)} minutes</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-subtle); padding-bottom:8px;">
+                <span style="color:var(--text-muted)">Architecture Standard</span>
+                <span class="badge badge-neutral">Production v0.1.0</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title" style="margin-bottom:14px;">Observability &amp; Scrape Endpoints</div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <div>
+                <div style="font-weight:600; font-size:12px;">Prometheus Metrics</div>
+                <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Scrape operational gauges and execution rates at <code>/metrics</code>.</div>
+                <a href="/metrics" target="_blank" class="btn btn-sm" style="margin-top:8px;">Open Raw Prometheus Metrics</a>
+              </div>
+              <div style="margin-top:8px;">
+                <div style="font-weight:600; font-size:12px;">Security &amp; Network Protections</div>
+                <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">SSRF defenses enforce blocked IP ranges (RFC 1918, link-local, loopback, cloud metadata endpoints 169.254.169.254).</div>
+              </div>
+            </div>
+          </div>
         </div>
       `;
     }
 
+    // INSPECT EXECUTION AUDIT TIMELINE
+    async function inspectExecution(id) {
+      const modal = document.getElementById('execution-detail-body');
+      modal.innerHTML = '<div class="state-container"><div>Loading step audit logs...</div></div>';
+      openModal('execution-modal');
+
+      try {
+        const exec = await fetchAPI('/api/v1/executions/' + id);
+        
+        modal.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; background:var(--card); padding:12px; border-radius:4px; border:1px solid var(--border);">
+            <div>
+              <div style="font-weight:600; font-size:13px;">Execution ID: <code>${exec.id}</code></div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
+                Workflow: <code>${exec.workflow_id}</code> &bull; Event: <code>${exec.event_id}</code>
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+              <span class="badge badge-${exec.status === 'success' ? 'success' : 'failed'}">${exec.status}</span>
+              <span style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted);">${exec.duration_ms} ms</span>
+            </div>
+          </div>
+
+          ${exec.error ? `
+            <div class="card" style="border-color:var(--danger-border); background:var(--danger-dim); margin-bottom:14px;">
+              <div style="font-weight:600; color:var(--danger);">Execution Failure Reason:</div>
+              <div style="font-family:var(--font-mono); font-size:12px; color:var(--text); margin-top:4px;">${escapeHTML(exec.error)}</div>
+            </div>
+          ` : ''}
+
+          <h4 style="font-size:12.5px; font-weight:600; margin-bottom:10px;">Lifecycle Step Audit Trail</h4>
+          <div class="timeline">
+            ${(exec.steps && exec.steps.length > 0) ? exec.steps.map(s => `
+              <div class="timeline-step">
+                <div class="timeline-step-header">
+                  <span style="display:flex; align-items:center; gap:6px;">
+                    <span class="stage-tag ${s.step_type}">${s.step_type.toUpperCase()}</span>
+                    <span>${escapeHTML(s.name)}</span>
+                  </span>
+                  <span class="badge badge-${s.status === 'success' ? 'success' : (s.status === 'skipped' ? 'warning' : 'failed')}">
+                    ${s.status} (${s.duration_ms} ms)
+                  </span>
+                </div>
+                ${s.error ? `<div style="color:var(--danger); font-size:11px; font-family:var(--font-mono)">Error: ${escapeHTML(s.error)}</div>` : ''}
+                ${s.output ? `<div class="code-box">${escapeHTML(JSON.stringify(s.output, null, 2))}</div>` : ''}
+              </div>
+            `).join('') : '<div style="color:var(--text-muted); padding:10px;">No granular steps recorded for this execution.</div>'}
+          </div>
+        `;
+      } catch (err) {
+        modal.innerHTML = '<div style="color:var(--danger)">Error loading execution: ' + escapeHTML(err.message) + '</div>';
+      }
+    }
+
+    // ACTIONS AND MUTATIONS
     async function toggleWorkflow(id, enable) {
-      await fetchAPI('/api/v1/workflows/' + id, {
-        method: 'PATCH',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({enabled: enable})
-      });
-      refreshCurrentTab();
+      try {
+        await fetchAPI('/api/v1/workflows/' + id, {
+          method: 'PATCH',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({enabled: enable})
+        });
+        refreshCurrentTab();
+      } catch (err) {
+        alert('Failed to toggle workflow: ' + err.message);
+      }
     }
 
     async function deleteWorkflow(id) {
-      if (!confirm('Are you sure you want to delete this automation?')) return;
-      await fetch('/api/v1/workflows/' + id, {method: 'DELETE'});
-      refreshCurrentTab();
+      if (!confirm('Are you sure you want to delete this automation rule?')) return;
+      try {
+        await fetchAPI('/api/v1/workflows/' + id, {method: 'DELETE'});
+        refreshCurrentTab();
+      } catch (err) {
+        alert('Failed to delete workflow: ' + err.message);
+      }
+    }
+
+    async function retryExecution(id) {
+      try {
+        await fetchAPI('/api/v1/executions/' + id + '/retry', {method: 'POST'});
+        alert('Retry initiated.');
+        refreshCurrentTab();
+      } catch (err) {
+        alert('Retry failed: ' + err.message);
+      }
     }
 
     async function retryFailure(id) {
-      await fetchAPI('/api/v1/failures/' + id + '/retry', {method: 'POST'});
-      refreshCurrentTab();
+      try {
+        await fetchAPI('/api/v1/failures/' + id + '/retry', {method: 'POST'});
+        alert('Dead-letter item reset and queued for retry.');
+        refreshCurrentTab();
+      } catch (err) {
+        alert('Failed to retry failure: ' + err.message);
+      }
     }
 
     async function discardFailure(id) {
-      await fetchAPI('/api/v1/failures/' + id + '/discard', {method: 'POST'});
-      refreshCurrentTab();
+      if (!confirm('Discard this dead-letter item?')) return;
+      try {
+        await fetchAPI('/api/v1/failures/' + id + '/discard', {method: 'POST'});
+        refreshCurrentTab();
+      } catch (err) {
+        alert('Discard failed: ' + err.message);
+      }
     }
 
     async function deleteCredential(id) {
-      if (!confirm('Are you sure you want to delete this credential?')) return;
-      await fetch('/api/v1/credentials/' + id, {method: 'DELETE'});
-      refreshCurrentTab();
+      if (!confirm('Delete this stored credential?')) return;
+      try {
+        await fetchAPI('/api/v1/credentials/' + id, {method: 'DELETE'});
+        refreshCurrentTab();
+      } catch (err) {
+        alert('Failed to delete credential: ' + err.message);
+      }
     }
 
-    function openCreateWorkflowModal() {
-      openModal('workflow-modal');
+    async function deleteWebhook(id) {
+      if (!confirm('Delete this webhook endpoint?')) return;
+      try {
+        await fetchAPI('/api/v1/webhooks/' + id, {method: 'DELETE'});
+        refreshCurrentTab();
+      } catch (err) {
+        alert('Failed to delete webhook: ' + err.message);
+      }
     }
 
-    async function submitCreateWorkflow() {
-      const name = document.getElementById('wf-name').value.trim();
-      const desc = document.getElementById('wf-desc').value.trim();
-      const trigType = document.getElementById('wf-trigger-type').value;
-      const actType = document.getElementById('wf-action-type').value;
-      const condRaw = document.getElementById('wf-conditions').value.trim();
-      const actConfigRaw = document.getElementById('wf-action-config').value.trim();
+    // ON-DEMAND WORKFLOW TEST
+    async function runWorkflowTest(wfID, wfName) {
+      const modal = document.getElementById('dispatch-modal');
+      document.getElementById('dispatch-modal-title').textContent = 'Test Automation: ' + wfName;
+      document.getElementById('dispatch-target-wf-id').value = wfID;
+      document.getElementById('dispatch-result-box').style.display = 'none';
+      openModal('dispatch-modal');
+    }
 
-      if (!name) {
-        alert('Workflow name is required');
+    function openDispatchModal() {
+      document.getElementById('dispatch-modal-title').textContent = 'Trigger Manual Ingestion Event';
+      document.getElementById('dispatch-target-wf-id').value = '';
+      document.getElementById('dispatch-result-box').style.display = 'none';
+      openModal('dispatch-modal');
+    }
+
+    async function submitDispatchEvent() {
+      const wfID = document.getElementById('dispatch-target-wf-id').value;
+      const sourceID = document.getElementById('dispatch-source-id').value.trim() || 'manual_test';
+      const eventType = document.getElementById('dispatch-event-type').value.trim() || 'test.event';
+      const payloadRaw = document.getElementById('dispatch-payload').value.trim();
+      const resultBox = document.getElementById('dispatch-result-box');
+      const submitBtn = document.getElementById('dispatch-submit-btn');
+
+      let payload = {};
+      try {
+        payload = JSON.parse(payloadRaw);
+      } catch (e) {
+        alert('Payload is not valid JSON: ' + e.message);
         return;
       }
 
-      let conditions = null;
-      if (condRaw) {
-        try { conditions = JSON.parse(condRaw); } catch (e) { alert('Invalid conditions JSON: ' + e.message); return; }
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Executing...';
+
+      try {
+        let res;
+        if (wfID) {
+          // Direct workflow test
+          res = await fetchAPI('/api/v1/workflows/' + wfID + '/test', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              source_id: sourceID,
+              event_type: eventType,
+              payload: payload
+            })
+          });
+        } else {
+          // Engine event ingestion
+          res = await fetchAPI('/api/v1/events', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              source_id: sourceID,
+              external_event_id: 'evt_' + Date.now(),
+              event_type: eventType,
+              payload: payload
+            })
+          });
+        }
+
+        resultBox.style.display = 'block';
+        resultBox.textContent = JSON.stringify(res, null, 2);
+        refreshCurrentTab();
+      } catch (err) {
+        resultBox.style.display = 'block';
+        resultBox.textContent = 'Error: ' + err.message;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Dispatch Event';
+      }
+    }
+
+    // WORKFLOW BUILDER MODAL LOGIC
+    async function populateCredentialDropdown() {
+      try {
+        const creds = await fetchAPI('/api/v1/credentials');
+        cachedCredentials = creds;
+        const select = document.getElementById('wf-action-cred');
+        select.innerHTML = '<option value="">(None / Inline Credentials)</option>' + 
+          creds.map(c => `<option value="${c.id}">${escapeHTML(c.name)} (${c.integration})</option>`).join('');
+      } catch (e) {}
+    }
+
+    function openCreateWorkflowModal() {
+      document.getElementById('wf-modal-title').textContent = 'Create Automation Workflow';
+      document.getElementById('wf-edit-id').value = '';
+      document.getElementById('wf-name').value = '';
+      document.getElementById('wf-desc').value = '';
+      document.getElementById('wf-enabled').value = 'true';
+      document.getElementById('wf-trigger-type').value = 'telegram';
+      document.getElementById('wf-trigger-event-type').value = '*';
+      document.getElementById('wf-cond-field').value = '';
+      document.getElementById('wf-cond-op').value = '';
+      document.getElementById('wf-cond-val').value = '';
+      document.getElementById('wf-transform-type').value = 'passthrough';
+      document.getElementById('wf-transform-template').value = '';
+      document.getElementById('wf-action-integration').value = 'discord';
+      document.getElementById('wf-action-type').value = 'send_message';
+      document.getElementById('wf-action-config').value = '{\n  "webhook_url": "https://discord.com/api/webhooks/...",\n  "content": "{{payload.text}}"\n}';
+      document.getElementById('wf-max-retries').value = '3';
+
+      populateCredentialDropdown();
+      openModal('workflow-modal');
+    }
+
+    function openCreateWorkflowWithIntegration(integrationID) {
+      openCreateWorkflowModal();
+      if (integrationID === 'telegram') {
+        document.getElementById('wf-trigger-type').value = 'telegram';
+        document.getElementById('wf-action-integration').value = 'telegram';
+      } else if (integrationID === 'discord') {
+        document.getElementById('wf-action-integration').value = 'discord';
+      } else if (integrationID === 'github') {
+        document.getElementById('wf-trigger-type').value = 'github';
+        document.getElementById('wf-action-integration').value = 'github';
+      } else if (integrationID === 'http') {
+        document.getElementById('wf-action-integration').value = 'http';
+      } else if (integrationID === 'rss') {
+        document.getElementById('wf-trigger-type').value = 'rss';
+      }
+      updateActionConfigTemplate();
+    }
+
+    async function editWorkflow(id) {
+      try {
+        const wf = await fetchAPI('/api/v1/workflows/' + id);
+        document.getElementById('wf-modal-title').textContent = 'Edit Automation Workflow';
+        document.getElementById('wf-edit-id').value = wf.id;
+        document.getElementById('wf-name').value = wf.name;
+        document.getElementById('wf-desc').value = wf.description || '';
+        document.getElementById('wf-enabled').value = wf.enabled ? 'true' : 'false';
+        document.getElementById('wf-trigger-type').value = wf.trigger.type || 'telegram';
+        document.getElementById('wf-trigger-event-type').value = (wf.trigger.event_types && wf.trigger.event_types.length > 0) ? wf.trigger.event_types.join(',') : '*';
+
+        if (wf.conditions) {
+          document.getElementById('wf-cond-field').value = wf.conditions.field || '';
+          document.getElementById('wf-cond-op').value = wf.conditions.operator || '';
+          document.getElementById('wf-cond-val').value = wf.conditions.value !== undefined ? String(wf.conditions.value) : '';
+        } else {
+          document.getElementById('wf-cond-field').value = '';
+          document.getElementById('wf-cond-op').value = '';
+          document.getElementById('wf-cond-val').value = '';
+        }
+
+        if (wf.transformations) {
+          document.getElementById('wf-transform-type').value = wf.transformations.type || 'passthrough';
+          document.getElementById('wf-transform-template').value = wf.transformations.template || '';
+        } else {
+          document.getElementById('wf-transform-type').value = 'passthrough';
+          document.getElementById('wf-transform-template').value = '';
+        }
+
+        if (wf.actions && wf.actions.length > 0) {
+          const act = wf.actions[0];
+          document.getElementById('wf-action-integration').value = act.integration;
+          document.getElementById('wf-action-type').value = act.action_type;
+          document.getElementById('wf-action-config').value = JSON.stringify(act.config, null, 2);
+          document.getElementById('wf-action-cred').value = act.credential_id || '';
+        }
+
+        document.getElementById('wf-max-retries').value = wf.max_retries || 3;
+        await populateCredentialDropdown();
+        openModal('workflow-modal');
+      } catch (err) {
+        alert('Failed to load workflow for editing: ' + err.message);
+      }
+    }
+
+    function updateActionConfigTemplate() {
+      const integration = document.getElementById('wf-action-integration').value;
+      const actTypeSelect = document.getElementById('wf-action-type');
+      const configArea = document.getElementById('wf-action-config');
+
+      if (integration === 'discord') {
+        actTypeSelect.innerHTML = '<option value="send_message">send_message</option><option value="send_embed">send_embed</option>';
+        configArea.value = '{\n  "webhook_url": "https://discord.com/api/webhooks/...",\n  "content": "{{payload.text}}"\n}';
+      } else if (integration === 'telegram') {
+        actTypeSelect.innerHTML = '<option value="send_message">send_message</option><option value="copy_message">copy_message</option>';
+        configArea.value = '{\n  "chat_id": "-100123456789",\n  "text": "{{payload.text}}"\n}';
+      } else if (integration === 'http') {
+        actTypeSelect.innerHTML = '<option value="http_request">http_request</option>';
+        configArea.value = '{\n  "url": "https://api.external.com/v1/notify",\n  "method": "POST",\n  "headers": {\n    "Content-Type": "application/json"\n  },\n  "body": "{\\\"event\\\":\\\"{{event.id}}\\\"}"\n}';
+      } else if (integration === 'github') {
+        actTypeSelect.innerHTML = '<option value="create_issue">create_issue</option>';
+        configArea.value = '{\n  "owner": "organization",\n  "repo": "repository",\n  "title": "{{payload.title}}",\n  "body": "{{payload.text}}"\n}';
+      }
+    }
+
+    function updateTriggerOptions() {
+      const trig = document.getElementById('wf-trigger-type').value;
+      const evInput = document.getElementById('wf-trigger-event-type');
+      if (trig === 'telegram') evInput.value = 'telegram.message';
+      else if (trig === 'github') evInput.value = 'github.issue.opened';
+      else if (trig === 'rss') evInput.value = 'rss.item';
+      else if (trig === 'webhook') evInput.value = 'webhook.received';
+      else evInput.value = '*';
+    }
+
+    async function submitSaveWorkflow() {
+      const editID = document.getElementById('wf-edit-id').value;
+      const name = document.getElementById('wf-name').value.trim();
+      const desc = document.getElementById('wf-desc').value.trim();
+      const enabled = document.getElementById('wf-enabled').value === 'true';
+      const triggerType = document.getElementById('wf-trigger-type').value;
+      const triggerEvent = document.getElementById('wf-trigger-event-type').value.trim() || '*';
+      const condField = document.getElementById('wf-cond-field').value.trim();
+      const condOp = document.getElementById('wf-cond-op').value;
+      const condVal = document.getElementById('wf-cond-val').value.trim();
+      const transformType = document.getElementById('wf-transform-type').value;
+      const transformTmpl = document.getElementById('wf-transform-template').value.trim();
+      const actIntegration = document.getElementById('wf-action-integration').value;
+      const actType = document.getElementById('wf-action-type').value;
+      const actConfigRaw = document.getElementById('wf-action-config').value.trim();
+      const credID = document.getElementById('wf-action-cred').value;
+      const maxRetries = parseInt(document.getElementById('wf-max-retries').value, 10) || 3;
+
+      if (!name) {
+        alert('Workflow name is required.');
+        return;
       }
 
       let actConfig = {};
       if (actConfigRaw) {
-        try { actConfig = JSON.parse(actConfigRaw); } catch (e) { alert('Invalid action config JSON: ' + e.message); return; }
+        try {
+          actConfig = JSON.parse(actConfigRaw);
+        } catch (e) {
+          alert('Action Configuration is not valid JSON: ' + e.message);
+          return;
+        }
+      }
+
+      let conditions = null;
+      if (condOp && condField) {
+        conditions = {
+          field: condField,
+          operator: condOp,
+          value: condVal
+        };
+      }
+
+      let transformations = null;
+      if (transformType !== 'passthrough') {
+        transformations = {
+          type: transformType,
+          template: transformTmpl
+        };
       }
 
       const payload = {
         name: name,
         description: desc,
-        enabled: true,
+        enabled: enabled,
+        max_retries: maxRetries,
         trigger: {
-          type: trigType,
-          event_types: ['*']
+          type: triggerType,
+          event_types: [triggerEvent]
         },
         conditions: conditions,
+        transformations: transformations,
         actions: [{
-          integration: actType,
-          action_type: actType === 'discord' ? 'send_message' : (actType === 'telegram' ? 'send_message' : (actType === 'github' ? 'create_issue' : 'http_request')),
+          integration: actIntegration,
+          action_type: actType,
+          credential_id: credID || undefined,
           config: actConfig
         }]
       };
 
       try {
-        await fetchAPI('/api/v1/workflows', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(payload)
-        });
+        if (editID) {
+          await fetchAPI('/api/v1/workflows/' + editID, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+          });
+        } else {
+          await fetchAPI('/api/v1/workflows', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+          });
+        }
         closeModal('workflow-modal');
         switchTab('workflows');
       } catch (err) {
-        alert('Error creating workflow: ' + err.message);
+        alert('Failed to save automation: ' + err.message);
       }
     }
 
+    // CREDENTIALS CREATION
+    function openAddCredentialModal(preselectedIntegration = '') {
+      document.getElementById('cred-name').value = '';
+      document.getElementById('cred-val').value = '';
+      if (preselectedIntegration) {
+        document.getElementById('cred-integration').value = preselectedIntegration;
+      }
+      openModal('cred-modal');
+    }
+
+    async function submitCreateCredential() {
+      const name = document.getElementById('cred-name').value.trim();
+      const integration = document.getElementById('cred-integration').value;
+      const key = document.getElementById('cred-key').value.trim() || 'token';
+      const secret = document.getElementById('cred-val').value.trim();
+
+      if (!name || !secret) {
+        alert('Credential name and secret value are required.');
+        return;
+      }
+
+      try {
+        await fetchAPI('/api/v1/credentials', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            name: name,
+            integration: integration,
+            values: { [key]: secret }
+          })
+        });
+        closeModal('cred-modal');
+        switchTab('credentials');
+      } catch (err) {
+        alert('Failed to store credential: ' + err.message);
+      }
+    }
+
+    // INBOUND WEBHOOK CREATION
+    function openCreateWebhookModal() {
+      document.getElementById('wh-name').value = '';
+      document.getElementById('wh-event-type').value = 'webhook.received';
+      document.getElementById('wh-secret').value = '';
+      openModal('webhook-modal');
+    }
+
+    async function submitCreateWebhook() {
+      const name = document.getElementById('wh-name').value.trim();
+      const eventType = document.getElementById('wh-event-type').value.trim() || 'webhook.received';
+      const secret = document.getElementById('wh-secret').value.trim();
+
+      if (!name) {
+        alert('Webhook name is required.');
+        return;
+      }
+
+      try {
+        await fetchAPI('/api/v1/webhooks', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            name: name,
+            event_type: eventType,
+            secret_token: secret,
+            enabled: true
+          })
+        });
+        closeModal('webhook-modal');
+        switchTab('webhooks');
+      } catch (err) {
+        alert('Failed to create webhook: ' + err.message);
+      }
+    }
+
+    // GUIDED TOUR ENGINE
+    const tourSteps = [
+      {
+        title: "1. Overview & Operational Health",
+        content: "The Overview dashboard surfaces real operational counters from PostgreSQL & the Kerob runtime: active automations, delivery success rates, and dead-letter queue depth. Every counter reflects live database state with zero mock or synthetic filler."
+      },
+      {
+        title: "2. The Adapter Ecosystem",
+        content: "Kerob isolates all service-specific protocols into adapters (Telegram Bot API, Telegram Public Scraper, Discord Webhooks, GitHub REST & Webhooks, Inbound HTTP Webhooks, and SSRF-hardened Generic REST). The core engine remains 100% service-agnostic."
+      },
+      {
+        title: "3. Workflow Lifecycle (WHEN → IF → TRANSFORM → THEN)",
+        content: "Automations are declarative pipelines. A Trigger (WHEN) ingests and normalizes an event. A Condition (IF) deterministically checks rules (equals, contains, regex, numeric comparison). A Transformation optionally renders templates like {{payload.text}}. Actions (THEN) execute across one or more adapters."
+      },
+      {
+        title: "4. Execution Auditing & Dead-Letter Queue",
+        content: "Every workflow run records granular stage timing and step outputs. If an external service fails or rate limits, exponential backoff retries execute. Exhausted retries land safely in the Dead-Letter Queue for operator diagnosis and one-click replay."
+      },
+      {
+        title: "5. Enterprise Security & Encryption",
+        content: "All integration tokens and API keys are protected at rest with AES-256-GCM encryption. Inbound webhooks enforce secret tokens and 1MB size caps. Outbound HTTP requests undergo strict SSRF validation blocking private networks and cloud metadata IP ranges."
+      }
+    ];
+
+    let currentTourStep = 0;
+
+    function startGuidedTour() {
+      currentTourStep = 0;
+      renderTourStep();
+      openModal('tour-modal');
+    }
+
+    function renderTourStep() {
+      const step = tourSteps[currentTourStep];
+      document.getElementById('tour-step-title').textContent = step.title;
+      document.getElementById('tour-step-content').innerHTML = `
+        <div class="tour-step-card">
+          <div class="tour-step-number">STEP ${currentTourStep + 1} OF ${tourSteps.length}</div>
+          <div style="font-size:13px; line-height:1.6; color:var(--text)">${step.content}</div>
+        </div>
+      `;
+
+      const nextBtn = document.getElementById('tour-next-btn');
+      if (currentTourStep === tourSteps.length - 1) {
+        nextBtn.textContent = 'Finish Tour';
+      } else {
+        nextBtn.textContent = 'Next Step →';
+      }
+    }
+
+    function nextTourStep() {
+      if (currentTourStep < tourSteps.length - 1) {
+        currentTourStep++;
+        renderTourStep();
+      } else {
+        closeModal('tour-modal');
+      }
+    }
+
+    // UTILITIES
     function openModal(id) {
       document.getElementById(id).style.display = 'flex';
     }
@@ -831,8 +2525,26 @@
       document.getElementById(id).style.display = 'none';
     }
 
-    // Initialize
-    renderOverview(document.getElementById('main-content'));
+    function escapeHTML(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Copied to clipboard: ' + text);
+      }).catch(() => {
+        prompt('Copy this endpoint URL:', text);
+      });
+    }
+
+    // Initialize application
+    switchTab('overview');
   </script>
 </body>
 </html>
