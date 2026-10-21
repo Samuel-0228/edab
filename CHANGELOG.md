@@ -5,6 +5,31 @@ The project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ---
 
+## [v0.2.0] - 2026-10-21
+
+### Added
+- **Interactive Operations Studio & Enterprise Control Plane**:
+  - Completely redesigned frontend dashboard (`dashboard.html`) utilizing dark monochrome technical palette (black, charcoal, dark gray, restrained emerald accents).
+  - Subtle procedural SVG noise/grain filter texture overlay for industrial aesthetic depth without heavy asset dependencies.
+  - Interactive automation lifecycle bar visually reflecting `WHEN (Trigger) → IF (Condition) → TRANSFORM → THEN (Action) → OBSERVE (Audit)`.
+  - On-demand workflow testing: introduced `POST /api/v1/workflows/{id}/test` allowing real-time test executions with synthetic or custom event payloads.
+  - Interactive 5-step architectural guided tour built into the UI demonstrating real platform mechanics.
+  - Granular execution timeline audit drawer displaying step durations, structured inputs, outputs, and stack errors.
+  - Manual event injection modal for triggering the complete pipeline live.
+  - Inbound webhook management UI for instant endpoint creation, URL copying, and event tagging.
+  - Credentials Vault UI for AES-256 encrypted token creation.
+- **Workflow Scheduling Engine**:
+  - Integrated cron and interval scheduling runtime (`internal/core/workflow/scheduler.go`).
+  - Supports standard 5-part cron syntax (`min hour dom month dow`) with step values (e.g. `*/5 * * * *`) and duration strings (`5m`, `1h`, `24h`).
+  - Emits normalized `schedule.tick` events to trigger scheduled workflows with concurrency protection.
+- **Static Analysis & Tooling Hardening**:
+  - Added `.golangci.yml` configuring `govet`, `staticcheck`, `errcheck`, `unused`, and `ineffassign`.
+  - Added `golangci-lint` and `govulncheck` to the CI pipeline on push and pull requests.
+  - Split legacy monolithic API handlers into clean, domain-focused modules (`handlers_sources.go`, `handlers_destinations.go`, `handlers_routes.go`, `handlers_deliveries.go`).
+  - Added comprehensive table-driven API boundary validation tests.
+
+---
+
 ## [v0.1.0] - 2026-10-20
 
 ### Added
