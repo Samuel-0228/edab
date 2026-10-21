@@ -143,11 +143,14 @@ func main() {
 		},
 	)
 
-	// 7. Start Worker and Telegram Listeners in Background
+	// 7. Start Worker, Scheduler, and Telegram Listeners in Background
 	rootCtx, stopRoot := context.WithCancel(context.Background())
 	defer stopRoot()
 
 	worker.Start(rootCtx)
+
+	scheduler := workflow.NewScheduler(wfStore, wfEngine, 10*time.Second)
+	scheduler.Start(rootCtx)
 
 	var teleListener *telegram.Listener
 	var publicPoller *telegram.PublicPoller
@@ -247,6 +250,7 @@ func main() {
 	}
 
 	stopRoot()
+	scheduler.Stop()
 	if publicPoller != nil {
 		publicPoller.Stop()
 	}
