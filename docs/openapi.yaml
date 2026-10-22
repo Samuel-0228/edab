@@ -265,3 +265,22 @@ components:
               config: { type: object }
         max_retries: { type: integer, default: 3 }
         timeout_seconds: { type: integer, default: 30 }
+
+    APIError:
+      type: object
+      required: [error, code]
+      properties:
+        error: { type: string }
+        code: { type: string }
+        request_id: { type: string }
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldError'
+
+    FieldError:
+      type: object
+      required: [field, message]
+      properties:
+        field: { type: string }
+        message: { type: string }

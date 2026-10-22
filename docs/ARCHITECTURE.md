@@ -152,3 +152,58 @@ Credentials stored via `internal/core/credentials` use AES-256-GCM authenticated
 
 ### 3. API Authentication
 When `API_TOKEN` is configured, all management routes require constant-time `Authorization: Bearer <API_TOKEN>` validation, defeating timing attacks.
+
+---
+
+## 6. API Boundary Validation Layer
+
+Untrusted request payloads are strictly validated in `internal/api/validation.go` before reaching the core domain or database operations.
+
+### Validation Principles
+1. **Pre-Domain Execution**: Validation intercepts requests immediately after JSON decoding. Invalid payloads never reach stores or workflow engines.
+2. **Consistent Structured 400 Responses**: Malformed requests return structured JSON with request correlation:
+   ```json
+   {
+     "error": "validation failed: one or more fields are invalid",
+     "code": "VALIDATION_ERROR",
+     "request_id": "a5c0f188-7e77-4b68-9a48-5c4e1352e46b",
+     "details": [
+       {"field": "name", "message": "workflow name is required"},
+       {"field": "trigger.type", "message": "unsupported trigger type \"unknown\""}
+     ]
+   }
+   ```
+3. **Validated Entities**:
+   - **Workflows (`POST /api/v1/workflows`, `PUT /api/v1/workflows/{id}`)**: Name presence and length (<= 128 chars), supported trigger types (`webhook`, `telegram`, `github`, `rss`, `schedule`), cron expression validity, non-empty action list, required integration and action type, and action URL SSRF safety.
+   - **Webhooks (`POST /api/v1/webhooks`, `PUT /api/v1/webhooks/{id}`)**: Name presence and length (<= 128 chars), non-negative rate limit.
+   - **Credentials (`POST /api/v1/credentials`, `PUT /api/v1/credentials/{id}`)**: Name presence, supported integration (`discord`, `telegram`, `github`, `http`, `custom`), non-empty secret map.
+   - **Sources & Destinations (`POST /sources`, `POST /destinations`)**: Name presence, valid registered adapter type names.
+   - **Routes (`POST /routes`)**: Valid UUID format for `source_id` and `destination_id`.
+
+---
+
+## 7. Error Tracking & Production Observability
+
+Kerob isolates error tracking behind a clean provider interface in `internal/core/errtracker`:
+
+```go
+type Provider interface {
+    CaptureError(ctx context.Context, err error, scope Scope)
+    Flush(timeout time.Duration)
+}
+```
+
+### Key Capabilities
+- **Scrubbing & Sanitization**: Proactively strips sensitive data from error messages, stack traces, and metadata tags before capture:
+  - Bearer tokens (`Bearer [REDACTED]`)
+  - GitHub personal access tokens (`[REDACTED_GITHUB_TOKEN]`)
+  - Telegram bot tokens (`[REDACTED_TELEGRAM_TOKEN]`)
+  - PostgreSQL connection strings (`postgres://user:[REDACTED]@host...`)
+  - Sensitive scope keys (`password`, `secret`, `token`, `auth`, `credential`, `key`)
+- **Structured Error Context**: Captures `request_id`, `workflow_id`, `execution_id`, `event_id`, and step metadata.
+- **Provider Implementations**:
+  - `NoopProvider`: Disables error reporting.
+  - `LogProvider`: Formats sanitized errors into structured `slog` error records.
+  - `MemoryProvider`: In-memory recording for unit and integration testing assertions.
+  - `SentryProvider`: Production integration with Sentry via standard HTTP ingestion without coupling the core engine to third-party SDKs.
+

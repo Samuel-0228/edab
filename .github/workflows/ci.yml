@@ -7,8 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  lint:
-    name: Lint & Static Analysis
+  backend-lint:
+    name: Backend Lint & Security
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -23,9 +23,14 @@ jobs:
       - name: Verify dependencies
         run: go mod verify
 
+      - name: Dependency freshness check
+        run: |
+          echo "Checking for direct dependency updates..."
+          go list -u -m all || true
+
       - name: Check code formatting (gofmt)
         run: |
-          unformatted=$(gofmt -l .)
+          unformatted=$(gofmt -l . | grep -v node_modules || true)
           if [ -n "$unformatted" ]; then
             echo "Unformatted files found:"
             echo "$unformatted"
@@ -44,8 +49,43 @@ jobs:
           go-version: '1.23'
           go-package: ./...
 
-  test-and-build:
-    name: Test & Build
+  frontend-quality:
+    name: Frontend Quality & Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Dependency freshness check
+        run: cd frontend && npm outdated || true
+
+      - name: Svelte TypeScript check (npm run check)
+        run: cd frontend && npm run check
+
+      - name: ESLint check (npm run lint)
+        run: cd frontend && npm run lint
+
+      - name: Prettier check (npm run format:check)
+        run: cd frontend && npm run format:check
+
+      - name: Run frontend unit & component tests (npm test)
+        run: cd frontend && npm test
+
+      - name: Production dashboard build
+        run: cd frontend && npm run build
+
+  backend-test-and-build:
+    name: Backend Test, Coverage & Build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -58,7 +98,25 @@ jobs:
           cache: true
 
       - name: Run test suite with race detector
-        run: go test -v -count=1 -race ./...
+        run: go test -v -count=1 -race $(go list ./... | grep -v node_modules)
+
+      - name: Enforce Go test coverage threshold (>=60.0%)
+        run: |
+          go test -coverprofile=coverage.out $(go list ./... | grep -v node_modules)
+          coverage=$(go tool cover -func=coverage.out | grep total: | awk '{print substr($3, 1, length($3)-1)}')
+          echo "=================================================="
+          echo "Go Total Statement Coverage: ${coverage}%"
+          echo "Required Minimum Threshold:   60.0%"
+          echo "=================================================="
+          awk -v cov="$coverage" 'BEGIN {
+            if (cov + 0 < 60.0) {
+              print "ERROR: Coverage " cov "% is strictly below 60.0% threshold. Failing CI."
+              exit 1
+            } else {
+              print "SUCCESS: Coverage threshold passed (" cov "% >= 60.0%)"
+              exit 0
+            }
+          }'
 
       - name: Build kerob binary
         run: CGO_ENABLED=0 go build -v -ldflags="-w -s" -o /dev/null ./cmd/server
