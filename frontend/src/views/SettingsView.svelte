@@ -79,20 +79,11 @@
       />
 
       <div class="actions-row">
-        <Button variant="primary" size="sm" onclick={handleSave}>
-          Save Settings
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          loading={testingConnection}
-          onclick={testConnection}
-        >
+        <Button variant="primary" size="sm" onclick={handleSave}>Save Settings</Button>
+        <Button variant="secondary" size="sm" loading={testingConnection} onclick={testConnection}>
           Test Connection
         </Button>
-        <Button variant="ghost" size="sm" onclick={handleClear}>
-          Reset Defaults
-        </Button>
+        <Button variant="ghost" size="sm" onclick={handleClear}>Reset Defaults</Button>
       </div>
 
       {#if testResult}

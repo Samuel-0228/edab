@@ -1,10 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import {
-    refreshTick,
-    openDispatchModal,
-    notifyError
-  } from '../api/stores';
+  import { refreshTick, openDispatchModal, notifyError } from '../api/stores';
   import { api } from '../api/client';
   import type { EventRecord } from '../api/types';
   import Card from '../components/common/Card.svelte';
@@ -68,9 +64,7 @@
       </div>
 
       <div class="toolbar-actions">
-        <Button variant="secondary" size="sm" icon="refresh" onclick={loadEvents}>
-          Refresh
-        </Button>
+        <Button variant="secondary" size="sm" icon="refresh" onclick={loadEvents}>Refresh</Button>
         <Button variant="primary" size="sm" icon="play" onclick={() => openDispatchModal()}>
           + Inject Event
         </Button>

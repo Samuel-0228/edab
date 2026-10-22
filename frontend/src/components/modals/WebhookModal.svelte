@@ -88,9 +88,7 @@
     <Button variant="ghost" size="sm" onclick={closeCreateWebhookModal} disabled={loading}>
       Cancel
     </Button>
-    <Button variant="primary" size="sm" {loading} onclick={handleSubmit}>
-      Create Endpoint
-    </Button>
+    <Button variant="primary" size="sm" {loading} onclick={handleSubmit}>Create Endpoint</Button>
   {/snippet}
 </Dialog>
 

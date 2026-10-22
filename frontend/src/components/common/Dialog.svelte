@@ -114,7 +114,7 @@
   }
 
   .dialog-panel::before {
-    content: "";
+    content: '';
     position: absolute;
     top: 0;
     left: 0;
@@ -187,8 +187,12 @@
   }
 
   @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   @keyframes slideUp {

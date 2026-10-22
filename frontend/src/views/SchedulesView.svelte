@@ -148,18 +148,10 @@
                     >
                       Trigger Now
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onclick={() => toggleStatus(wf)}
-                    >
+                    <Button variant="ghost" size="sm" onclick={() => toggleStatus(wf)}>
                       {wf.enabled ? 'Pause' : 'Resume'}
                     </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onclick={() => openEditWorkflow(wf)}
-                    >
+                    <Button variant="secondary" size="sm" onclick={() => openEditWorkflow(wf)}>
                       Edit
                     </Button>
                   </div>
@@ -176,11 +168,7 @@
         icon="schedule"
       >
         {#snippet action()}
-          <Button
-            variant="primary"
-            size="sm"
-            onclick={() => openCreateWorkflow('schedule')}
-          >
+          <Button variant="primary" size="sm" onclick={() => openCreateWorkflow('schedule')}>
             Create Scheduled Automation
           </Button>
         {/snippet}

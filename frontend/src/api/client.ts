@@ -104,10 +104,7 @@ export class KerobApiClient {
     }
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = new Headers(options.headers || {});
 
@@ -141,7 +138,11 @@ export class KerobApiClient {
       } catch {
         // use default statusText
       }
-      if (response.status === 503 || errorMsg.includes('ECONNREFUSED') || errorMsg.includes('unreachable')) {
+      if (
+        response.status === 503 ||
+        errorMsg.includes('ECONNREFUSED') ||
+        errorMsg.includes('unreachable')
+      ) {
         this.notifyStatus(false, errorMsg);
       }
       throw new ApiError(response.status, errorMsg, endpoint);
@@ -184,10 +185,7 @@ export class KerobApiClient {
     });
   }
 
-  public async updateWorkflow(
-    id: string,
-    input: WorkflowCreateInput
-  ): Promise<Workflow> {
+  public async updateWorkflow(id: string, input: WorkflowCreateInput): Promise<Workflow> {
     return this.request<Workflow>(`/api/v1/workflows/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(input)
@@ -210,17 +208,11 @@ export class KerobApiClient {
     });
   }
 
-  public async testWorkflow(
-    id: string,
-    input: WorkflowTestInput
-  ): Promise<WorkflowTestResponse> {
-    return this.request<WorkflowTestResponse>(
-      `/api/v1/workflows/${encodeURIComponent(id)}/test`,
-      {
-        method: 'POST',
-        body: JSON.stringify(input)
-      }
-    );
+  public async testWorkflow(id: string, input: WorkflowTestInput): Promise<WorkflowTestResponse> {
+    return this.request<WorkflowTestResponse>(`/api/v1/workflows/${encodeURIComponent(id)}/test`, {
+      method: 'POST',
+      body: JSON.stringify(input)
+    });
   }
 
   // --- Integrations Catalog ---
@@ -230,9 +222,7 @@ export class KerobApiClient {
   }
 
   public async getIntegration(id: string): Promise<IntegrationMetadata> {
-    return this.request<IntegrationMetadata>(
-      `/api/v1/integrations/${encodeURIComponent(id)}`
-    );
+    return this.request<IntegrationMetadata>(`/api/v1/integrations/${encodeURIComponent(id)}`);
   }
 
   // --- Credentials ---
@@ -290,9 +280,7 @@ export class KerobApiClient {
   }
 
   public async getFailure(id: string): Promise<DeadLetterRecord> {
-    return this.request<DeadLetterRecord>(
-      `/api/v1/failures/${encodeURIComponent(id)}`
-    );
+    return this.request<DeadLetterRecord>(`/api/v1/failures/${encodeURIComponent(id)}`);
   }
 
   public async retryFailure(id: string): Promise<void> {

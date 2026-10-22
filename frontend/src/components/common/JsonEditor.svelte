@@ -89,8 +89,7 @@
     style="min-height: {minHeight}"
     class="json-textarea {syntaxError ? 'has-error' : ''}"
     spellcheck="false"
-    oninput={handleInput}
-  ></textarea>
+    oninput={handleInput}></textarea>
 
   {#if syntaxError}
     <div class="syntax-error-text">{syntaxError}</div>

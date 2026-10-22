@@ -46,8 +46,10 @@
         <div class="engine-offline-content">
           <span class="offline-pill">ENGINE OFFLINE</span>
           <span class="offline-text">
-            Unable to connect to Kerob Engine at <code>{api.getBaseUrl() || 'http://localhost:8080'}</code>.
-            Ensure the service is running (<code>docker compose up -d</code> or <code>go run ./cmd/server</code>).
+            Unable to connect to Kerob Engine at <code
+              >{api.getBaseUrl() || 'http://localhost:8080'}</code
+            >. Ensure the service is running (<code>docker compose up -d</code> or
+            <code>go run ./cmd/server</code>).
           </span>
         </div>
         <button class="offline-retry-btn" onclick={() => triggerRefresh()}>
@@ -168,7 +170,13 @@
   }
 
   @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 </style>

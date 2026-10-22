@@ -1,11 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import {
-    refreshTick,
-    openExecutionDetail,
-    notifySuccess,
-    notifyError
-  } from '../api/stores';
+  import { refreshTick, openExecutionDetail, notifySuccess, notifyError } from '../api/stores';
   import { api } from '../api/client';
   import type { Execution } from '../api/types';
   import Card from '../components/common/Card.svelte';
@@ -147,19 +142,11 @@
                 <td class="text-muted">{new Date(exec.started_at).toLocaleString()}</td>
                 <td style="text-align: right;">
                   <div class="row-actions">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onclick={() => openExecutionDetail(exec.id)}
-                    >
+                    <Button variant="ghost" size="sm" onclick={() => openExecutionDetail(exec.id)}>
                       Timeline
                     </Button>
                     {#if exec.status === 'failed'}
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onclick={() => retryRun(exec.id)}
-                      >
+                      <Button variant="primary" size="sm" onclick={() => retryRun(exec.id)}>
                         Retry
                       </Button>
                     {/if}

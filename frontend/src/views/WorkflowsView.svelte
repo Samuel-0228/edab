@@ -185,7 +185,9 @@
                   {/if}
                   {#if wf.trigger?.type === 'schedule' && wf.trigger?.config}
                     <div class="schedule-cadence mono">
-                      {(wf.trigger.config as any).cron || (wf.trigger.config as any).interval || 'cadence'}
+                      {(wf.trigger.config as any).cron ||
+                        (wf.trigger.config as any).interval ||
+                        'cadence'}
                     </div>
                   {/if}
                 </td>
@@ -194,7 +196,8 @@
                   {#if wf.conditions && wf.conditions.operator}
                     <Badge variant="stage-if">IF</Badge>
                     <span class="condition-expr mono">
-                      {wf.conditions.field} {wf.conditions.operator} "{String(wf.conditions.value ?? '')}"
+                      {wf.conditions.field}
+                      {wf.conditions.operator} "{String(wf.conditions.value ?? '')}"
                     </span>
                   {:else}
                     <span class="text-faint mono">— Always True —</span>
@@ -233,25 +236,13 @@
                     >
                       Test
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onclick={() => toggleWorkflow(wf)}
-                    >
+                    <Button variant="ghost" size="sm" onclick={() => toggleWorkflow(wf)}>
                       {wf.enabled ? 'Disable' : 'Enable'}
                     </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onclick={() => openEditWorkflow(wf)}
-                    >
+                    <Button variant="secondary" size="sm" onclick={() => openEditWorkflow(wf)}>
                       Edit
                     </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onclick={() => confirmDelete(wf)}
-                    >
+                    <Button variant="danger" size="sm" onclick={() => confirmDelete(wf)}>
                       Delete
                     </Button>
                   </div>
@@ -264,7 +255,9 @@
     {:else}
       <EmptyState
         title="No automation pipelines found"
-        description={searchQuery.trim() || statusFilter !== 'all' || triggerFilter !== 'all' ? 'Try adjusting your filters or search keywords.' : 'Create your first event-driven automation pipeline to connect messaging networks and APIs.'}
+        description={searchQuery.trim() || statusFilter !== 'all' || triggerFilter !== 'all'
+          ? 'Try adjusting your filters or search keywords.'
+          : 'Create your first event-driven automation pipeline to connect messaging networks and APIs.'}
         icon="workflow"
       >
         {#snippet action()}
@@ -303,7 +296,8 @@
   :global(.search-field) {
     max-width: 320px;
   }
-  :global(.status-select), :global(.trigger-select) {
+  :global(.status-select),
+  :global(.trigger-select) {
     max-width: 160px;
   }
 

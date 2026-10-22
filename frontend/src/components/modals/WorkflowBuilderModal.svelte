@@ -126,8 +126,7 @@
         if (wf.conditions) {
           conditionField = wf.conditions.field || '';
           conditionOp = wf.conditions.operator || '';
-          conditionVal =
-            wf.conditions.value !== undefined ? String(wf.conditions.value) : '';
+          conditionVal = wf.conditions.value !== undefined ? String(wf.conditions.value) : '';
         } else {
           conditionField = '';
           conditionOp = '';
@@ -233,7 +232,7 @@
     if (actionConfigRaw.trim()) {
       try {
         parsedConfig = JSON.parse(actionConfigRaw);
-      } catch (e: unknown) {
+      } catch {
         notifyError('Action Configuration JSON is invalid');
         return;
       }
@@ -273,7 +272,10 @@
       max_retries: Number(maxRetries) || 3,
       trigger: {
         type: triggerType,
-        event_types: triggerEventType.split(',').map((s) => s.trim()).filter(Boolean),
+        event_types: triggerEventType
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
         config: triggerConfig
       },
       conditions,
@@ -310,7 +312,9 @@
 
 <Dialog
   open={$workflowBuilderModal.open}
-  title={$workflowBuilderModal.mode === 'edit' ? 'Edit Automation Pipeline' : 'Create Automation Pipeline'}
+  title={$workflowBuilderModal.mode === 'edit'
+    ? 'Edit Automation Pipeline'
+    : 'Create Automation Pipeline'}
   subtitle="Build a declarative event processing rule: WHEN (Trigger) → IF (Condition) → TRANSFORM (Format) → THEN (Action)."
   maxWidth="780px"
   onclose={closeWorkflowBuilder}
@@ -422,11 +426,7 @@
           mono
         />
 
-        <Select
-          label="Operator"
-          options={conditionOperators}
-          bind:value={conditionOp}
-        />
+        <Select label="Operator" options={conditionOperators} bind:value={conditionOp} />
 
         <Input
           label="Target Value"
@@ -445,11 +445,7 @@
       </div>
 
       <div class="transform-fields-grid">
-        <Select
-          label="Transform Mode"
-          options={transformOptions}
-          bind:value={transformType}
-        />
+        <Select label="Transform Mode" options={transformOptions} bind:value={transformType} />
 
         <Input
           label="Template Expression / Field Map"
@@ -476,11 +472,7 @@
           onchange={setDefaultActionConfig}
         />
 
-        <Select
-          label="Action Operation"
-          options={actionTypeOptions}
-          bind:value={actionType}
-        />
+        <Select label="Action Operation" options={actionTypeOptions} bind:value={actionType} />
       </div>
 
       <JsonEditor

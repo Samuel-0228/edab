@@ -29,7 +29,12 @@
   role="button"
   tabindex="0"
   onclick={toggle}
-  onkeydown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } }}
+  onkeydown={(e) => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      toggle();
+    }
+  }}
 >
   <button
     type="button"
@@ -91,7 +96,9 @@
     height: 14px;
     background: var(--text-muted);
     border-radius: 50%;
-    transition: transform 0.15s ease-in-out, background 0.15s ease-in-out;
+    transition:
+      transform 0.15s ease-in-out,
+      background 0.15s ease-in-out;
   }
 
   .switch-track.checked .switch-thumb {

@@ -68,9 +68,7 @@ describe('KerobApiClient', () => {
     });
     vi.stubGlobal('fetch', mockFetch);
 
-    await expect(client.getWorkflow('wf_999')).rejects.toThrow(
-      'workflow id wf_999 not found'
-    );
+    await expect(client.getWorkflow('wf_999')).rejects.toThrow('workflow id wf_999 not found');
   });
 
   it('handles 204 No Content as undefined for void return types', async () => {

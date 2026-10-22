@@ -1,10 +1,5 @@
 <script lang="ts">
-  import {
-    currentRoute,
-    navigate,
-    summaryCounts,
-    openTourModal
-  } from '../../api/stores';
+  import { currentRoute, navigate, summaryCounts, openTourModal } from '../../api/stores';
   import type { AppRoute } from '../../api/types';
   import Icon from '../icons/Icon.svelte';
 
@@ -21,7 +16,13 @@
     { id: 'workflows', label: 'Automations', icon: 'workflow', countKey: 'activeWorkflows' },
     { id: 'schedules', label: 'Schedules', icon: 'schedule' },
     { id: 'executions', label: 'Executions', icon: 'execution' },
-    { id: 'failures', label: 'Dead-Letter Queue', icon: 'failure', countKey: 'deadLetters', danger: true }
+    {
+      id: 'failures',
+      label: 'Dead-Letter Queue',
+      icon: 'failure',
+      countKey: 'deadLetters',
+      danger: true
+    }
   ];
 
   const connectivityNav: NavItem[] = [
@@ -68,7 +69,11 @@
               <span>{item.label}</span>
             </div>
             {#if item.countKey !== undefined && $summaryCounts[item.countKey] !== undefined}
-              <span class="nav-counter {item.danger && $summaryCounts[item.countKey] > 0 ? 'danger' : ''}">
+              <span
+                class="nav-counter {item.danger && $summaryCounts[item.countKey] > 0
+                  ? 'danger'
+                  : ''}"
+              >
                 {$summaryCounts[item.countKey]}
               </span>
             {/if}
@@ -119,9 +124,7 @@
       <span class="status-text">CORE ACTIVE</span>
     </div>
 
-    <button class="tour-btn" onclick={openTourModal} title="Guided Tour">
-      Tour
-    </button>
+    <button class="tour-btn" onclick={openTourModal} title="Guided Tour"> Tour </button>
   </div>
 </aside>
 
@@ -310,8 +313,15 @@
   }
 
   @keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.4; transform: scale(0.85); }
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.4;
+      transform: scale(0.85);
+    }
   }
 
   .status-text {

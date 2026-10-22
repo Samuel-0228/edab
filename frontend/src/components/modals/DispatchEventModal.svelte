@@ -16,7 +16,9 @@
 
   let sourceId = $state('manual_tester');
   let eventType = $state('telegram.message');
-  let payloadRaw = $state(`{\n  "text": "Urgent technical alert: deployment status update",\n  "title": "System Diagnostic Event",\n  "author": "ops_engineer"\n}`);
+  let payloadRaw = $state(
+    `{\n  "text": "Urgent technical alert: deployment status update",\n  "title": "System Diagnostic Event",\n  "author": "ops_engineer"\n}`
+  );
   let loading = $state(false);
   let executionResult = $state<unknown | null>(null);
 
@@ -34,10 +36,10 @@
   });
 
   async function handleDispatch() {
-    let parsedPayload: Record<string, unknown> = {};
+    let parsedPayload: Record<string, unknown>;
     try {
       parsedPayload = JSON.parse(payloadRaw);
-    } catch (e: unknown) {
+    } catch {
       notifyError('Payload must be valid JSON');
       return;
     }
@@ -79,7 +81,9 @@
 
 <Dialog
   open={$dispatchModal.open}
-  title={$dispatchModal.workflowId ? `Test Automation: ${$dispatchModal.workflowName || $dispatchModal.workflowId}` : 'Inject Event into Pipeline'}
+  title={$dispatchModal.workflowId
+    ? `Test Automation: ${$dispatchModal.workflowName || $dispatchModal.workflowId}`
+    : 'Inject Event into Pipeline'}
   subtitle="Inject a normalized event payload to test trigger evaluation, conditions, template transforms, and downstream actions."
   maxWidth="680px"
   onclose={closeDispatchModal}
@@ -128,16 +132,8 @@
   </div>
 
   {#snippet footer()}
-    <Button variant="ghost" size="sm" onclick={closeDispatchModal}>
-      Close
-    </Button>
-    <Button
-      variant="primary"
-      size="sm"
-      {loading}
-      icon="play"
-      onclick={handleDispatch}
-    >
+    <Button variant="ghost" size="sm" onclick={closeDispatchModal}>Close</Button>
+    <Button variant="primary" size="sm" {loading} icon="play" onclick={handleDispatch}>
       {$dispatchModal.workflowId ? 'Execute Workflow Test' : 'Dispatch Event'}
     </Button>
   {/snippet}

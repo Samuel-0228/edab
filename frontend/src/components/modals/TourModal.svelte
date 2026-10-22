@@ -78,14 +78,10 @@
   </div>
 
   {#snippet footer()}
-    <Button variant="ghost" size="sm" onclick={closeTourModal}>
-      Exit Tour
-    </Button>
+    <Button variant="ghost" size="sm" onclick={closeTourModal}>Exit Tour</Button>
     <div style="flex:1;"></div>
     {#if currentStep > 0}
-      <Button variant="secondary" size="sm" onclick={prevStep}>
-        Back
-      </Button>
+      <Button variant="secondary" size="sm" onclick={prevStep}>Back</Button>
     {/if}
     <Button variant="primary" size="sm" onclick={nextStep}>
       {currentStep === steps.length - 1 ? 'Finish Tour' : 'Next Step →'}

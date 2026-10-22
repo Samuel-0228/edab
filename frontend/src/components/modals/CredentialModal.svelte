@@ -121,9 +121,7 @@
     <Button variant="ghost" size="sm" onclick={closeAddCredentialModal} disabled={loading}>
       Cancel
     </Button>
-    <Button variant="primary" size="sm" {loading} onclick={handleSubmit}>
-      Encrypt & Store
-    </Button>
+    <Button variant="primary" size="sm" {loading} onclick={handleSubmit}>Encrypt & Store</Button>
   {/snippet}
 </Dialog>
 

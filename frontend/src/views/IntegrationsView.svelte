@@ -94,19 +94,11 @@
           </div>
 
           <div class="card-footer-actions">
-            <Button
-              variant="secondary"
-              size="sm"
-              onclick={() => openCreateWorkflow(item.id)}
-            >
+            <Button variant="secondary" size="sm" onclick={() => openCreateWorkflow(item.id)}>
               + Use in Automation
             </Button>
             {#if item.credentials.length > 0}
-              <Button
-                variant="ghost"
-                size="sm"
-                onclick={() => openAddCredentialModal(item.id)}
-              >
+              <Button variant="ghost" size="sm" onclick={() => openAddCredentialModal(item.id)}>
                 Configure Token
               </Button>
             {/if}

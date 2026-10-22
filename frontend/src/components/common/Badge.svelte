@@ -78,13 +78,16 @@
     border-color: var(--accent-emerald-border);
   }
 
-  .failed, .danger {
+  .failed,
+  .danger {
     background: var(--accent-crimson-dim);
     color: var(--accent-crimson);
     border-color: var(--accent-crimson-border);
   }
 
-  .warning, .skipped, .retrying {
+  .warning,
+  .skipped,
+  .retrying {
     background: var(--accent-amber-dim);
     color: var(--accent-amber);
     border-color: var(--accent-amber-border);

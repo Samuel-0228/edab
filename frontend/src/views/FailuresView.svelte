@@ -117,18 +117,10 @@
                 <td class="mono">{f.attempts}x</td>
                 <td style="text-align: right;">
                   <div class="row-actions">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onclick={() => retryFailure(f.id)}
-                    >
+                    <Button variant="primary" size="sm" onclick={() => retryFailure(f.id)}>
                       Retry Delivery
                     </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onclick={() => confirmDiscard(f)}
-                    >
+                    <Button variant="danger" size="sm" onclick={() => confirmDiscard(f)}>
                       Discard
                     </Button>
                   </div>

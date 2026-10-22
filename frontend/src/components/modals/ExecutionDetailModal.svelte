@@ -57,7 +57,9 @@
 <Dialog
   open={$executionDetailModal.open}
   title="Execution Lifecycle Audit"
-  subtitle={execution ? `Run ${execution.id} against Workflow ${execution.workflow_id.slice(0, 8)}...` : 'Loading audit record...'}
+  subtitle={execution
+    ? `Run ${execution.id} against Workflow ${execution.workflow_id.slice(0, 8)}...`
+    : 'Loading audit record...'}
   maxWidth="760px"
   onclose={closeExecutionDetail}
 >
@@ -166,17 +168,9 @@
   {/if}
 
   {#snippet footer()}
-    <Button variant="ghost" size="sm" onclick={closeExecutionDetail}>
-      Close
-    </Button>
+    <Button variant="ghost" size="sm" onclick={closeExecutionDetail}>Close</Button>
     {#if execution && execution.status === 'failed'}
-      <Button
-        variant="primary"
-        size="sm"
-        icon="refresh"
-        loading={retrying}
-        onclick={handleRetry}
-      >
+      <Button variant="primary" size="sm" icon="refresh" loading={retrying} onclick={handleRetry}>
         Retry Execution
       </Button>
     {/if}

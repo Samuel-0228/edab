@@ -9,12 +9,7 @@
     class?: string;
   }
 
-  let {
-    content,
-    maxHeight = '240px',
-    language = 'json',
-    class: className = ''
-  }: Props = $props();
+  let { content, maxHeight = '240px', language = 'json', class: className = '' }: Props = $props();
 
   let formatted = $derived.by(() => {
     if (typeof content === 'string') {

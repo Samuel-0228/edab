@@ -10,13 +10,7 @@
     action?: Snippet;
   }
 
-  let {
-    title,
-    description,
-    icon = 'info',
-    class: className = '',
-    action
-  }: Props = $props();
+  let { title, description, icon = 'info', class: className = '', action }: Props = $props();
 </script>
 
 <div class="empty-state-panel {className}">

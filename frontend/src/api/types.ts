@@ -1,10 +1,5 @@
 export type ExecutionStatus =
-  | 'pending'
-  | 'running'
-  | 'success'
-  | 'failed'
-  | 'retrying'
-  | 'cancelled';
+  'pending' | 'running' | 'success' | 'failed' | 'retrying' | 'cancelled';
 
 export interface ExecutionStep {
   id: string;

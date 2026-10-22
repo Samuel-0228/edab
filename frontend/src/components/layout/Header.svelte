@@ -79,9 +79,7 @@
   </div>
 
   <div class="header-actions">
-    <Button variant="ghost" size="sm" icon="refresh" onclick={triggerRefresh}>
-      Sync
-    </Button>
+    <Button variant="ghost" size="sm" icon="refresh" onclick={triggerRefresh}>Sync</Button>
 
     <Button variant="secondary" size="sm" icon="play" onclick={() => openDispatchModal()}>
       Test Ingest
@@ -142,7 +140,8 @@
   }
 
   @media (max-width: 860px) {
-    .header-subtitle, .header-separator {
+    .header-subtitle,
+    .header-separator {
       display: none;
     }
   }

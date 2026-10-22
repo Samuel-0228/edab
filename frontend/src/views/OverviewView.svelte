@@ -59,7 +59,9 @@
       <span class="status-indicator {$engineConnection.online === false ? 'offline' : ''}"></span>
       <div>
         <div class="status-heading">
-          {$engineConnection.online === false ? 'KEROB ENGINE OFFLINE / UNREACHABLE' : 'KEROB ENGINE OPERATIONAL'}
+          {$engineConnection.online === false
+            ? 'KEROB ENGINE OFFLINE / UNREACHABLE'
+            : 'KEROB ENGINE OPERATIONAL'}
         </div>
         <div class="status-desc">
           {$engineConnection.online === false
@@ -103,7 +105,9 @@
     <StatCard
       label="Delivery Success Rate"
       value={data ? `${data.success_rate.toFixed(1)}%` : '-'}
-      subtext={data && data.executions_failed > 0 ? `${data.executions_failed} failed runs` : 'Zero unrecovered failures'}
+      subtext={data && data.executions_failed > 0
+        ? `${data.executions_failed} failed runs`
+        : 'Zero unrecovered failures'}
       indicator={data && data.success_rate > 95 ? 'positive' : 'warning'}
       icon="check"
     />
@@ -111,7 +115,9 @@
     <StatCard
       label="Dead-Letter Depth"
       value={data?.dead_letter_count ?? '-'}
-      subtext={data?.dead_letter_count === 0 ? 'All retries cleared' : 'Requires operator inspection'}
+      subtext={data?.dead_letter_count === 0
+        ? 'All retries cleared'
+        : 'Requires operator inspection'}
       indicator={data && data.dead_letter_count > 0 ? 'negative' : 'positive'}
       icon="failure"
     />
@@ -155,7 +161,9 @@
         </div>
         <div class="env-row">
           <span class="env-key">Engine Uptime</span>
-          <span class="env-val mono">{data ? `${Math.floor(data.uptime_seconds / 60)} minutes` : '-'}</span>
+          <span class="env-val mono"
+            >{data ? `${Math.floor(data.uptime_seconds / 60)} minutes` : '-'}</span
+          >
         </div>
       </div>
     </Card>
@@ -266,7 +274,7 @@
   }
 
   .system-status-banner::before {
-    content: "";
+    content: '';
     position: absolute;
     left: 0;
     top: 0;

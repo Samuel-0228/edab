@@ -154,13 +154,9 @@
           description={autoRefresh ? 'Streaming (3s)' : 'Paused'}
         />
 
-        <Button variant="ghost" size="sm" onclick={clearBuffer}>
-          Clear
-        </Button>
+        <Button variant="ghost" size="sm" onclick={clearBuffer}>Clear</Button>
 
-        <Button variant="secondary" size="sm" icon="refresh" onclick={pollLogs}>
-          Poll Now
-        </Button>
+        <Button variant="secondary" size="sm" icon="refresh" onclick={pollLogs}>Poll Now</Button>
       </div>
     </div>
   </Card>

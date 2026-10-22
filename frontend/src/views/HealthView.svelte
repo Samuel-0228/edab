@@ -59,11 +59,7 @@
 
   async function loadHealthData() {
     try {
-      const [h, r, m] = await Promise.all([
-        api.getHealth(),
-        api.getReady(),
-        api.getMetricsText()
-      ]);
+      const [h, r, m] = await Promise.all([api.getHealth(), api.getReady(), api.getMetricsText()]);
       health = h;
       ready = r;
       rawMetrics = m;
@@ -135,7 +131,8 @@
           <span class="probe-meta mono">RFC 1918 Blocked</span>
         </div>
         <p class="probe-desc">
-          Restricted HTTP client blocks loopback, link-local, and metadata services (169.254.169.254).
+          Restricted HTTP client blocks loopback, link-local, and metadata services
+          (169.254.169.254).
         </p>
       </div>
     </Card>
@@ -212,13 +209,15 @@
     padding="none"
   >
     {#snippet headerActions()}
-      <Button variant="ghost" size="sm" onclick={loadHealthData}>
-        Re-scrape
-      </Button>
+      <Button variant="ghost" size="sm" onclick={loadHealthData}>Re-scrape</Button>
     {/snippet}
 
     <div style="padding: 14px 16px;">
-      <CodeBox content={rawMetrics || '# No metrics scraped yet'} maxHeight="260px" language="plaintext" />
+      <CodeBox
+        content={rawMetrics || '# No metrics scraped yet'}
+        maxHeight="260px"
+        language="plaintext"
+      />
     </div>
   </Card>
 </div>

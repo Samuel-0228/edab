@@ -31,9 +31,7 @@
   <p class="confirm-message">{$confirmModal.message}</p>
 
   {#snippet footer()}
-    <Button variant="ghost" size="sm" onclick={closeConfirm} disabled={loading}>
-      Cancel
-    </Button>
+    <Button variant="ghost" size="sm" onclick={closeConfirm} disabled={loading}>Cancel</Button>
     <Button
       variant={$confirmModal.danger ? 'danger' : 'primary'}
       size="sm"
