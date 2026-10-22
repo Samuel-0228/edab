@@ -158,3 +158,48 @@ func (w *WebhookDestinationAdapter) Deliver(ctx context.Context, ev *event.Event
 
 	return nil
 }
+
+// DeliverWithResult implements ResultReporter interface.
+func (w *WebhookDestinationAdapter) DeliverWithResult(ctx context.Context, ev *event.Event) (json.RawMessage, error) {
+	w.mu.Lock()
+	targetURL := w.config.TargetURL
+	headers := w.config.Headers
+	client := w.client
+	w.mu.Unlock()
+
+	if targetURL == "" {
+		return nil, fmt.Errorf("target_url is not configured for webhook destination")
+	}
+
+	body, err := json.Marshal(ev)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal event for webhook: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to build webhook request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "kerob/1.0")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("webhook request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("webhook returned non-2xx status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	if len(respBody) > 0 && json.Valid(respBody) {
+		return json.RawMessage(respBody), nil
+	}
+	return json.RawMessage(fmt.Sprintf(`{"status_code":%d}`, resp.StatusCode)), nil
+}

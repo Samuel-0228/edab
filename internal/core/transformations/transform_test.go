@@ -2,6 +2,7 @@ package transformations
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"kerob/internal/core/event"
@@ -142,5 +143,68 @@ func TestRenderJSONConfig(t *testing.T) {
 	subData, ok := parsed["data"].(map[string]any)
 	if !ok || subData["error_code"] != "503" {
 		t.Errorf("expected data.error_code to be 503, got %v", subData)
+	}
+}
+
+func TestTransformationEdgeCases(t *testing.T) {
+	// 1. Nil event
+	out, err := Transform(nil, nil)
+	if err != nil || len(out) != 0 {
+		t.Fatalf("expected empty map for nil event")
+	}
+
+	ev, _ := event.New("src-1", "ext-1", "test.event", map[string]any{
+		"items": []any{
+			map[string]any{"id": "item-1", "price": 10},
+			map[string]any{"id": "item-2", "price": 25},
+		},
+		"simple": "val",
+	}, nil)
+
+	// 2. Passthrough
+	passOut, err := Transform(&Transformation{Type: "passthrough"}, ev)
+	if err != nil || passOut["simple"] != "val" {
+		t.Fatalf("expected passthrough to preserve payload: %+v", passOut)
+	}
+
+	// 3. Single template type with custom output key
+	tplTf := &Transformation{
+		Type:      "template",
+		Template:  "Item: {{payload.simple}}",
+		OutputKey: "formatted_result",
+	}
+	tplOut, err := Transform(tplTf, ev)
+	if err != nil || tplOut["formatted_result"] != "Item: val" {
+		t.Fatalf("expected formatted_result 'Item: val', got %+v", tplOut)
+	}
+
+	// 4. Invalid rendered JSON template returns error
+	_, err = Transform(&Transformation{
+		Type:     "json",
+		Template: `{invalid_json: true`,
+	}, ev)
+	if err == nil {
+		t.Fatalf("expected error for invalid rendered JSON template")
+	}
+
+	// 5. Valid JSON transformation
+	jsonOut, err := Transform(&Transformation{
+		Type:     "json",
+		Template: `{"user_name":"{{payload.simple}}","active":true}`,
+	}, ev)
+	if err != nil || jsonOut["user_name"] != "val" || jsonOut["active"] != true {
+		t.Fatalf("expected valid parsed JSON transformation output, got %+v", jsonOut)
+	}
+
+	// 6. RenderJSONConfig with empty/nil rawConfig
+	emptyRender, err := RenderJSONConfig(nil, ev)
+	if err != nil || len(emptyRender) != 0 {
+		t.Fatalf("expected empty bytes for nil config")
+	}
+
+	// 7. RenderTemplate with unclosed tags and nested missing paths
+	unclosed := RenderTemplate("Hello {{payload.missing_key without close", ev)
+	if !strings.Contains(unclosed, "Hello") {
+		t.Errorf("expected string to be returned safely: %s", unclosed)
 	}
 }

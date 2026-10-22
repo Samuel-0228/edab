@@ -42,10 +42,16 @@ type DiscordFooter struct {
 	IconURL string `json:"icon_url,omitempty"`
 }
 
-type DiscordActionExecutor struct{}
+type DiscordActionExecutor struct {
+	client *http.Client
+}
 
 func NewDiscordActionExecutor() *DiscordActionExecutor {
 	return &DiscordActionExecutor{}
+}
+
+func NewDiscordActionExecutorWithClient(client *http.Client) *DiscordActionExecutor {
+	return &DiscordActionExecutor{client: client}
 }
 
 func (d *DiscordActionExecutor) Name() string { return "Discord" }
@@ -117,7 +123,10 @@ func (d *DiscordActionExecutor) Execute(ctx context.Context, req workflow.Action
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("User-Agent", "kerob/1.0 (automation-engine)")
 
-	client := ssrf.NewSafeHTTPClient(15 * time.Second)
+	client := d.client
+	if client == nil {
+		client = ssrf.NewSafeHTTPClient(15 * time.Second)
+	}
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return workflow.ActionResult{Success: false}, fmt.Errorf("discord webhook request failed: %w", err)

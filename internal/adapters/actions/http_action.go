@@ -25,10 +25,16 @@ type HTTPActionConfig struct {
 	TimeoutSec  int               `json:"timeout_seconds,omitempty"`
 }
 
-type HTTPActionExecutor struct{}
+type HTTPActionExecutor struct {
+	client *http.Client
+}
 
 func NewHTTPActionExecutor() *HTTPActionExecutor {
 	return &HTTPActionExecutor{}
+}
+
+func NewHTTPActionExecutorWithClient(client *http.Client) *HTTPActionExecutor {
+	return &HTTPActionExecutor{client: client}
 }
 
 func (h *HTTPActionExecutor) Name() string { return "Generic HTTP Action" }
@@ -121,12 +127,15 @@ func (h *HTTPActionExecutor) Execute(ctx context.Context, req workflow.ActionReq
 		}
 	}
 
-	// 4. Send request with SSRF-safe client
+	// 4. Send request with SSRF-safe client (or injected client)
 	timeout := 15 * time.Second
 	if cfg.TimeoutSec > 0 {
 		timeout = time.Duration(cfg.TimeoutSec) * time.Second
 	}
-	client := ssrf.NewSafeHTTPClient(timeout)
+	client := h.client
+	if client == nil {
+		client = ssrf.NewSafeHTTPClient(timeout)
+	}
 
 	resp, err := client.Do(httpReq)
 	if err != nil {

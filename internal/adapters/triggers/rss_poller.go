@@ -87,15 +87,22 @@ type RSSPoller struct {
 }
 
 func NewRSSPoller(sourceID, feedURL string, interval time.Duration, ingester Ingester) *RSSPoller {
+	return NewRSSPollerWithClient(sourceID, feedURL, interval, ingester, nil)
+}
+
+func NewRSSPollerWithClient(sourceID, feedURL string, interval time.Duration, ingester Ingester, client *http.Client) *RSSPoller {
 	if interval <= 0 {
 		interval = 5 * time.Minute
+	}
+	if client == nil {
+		client = ssrf.NewSafeHTTPClient(15 * time.Second)
 	}
 	return &RSSPoller{
 		sourceID:  sourceID,
 		feedURL:   feedURL,
 		interval:  interval,
 		ingester:  ingester,
-		client:    ssrf.NewSafeHTTPClient(15 * time.Second),
+		client:    client,
 		seenGUIDs: make(map[string]bool),
 		stopChan:  make(chan struct{}),
 	}

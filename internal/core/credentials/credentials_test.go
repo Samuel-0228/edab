@@ -122,3 +122,84 @@ func TestMemoryStoreCRUD(t *testing.T) {
 		t.Fatalf("expected ErrCredentialNotFound after delete, got %v", err)
 	}
 }
+
+func TestCredentialsStoreUpdateAndErrors(t *testing.T) {
+	ctx := context.Background()
+	key := DeriveKey("update-test-key")
+	store := NewMemoryStore(key)
+
+	// Create
+	c, err := store.Create(ctx, &Credential{
+		Name:        "Initial Name",
+		Integration: "github",
+	}, map[string]string{
+		"token": "ghp_111222333444555",
+	})
+	if err != nil {
+		t.Fatalf("failed to create: %v", err)
+	}
+
+	// Update name and token
+	c.Name = "Updated GitHub"
+	updated, err := store.Update(ctx, c, map[string]string{
+		"token": "ghp_999888777666555",
+	})
+	if err != nil {
+		t.Fatalf("update failed: %v", err)
+	}
+	if updated.Name != "Updated GitHub" {
+		t.Errorf("expected updated name, got %s", updated.Name)
+	}
+
+	// Verify updated secret is decrypted correctly
+	decrypted, err := store.GetDecrypted(ctx, c.ID)
+	if err != nil || decrypted["token"] != "ghp_999888777666555" {
+		t.Fatalf("expected updated decrypted token, got: %v", decrypted)
+	}
+
+	// Update nonexistent
+	_, err = store.Update(ctx, &Credential{ID: "nonexistent"}, map[string]string{"foo": "bar"})
+	if err != ErrCredentialNotFound {
+		t.Fatalf("expected ErrCredentialNotFound on update nonexistent, got %v", err)
+	}
+
+	// GetDecrypted nonexistent
+	_, err = store.GetDecrypted(ctx, "nonexistent")
+	if err != ErrCredentialNotFound {
+		t.Fatalf("expected ErrCredentialNotFound on GetDecrypted nonexistent, got %v", err)
+	}
+
+	// Delete nonexistent
+	err = store.Delete(ctx, "nonexistent")
+	if err != ErrCredentialNotFound {
+		t.Fatalf("expected ErrCredentialNotFound on Delete nonexistent, got %v", err)
+	}
+}
+
+func TestCryptoErrorCases(t *testing.T) {
+	// 1. Invalid key length for Encrypt
+	_, _, err := Encrypt([]byte("too-short"), []byte("data"))
+	if err == nil {
+		t.Fatal("expected error on invalid key length for Encrypt")
+	}
+
+	// 2. Invalid key length for Decrypt
+	_, err = Decrypt([]byte("too-short"), []byte("cipher"), []byte("nonce"))
+	if err == nil {
+		t.Fatal("expected error on invalid key length for Decrypt")
+	}
+
+	// 3. Invalid nonce size for Decrypt
+	key := DeriveKey("valid-32-byte-key-master-test-key")
+	_, err = Decrypt(key, []byte("cipher"), []byte("short-nonce"))
+	if err == nil {
+		t.Fatal("expected error on invalid nonce size for Decrypt")
+	}
+
+	// 4. DeriveKey deterministic and 32 bytes
+	k1 := DeriveKey("same-secret")
+	k2 := DeriveKey("same-secret")
+	if len(k1) != 32 || len(k2) != 32 || string(k1) != string(k2) {
+		t.Fatalf("DeriveKey must produce deterministic 32-byte keys")
+	}
+}

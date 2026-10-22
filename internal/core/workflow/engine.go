@@ -9,6 +9,7 @@ import (
 
 	"kerob/internal/core/conditions"
 	"kerob/internal/core/credentials"
+	"kerob/internal/core/errtracker"
 	"kerob/internal/core/event"
 	"kerob/internal/core/transformations"
 )
@@ -27,6 +28,12 @@ type Engine struct {
 	creds      credentials.Store
 	actions    *ActionRegistry
 	cfg        EngineConfig
+	errTracker errtracker.Provider
+}
+
+// SetErrorTracker sets the error tracker provider for the workflow engine.
+func (e *Engine) SetErrorTracker(tracker errtracker.Provider) {
+	e.errTracker = tracker
 }
 
 func NewEngine(
@@ -346,6 +353,16 @@ func (e *Engine) handleExecutionFailure(
 	// Retries exhausted: mark failed and record in dead-letter
 	_ = e.executions.UpdateStatus(ctx, exec.ID, ExecutionFailed, &errStr, totalDuration)
 	e.recordDeadLetter(ctx, exec, wf, ev, actionID, errStr)
+	if e.errTracker != nil {
+		e.errTracker.CaptureError(ctx, fmt.Errorf("%s", errStr), errtracker.Scope{
+			WorkflowID:  wf.ID,
+			ExecutionID: exec.ID,
+			EventID:     ev.ID,
+			Tags: map[string]string{
+				"action_id": actionID,
+			},
+		})
+	}
 	slog.Error("workflow execution permanently failed (retries exhausted)",
 		slog.String("execution_id", exec.ID),
 		slog.String("workflow_id", wf.ID),

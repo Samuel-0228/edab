@@ -148,3 +148,84 @@ func TestTelegramSourceAdapterNormalizeMediaGroup(t *testing.T) {
 		t.Errorf("expected largest photo file IDs, got %v", payload.Media)
 	}
 }
+
+func TestTelegramPublicSourceAdapter(t *testing.T) {
+	ctx := context.Background()
+	adapter := NewTelegramPublicSourceAdapter()
+
+	if adapter.Name() != "telegram_public" {
+		t.Errorf("expected telegram_public, got %s", adapter.Name())
+	}
+
+	// Health before connect
+	if err := adapter.Health(ctx); err == nil {
+		t.Fatal("expected error on health before connect")
+	}
+
+	// Connect invalid JSON
+	if err := adapter.Connect(ctx, []byte(`{invalid json`)); err == nil {
+		t.Fatal("expected error on invalid config JSON")
+	}
+
+	// Connect valid
+	if err := adapter.Connect(ctx, []byte(`{"channel_username":"@golang_news"}`)); err != nil {
+		t.Fatalf("connect failed: %v", err)
+	}
+	if err := adapter.Health(ctx); err != nil {
+		t.Fatalf("health failed after connect: %v", err)
+	}
+
+	// Poll returns nil
+	posts, err := adapter.Poll(ctx)
+	if err != nil || posts != nil {
+		t.Errorf("expected nil from Poll, got: %v, %v", posts, err)
+	}
+
+	// Normalize validation errors
+	if _, err := adapter.Normalize(ctx, "src-1", nil); err == nil {
+		t.Fatal("expected error on empty raw bytes")
+	}
+	if _, err := adapter.Normalize(ctx, "src-1", []byte(`{bad json`)); err == nil {
+		t.Fatal("expected error on bad json")
+	}
+	if _, err := adapter.Normalize(ctx, "src-1", []byte(`{"message_id":1}`)); err == nil {
+		t.Fatal("expected error on missing channel")
+	}
+	if _, err := adapter.Normalize(ctx, "src-1", []byte(`{"channel":"golang_news","message_id":0}`)); err == nil {
+		t.Fatal("expected error on missing/invalid message_id")
+	}
+
+	// Normalize single text post
+	singleRaw := []byte(`{
+		"channel": "@golang_news",
+		"message_id": 55,
+		"text": "Go 1.22 released",
+		"html_text": "<b>Go 1.22</b> released"
+	}`)
+	evSingle, err := adapter.Normalize(ctx, "src-pub", singleRaw)
+	if err != nil {
+		t.Fatalf("normalize single failed: %v", err)
+	}
+	if evSingle.EventType != "telegram.public_post" {
+		t.Errorf("expected telegram.public_post, got %s", evSingle.EventType)
+	}
+
+	// Normalize album with media
+	albumRaw := []byte(`{
+		"channel": "golang_news",
+		"message_id": 60,
+		"text": "Conference photos",
+		"is_album": true,
+		"media": [
+			{"kind":"photo","url":"https://8.8.8.8/p1.jpg"},
+			{"kind":"photo","url":"https://8.8.8.8/p2.jpg"}
+		]
+	}`)
+	evAlbum, err := adapter.Normalize(ctx, "src-pub", albumRaw)
+	if err != nil {
+		t.Fatalf("normalize album failed: %v", err)
+	}
+	if evAlbum.EventType != "telegram.media_group" {
+		t.Errorf("expected telegram.media_group for album, got %s", evAlbum.EventType)
+	}
+}

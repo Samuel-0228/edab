@@ -143,3 +143,78 @@ func TestWebhookSourceAdapter(t *testing.T) {
 		t.Errorf("expected source_id src-wh, got %s", ev.SourceID)
 	}
 }
+
+func TestMemorySourceStoreAndResolvers(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	// 1. Create Source
+	s1, err := store.Create(ctx, &Source{
+		Name:        "Telegram Channel Source",
+		AdapterType: "telegram",
+		Config:      []byte(`{"telegram_chat_id":"-10012345"}`),
+		Enabled:     true,
+	})
+	if err != nil || s1.ID == "" {
+		t.Fatalf("failed to create source: %v", err)
+	}
+
+	// 2. Create Public Telegram Source
+	s2, err := store.Create(ctx, &Source{
+		Name:        "Telegram Public Channel",
+		AdapterType: "telegram_public",
+		Config:      []byte(`{"channel_username":"technews"}`),
+		Enabled:     true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create public source: %v", err)
+	}
+
+	// 3. GetByID
+	fetched, err := store.GetByID(ctx, s1.ID)
+	if err != nil || fetched.Name != "Telegram Channel Source" {
+		t.Fatalf("failed to get source: %v", err)
+	}
+	if _, err := store.GetByID(ctx, "nonexistent"); err == nil {
+		t.Fatal("expected error on nonexistent source")
+	}
+
+	// 4. Update
+	s1.Name = "Updated Name"
+	updated, err := store.Update(ctx, s1)
+	if err != nil || updated.Name != "Updated Name" {
+		t.Fatalf("failed to update source: %v", err)
+	}
+
+	// 5. List
+	all, err := store.List(ctx)
+	if err != nil || len(all) != 2 {
+		t.Fatalf("expected 2 sources, got %d", len(all))
+	}
+
+	// 6. Test SourceResolver
+	resolver := NewSourceResolver(store)
+	matchedID, found, err := resolver.ResolveSource(ctx, -10012345)
+	if err != nil || !found || matchedID != s1.ID {
+		t.Fatalf("expected source resolver to find s1, got id=%s, found=%v, err=%v", matchedID, found, err)
+	}
+	_, foundMissing, _ := resolver.ResolveSource(ctx, -999999)
+	if foundMissing {
+		t.Fatal("expected found=false for missing chat ID")
+	}
+
+	// 7. Test PublicSourceResolver
+	publicResolver := NewPublicSourceResolver(store)
+	pubList, err := publicResolver(ctx)
+	if err != nil || len(pubList) != 1 || pubList[0].Channel != "technews" {
+		t.Fatalf("unexpected public source list: %+v", pubList)
+	}
+
+	// 8. Delete
+	if err := store.Delete(ctx, s2.ID); err != nil {
+		t.Fatalf("failed to delete source: %v", err)
+	}
+	if err := store.Delete(ctx, "nonexistent"); err == nil {
+		t.Fatal("expected error deleting nonexistent source")
+	}
+}

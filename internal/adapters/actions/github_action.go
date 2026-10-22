@@ -21,10 +21,16 @@ type GitHubActionConfig struct {
 	Labels []string `json:"labels,omitempty"`
 }
 
-type GitHubActionExecutor struct{}
+type GitHubActionExecutor struct {
+	client *http.Client
+}
 
 func NewGitHubActionExecutor() *GitHubActionExecutor {
 	return &GitHubActionExecutor{}
+}
+
+func NewGitHubActionExecutorWithClient(client *http.Client) *GitHubActionExecutor {
+	return &GitHubActionExecutor{client: client}
 }
 
 func (g *GitHubActionExecutor) Name() string { return "GitHub" }
@@ -101,7 +107,10 @@ func (g *GitHubActionExecutor) Execute(ctx context.Context, req workflow.ActionR
 	httpReq.Header.Set("User-Agent", "kerob/1.0 (automation-engine)")
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	client := ssrf.NewSafeHTTPClient(15 * time.Second)
+	client := g.client
+	if client == nil {
+		client = ssrf.NewSafeHTTPClient(15 * time.Second)
+	}
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return workflow.ActionResult{Success: false}, fmt.Errorf("github api request failed: %w", err)

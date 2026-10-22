@@ -9,6 +9,7 @@ import (
 
 	"kerob/internal/core/conditions"
 	"kerob/internal/core/credentials"
+	"kerob/internal/core/errtracker"
 	"kerob/internal/core/event"
 	"kerob/internal/core/transformations"
 )
@@ -249,4 +250,212 @@ func TestWorkflowEngineFailureAndDeadLetter(t *testing.T) {
 	if rec.Error == "" {
 		t.Error("expected recorded error in dead letter")
 	}
+}
+
+type SlowActionExecutor struct {
+	Delay time.Duration
+}
+
+func (s *SlowActionExecutor) Name() string                          { return "slow" }
+func (s *SlowActionExecutor) Type() string                          { return "slow" }
+func (s *SlowActionExecutor) Validate(config json.RawMessage) error { return nil }
+func (s *SlowActionExecutor) Execute(ctx context.Context, req ActionRequest) (ActionResult, error) {
+	select {
+	case <-ctx.Done():
+		return ActionResult{Success: false}, ctx.Err()
+	case <-time.After(s.Delay):
+		return ActionResult{Success: true}, nil
+	}
+}
+
+func TestWorkflowEngineConditionEvaluationError(t *testing.T) {
+	ctx := context.Background()
+	wfStore := NewMemoryStore()
+	execStore := NewMemoryExecutionStore()
+	dlStore := NewMemoryDeadLetterStore()
+	credStore := credentials.NewMemoryStore(credentials.DeriveKey("test-key"))
+	registry := NewActionRegistry()
+
+	// Condition with invalid operator or regex
+	wf, err := wfStore.Create(ctx, &Workflow{
+		Name:    "Broken Regex Condition",
+		Enabled: true,
+		Trigger: TriggerConfig{Type: "webhook"},
+		Conditions: &conditions.Condition{
+			Field:    "payload.val",
+			Operator: conditions.OpMatches,
+			Value:    "[unclosed regex group",
+		},
+		Actions: []ActionStep{
+			{Integration: "mock", ActionType: "test"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create workflow: %v", err)
+	}
+
+	engine := NewEngine(wfStore, execStore, dlStore, credStore, registry)
+	ev, _ := event.New("src-1", "ext-1", "webhook.received", map[string]any{"val": "hello"}, nil)
+
+	execs, err := engine.ProcessEvent(ctx, ev)
+	if err != nil {
+		t.Logf("ProcessEvent error: %v", err)
+	}
+	if len(execs) != 1 || execs[0].Status != ExecutionFailed {
+		t.Fatalf("expected ExecutionFailed, got: %+v", execs)
+	}
+
+	// Verify dead letter
+	dls, _ := dlStore.List(ctx, false)
+	if len(dls) != 1 || dls[0].WorkflowID != wf.ID {
+		t.Fatalf("expected dead letter for condition error, got: %+v", dls)
+	}
+}
+
+func TestWorkflowEngineTransformationError(t *testing.T) {
+	ctx := context.Background()
+	wfStore := NewMemoryStore()
+	execStore := NewMemoryExecutionStore()
+	dlStore := NewMemoryDeadLetterStore()
+	credStore := credentials.NewMemoryStore(credentials.DeriveKey("test-key"))
+	registry := NewActionRegistry()
+
+	// Transformation with invalid json template
+	wf, err := wfStore.Create(ctx, &Workflow{
+		Name:    "Invalid Transformation",
+		Enabled: true,
+		Trigger: TriggerConfig{Type: "webhook"},
+		Transformations: &transformations.Transformation{
+			Type:     "json",
+			Template: "{invalid json string",
+		},
+		Actions: []ActionStep{
+			{Integration: "mock", ActionType: "test"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create workflow: %v", err)
+	}
+
+	engine := NewEngine(wfStore, execStore, dlStore, credStore, registry)
+	ev, _ := event.New("src-1", "ext-1", "webhook.received", map[string]any{"val": "hello"}, nil)
+
+	execs, err := engine.ProcessEvent(ctx, ev)
+	if err != nil {
+		t.Logf("ProcessEvent error: %v", err)
+	}
+	if len(execs) != 1 || execs[0].Status != ExecutionFailed {
+		t.Fatalf("expected ExecutionFailed, got: %+v", execs)
+	}
+
+	dls, _ := dlStore.List(ctx, false)
+	if len(dls) != 1 || dls[0].WorkflowID != wf.ID {
+		t.Fatalf("expected dead letter for transform error, got: %+v", dls)
+	}
+}
+
+func TestWorkflowEngineActionErrorsAndRetries(t *testing.T) {
+	ctx := context.Background()
+	wfStore := NewMemoryStore()
+	execStore := NewMemoryExecutionStore()
+	dlStore := NewMemoryDeadLetterStore()
+	credStore := credentials.NewMemoryStore(credentials.DeriveKey("test-key"))
+	registry := NewActionRegistry()
+
+	memTracker := errtracker.NewMemoryProvider()
+
+	// 1. Missing executor
+	wfNoExecutor, _ := wfStore.Create(ctx, &Workflow{
+		Name:       "No Registered Executor",
+		Enabled:    true,
+		MaxRetries: 1,
+		Trigger:    TriggerConfig{Type: "webhook", EventTypes: []string{"test.no_exec"}},
+		Actions: []ActionStep{
+			{Integration: "unregistered_integration", ActionType: "send"},
+		},
+	})
+	engine := NewEngine(wfStore, execStore, dlStore, credStore, registry)
+	engine.SetErrorTracker(memTracker)
+
+	ev1, _ := event.New("src-1", "ext-no-exec", "test.no_exec", map[string]any{}, nil)
+	execs, _ := engine.ProcessEvent(ctx, ev1)
+	if len(execs) != 1 || execs[0].Status != ExecutionFailed {
+		t.Fatalf("expected ExecutionFailed for missing executor, got: %+v", execs)
+	}
+
+	// 2. Action Credential Error
+	wfBadCred, _ := wfStore.Create(ctx, &Workflow{
+		Name:       "Missing Credential",
+		Enabled:    true,
+		MaxRetries: 1,
+		Trigger:    TriggerConfig{Type: "webhook", EventTypes: []string{"test.bad_cred"}},
+		Actions: []ActionStep{
+			{
+				Integration:  "mock",
+				ActionType:   "send",
+				CredentialID: "non-existent-cred-id",
+			},
+		},
+	})
+	ev2, _ := event.New("src-1", "ext-bad-cred", "test.bad_cred", map[string]any{}, nil)
+	execs2, _ := engine.ProcessEvent(ctx, ev2)
+	if len(execs2) != 1 || execs2[0].Status != ExecutionFailed {
+		t.Fatalf("expected ExecutionFailed for bad cred, got: %+v", execs2)
+	}
+
+	// 3. Action Timeout
+	slowExec := &SlowActionExecutor{Delay: 100 * time.Millisecond}
+	registry.Register(slowExec)
+
+	wfTimeout, _ := wfStore.Create(ctx, &Workflow{
+		Name:           "Slow Action",
+		Enabled:        true,
+		MaxRetries:     1,
+		TimeoutSeconds: 1,
+		Trigger:        TriggerConfig{Type: "webhook", EventTypes: []string{"test.timeout"}},
+		Actions: []ActionStep{
+			{
+				Integration: "slow",
+				ActionType:  "run",
+				TimeoutSec:  1, // 1 second timeout
+			},
+		},
+	})
+	ev3, _ := event.New("src-1", "ext-slow", "test.timeout", map[string]any{}, nil)
+	execs3, _ := engine.ProcessEvent(ctx, ev3)
+	if len(execs3) != 1 || execs3[0].Status != ExecutionSuccess {
+		// 100ms finishes within 1s timeout
+		t.Fatalf("expected ExecutionSuccess for 100ms in 1s timeout, got: %+v", execs3)
+	}
+
+	// 4. Action Retrying Status when attempts < MaxRetries
+	failingExec := &MockActionExecutor{TypeStr: "failing", FailUntil: 10}
+	registry.Register(failingExec)
+
+	wfRetry, _ := wfStore.Create(ctx, &Workflow{
+		Name:       "Retrying Workflow",
+		Enabled:    true,
+		MaxRetries: 3, // 3 attempts allowed
+		Trigger:    TriggerConfig{Type: "webhook", EventTypes: []string{"test.retry"}},
+		Actions: []ActionStep{
+			{Integration: "failing", ActionType: "fail_once"},
+		},
+	})
+	ev4, _ := event.New("src-1", "ext-retry", "test.retry", map[string]any{}, nil)
+	execs4, _ := engine.ProcessEvent(ctx, ev4)
+	if len(execs4) != 1 || execs4[0].Status != ExecutionRetrying {
+		t.Fatalf("expected ExecutionRetrying on 1st failure with 3 retries, got: %+v", execs4)
+	}
+	if execs4[0].NextAttemptAt.IsZero() {
+		t.Fatal("expected NextAttemptAt to be set for retrying execution")
+	}
+
+	// Verify error tracking recorded captures
+	if len(memTracker.Records()) == 0 {
+		t.Fatal("expected errtracker captures to be recorded")
+	}
+	_ = wfNoExecutor
+	_ = wfBadCred
+	_ = wfTimeout
+	_ = wfRetry
 }

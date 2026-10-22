@@ -1,6 +1,7 @@
 package event
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -87,5 +88,65 @@ func TestNewEventPayloadFormats(t *testing.T) {
 	}
 	if !json.Valid(ev4.Payload) {
 		t.Errorf("expected valid json payload for plain text, got %s", string(ev4.Payload))
+	}
+}
+
+func TestMemoryEventStore(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	// 1. Create Event
+	ev1, err := New("src-1", "ext-100", "order.created", map[string]string{"item": "book"}, nil)
+	if err != nil {
+		t.Fatalf("failed to create event: %v", err)
+	}
+
+	created, inserted, err := store.Create(ctx, ev1)
+	if err != nil || !inserted || created.ID == "" {
+		t.Fatalf("failed to insert event: %v, inserted: %v", err, inserted)
+	}
+
+	// 2. Idempotent deduplication (same sourceID + externalEventID)
+	evDup, _ := New("src-1", "ext-100", "order.created", map[string]string{"item": "book"}, nil)
+	existing, inserted2, err := store.Create(ctx, evDup)
+	if err != nil || inserted2 || existing.ID != created.ID {
+		t.Fatalf("expected inserted=false and identical ID for duplicate event")
+	}
+
+	// 3. GetByID
+	fetched, err := store.GetByID(ctx, created.ID)
+	if err != nil || fetched.ExternalEventID != "ext-100" {
+		t.Fatalf("failed to get event by id: %v", err)
+	}
+	if _, err := store.GetByID(ctx, "nonexistent"); err != ErrEventNotFound {
+		t.Fatalf("expected ErrEventNotFound, got %v", err)
+	}
+
+	// 4. GetByExternalID
+	byExt, err := store.GetByExternalID(ctx, "src-1", "ext-100")
+	if err != nil || byExt.ID != created.ID {
+		t.Fatalf("failed to get by external id: %v", err)
+	}
+	if _, err := store.GetByExternalID(ctx, "src-1", "nonexistent"); err != ErrEventNotFound {
+		t.Fatalf("expected ErrEventNotFound for missing external ID")
+	}
+
+	// 5. List and pagination
+	ev2, _ := New("src-2", "ext-200", "order.shipped", map[string]string{"item": "pen"}, nil)
+	_, _, _ = store.Create(ctx, ev2)
+
+	listAll, err := store.List(ctx, ListFilter{})
+	if err != nil || len(listAll) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(listAll))
+	}
+
+	listFiltered, err := store.List(ctx, ListFilter{SourceID: "src-1"})
+	if err != nil || len(listFiltered) != 1 {
+		t.Fatalf("expected 1 event for src-1, got %d", len(listFiltered))
+	}
+
+	listPaging, err := store.List(ctx, ListFilter{Limit: 1, Offset: 1})
+	if err != nil || len(listPaging) != 1 {
+		t.Fatalf("expected 1 event with paging, got %d", len(listPaging))
 	}
 }

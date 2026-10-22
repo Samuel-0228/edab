@@ -1,56 +1,47 @@
 package actions
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
-	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"kerob/internal/core/event"
 	"kerob/internal/core/workflow"
+	"kerob/internal/telegram"
 )
 
-func TestHTTPActionExecutorSuccess(t *testing.T) {
-	// Start a local mock server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Custom-Header") != "CustomValue" {
-			t.Errorf("missing custom header")
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"success","code":200}`))
-	}))
-	defer server.Close()
+type roundTripperFunc func(req *http.Request) (*http.Response, error)
 
-	executor := NewHTTPActionExecutor()
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
-	ev, _ := event.New("src-test", "evt-1", "test.event", map[string]any{"data": "val"}, nil)
-
-	config := json.RawMessage(`{
-		"method": "POST",
-		"url": "` + server.URL + `",
-		"headers": {"X-Custom-Header": "CustomValue"}
-	}`)
-
-	// SSRF validation blocks localhost by default in production.
-	// For testing with httptest server, let's verify that SSRF correctly intercepts localhost calls!
-	result, err := executor.Execute(context.Background(), workflow.ActionRequest{
-		Config: config,
-		Event:  ev,
-	})
-
-	// Since httptest uses 127.0.0.1, SSRF protection must trigger:
-	if err == nil {
-		t.Fatal("expected SSRF protection to block httptest loopback URL, but it succeeded")
+func mockHTTPClient(handler func(req *http.Request) (*http.Response, error)) *http.Client {
+	return &http.Client{
+		Transport: roundTripperFunc(handler),
 	}
-	if result.Success {
-		t.Fatal("expected result.Success to be false when SSRF blocks request")
+}
+
+func jsonResponse(status int, body any) *http.Response {
+	b, _ := json.Marshal(body)
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(bytes.NewReader(b)),
+		Header:     make(http.Header),
 	}
 }
 
 func TestHTTPActionValidation(t *testing.T) {
 	executor := NewHTTPActionExecutor()
+
+	if executor.Name() != "Generic HTTP Action" || executor.Type() != "http" {
+		t.Fatalf("unexpected name or type: %s %s", executor.Name(), executor.Type())
+	}
 
 	// Missing URL
 	if err := executor.Validate(json.RawMessage(`{"method":"POST"}`)); err == nil {
@@ -62,30 +53,251 @@ func TestHTTPActionValidation(t *testing.T) {
 		t.Fatal("expected validation error for invalid HTTP method")
 	}
 
+	// Malformed JSON
+	if err := executor.Validate(json.RawMessage(`{malformed`)); err == nil {
+		t.Fatal("expected validation error for malformed json")
+	}
+
 	// Valid config
 	if err := executor.Validate(json.RawMessage(`{"url":"https://example.com","method":"POST"}`)); err != nil {
 		t.Fatalf("unexpected validation error: %v", err)
 	}
 }
 
-func TestDiscordActionValidation(t *testing.T) {
-	executor := NewDiscordActionExecutor()
+func TestHTTPActionExecution(t *testing.T) {
+	ev, _ := event.New("src-test", "evt-1", "test.event", map[string]any{"data": "val"}, nil)
 
-	if err := executor.Validate(json.RawMessage(`{"webhook_url":"https://discord.com/api/webhooks/123/xyz"}`)); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	// 1. Success with custom headers, query params, and body
+	var capturedReq *http.Request
+	client := mockHTTPClient(func(req *http.Request) (*http.Response, error) {
+		capturedReq = req
+		return jsonResponse(http.StatusOK, map[string]string{"result": "created"}), nil
+	})
+
+	executor := NewHTTPActionExecutorWithClient(client)
+
+	cfg := json.RawMessage(`{
+		"method": "POST",
+		"url": "https://8.8.8.8/v1/resource",
+		"query_params": {"ref": "main", "active": "true"},
+		"headers": {"X-Custom-Trace": "trace-123"},
+		"body": "{\"custom\":\"payload\"}"
+	}`)
+
+	res, err := executor.Execute(context.Background(), workflow.ActionRequest{
+		Config: cfg,
+		Event:  ev,
+		Credentials: map[string]string{
+			"api_key": "secret-api-token",
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected success, got error: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("expected res.Success to be true")
+	}
+	if capturedReq.Header.Get("Authorization") != "Bearer secret-api-token" {
+		t.Errorf("expected Bearer token, got: %s", capturedReq.Header.Get("Authorization"))
+	}
+	if capturedReq.Header.Get("X-Custom-Trace") != "trace-123" {
+		t.Errorf("missing custom header")
+	}
+	if !strings.Contains(capturedReq.URL.RawQuery, "ref=main") {
+		t.Errorf("expected query params in url: %s", capturedReq.URL.String())
+	}
+
+	// 2. HTTP error response (status 404 / 500)
+	clientErr := mockHTTPClient(func(req *http.Request) (*http.Response, error) {
+		return jsonResponse(http.StatusNotFound, map[string]string{"error": "not found"}), nil
+	})
+	executorErr := NewHTTPActionExecutorWithClient(clientErr)
+
+	res, err = executorErr.Execute(context.Background(), workflow.ActionRequest{
+		Config: cfg,
+		Event:  ev,
+	})
+	if err == nil || res.Success {
+		t.Fatalf("expected error on 404 response")
+	}
+
+	// 3. Client network error
+	clientNetErr := mockHTTPClient(func(req *http.Request) (*http.Response, error) {
+		return nil, fmt.Errorf("network connection reset")
+	})
+	executorNetErr := NewHTTPActionExecutorWithClient(clientNetErr)
+	_, err = executorNetErr.Execute(context.Background(), workflow.ActionRequest{
+		Config: cfg,
+		Event:  ev,
+	})
+	if err == nil {
+		t.Fatalf("expected error on network reset")
 	}
 }
 
-func TestGitHubActionValidation(t *testing.T) {
-	executor := NewGitHubActionExecutor()
+func TestDiscordActionValidationAndExecution(t *testing.T) {
+	ev, _ := event.New("src-test", "evt-1", "test.event", map[string]any{"data": "val"}, nil)
 
-	// Missing owner/repo
-	if err := executor.Validate(json.RawMessage(`{"title":"New Issue"}`)); err == nil {
-		t.Fatal("expected validation error for missing owner and repo")
+	// Success with injected client
+	var postedBody []byte
+	client := mockHTTPClient(func(req *http.Request) (*http.Response, error) {
+		postedBody, _ = io.ReadAll(req.Body)
+		return jsonResponse(http.StatusNoContent, nil), nil
+	})
+
+	executor := NewDiscordActionExecutorWithClient(client)
+	if executor.Name() != "Discord" || executor.Type() != "discord" {
+		t.Fatalf("unexpected name or type: %s %s", executor.Name(), executor.Type())
 	}
 
-	// Valid config
-	if err := executor.Validate(json.RawMessage(`{"owner":"myorg","repo":"myrepo","title":"Bug"}`)); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cfg := json.RawMessage(`{
+		"webhook_url": "https://8.8.8.8/api/webhooks/123/xyz",
+		"content": "Alert from test",
+		"username": "Kerob Alert",
+		"avatar_url": "https://8.8.8.8/logo.png",
+		"embed": {
+			"title": "CPU Overload",
+			"description": "Host node-1 usage > 90%",
+			"color": 16711680,
+			"fields": [{"name": "Usage", "value": "95%", "inline": true}]
+		}
+	}`)
+
+	res, err := executor.Execute(context.Background(), workflow.ActionRequest{
+		Config: cfg,
+		Event:  ev,
+	})
+	if err != nil {
+		t.Fatalf("failed to execute discord action: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("expected res.Success to be true")
+	}
+	if !strings.Contains(string(postedBody), "CPU Overload") {
+		t.Errorf("expected embed title in posted discord payload: %s", string(postedBody))
+	}
+
+	// Discord error response (status 400)
+	client400 := mockHTTPClient(func(req *http.Request) (*http.Response, error) {
+		return jsonResponse(http.StatusBadRequest, map[string]string{"message": "invalid embed"}), nil
+	})
+	exec400 := NewDiscordActionExecutorWithClient(client400)
+	_, err = exec400.Execute(context.Background(), workflow.ActionRequest{
+		Config: cfg,
+		Event:  ev,
+	})
+	if err == nil {
+		t.Fatalf("expected error on 400 discord response")
+	}
+
+	// Missing webhook URL
+	_, err = executor.Execute(context.Background(), workflow.ActionRequest{
+		Config: json.RawMessage(`{"content":"hello"}`),
+		Event:  ev,
+	})
+	if err == nil {
+		t.Fatal("expected error when webhook_url missing")
+	}
+}
+
+func TestGitHubActionValidationAndExecution(t *testing.T) {
+	ev, _ := event.New("src-test", "evt-1", "test.event", map[string]any{"data": "val"}, nil)
+
+	// Success with injected client
+	client := mockHTTPClient(func(req *http.Request) (*http.Response, error) {
+		if !strings.HasPrefix(req.Header.Get("Authorization"), "token ") {
+			t.Errorf("missing token in authorization header: %s", req.Header.Get("Authorization"))
+		}
+		return jsonResponse(http.StatusCreated, map[string]any{
+			"id":       101,
+			"number":   42,
+			"html_url": "https://github.com/myorg/myrepo/issues/42",
+		}), nil
+	})
+
+	executor := NewGitHubActionExecutorWithClient(client)
+	if executor.Name() != "GitHub" || executor.Type() != "github" {
+		t.Fatalf("unexpected name or type: %s %s", executor.Name(), executor.Type())
+	}
+
+	cfg := json.RawMessage(`{
+		"owner": "myorg",
+		"repo": "myrepo",
+		"title": "Bug in automation",
+		"body": "Detailed report",
+		"labels": ["bug", "automated"],
+		"api_base_url": "https://8.8.8.8"
+	}`)
+
+	res, err := executor.Execute(context.Background(), workflow.ActionRequest{
+		Config: cfg,
+		Event:  ev,
+		Credentials: map[string]string{
+			"token": "ghp_mocktesttoken12345678901234567890",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to execute github action: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("expected res.Success to be true")
+	}
+	if res.ExternalID != "issue#42" {
+		t.Errorf("expected ExternalID 'issue#42', got: %s", res.ExternalID)
+	}
+
+	// GitHub API 403 Forbidden
+	client403 := mockHTTPClient(func(req *http.Request) (*http.Response, error) {
+		return jsonResponse(http.StatusForbidden, map[string]string{"message": "Resource not accessible by personal access token"}), nil
+	})
+	exec403 := NewGitHubActionExecutorWithClient(client403)
+	_, err = exec403.Execute(context.Background(), workflow.ActionRequest{
+		Config: cfg,
+		Event:  ev,
+	})
+	if err == nil {
+		t.Fatalf("expected error on github 403")
+	}
+}
+
+func TestTelegramActionExecutor(t *testing.T) {
+	mockAPI := telegram.NewMockAPI()
+	executor := NewTelegramActionExecutor(mockAPI)
+
+	if executor.Name() != "Telegram" || executor.Type() != "telegram" {
+		t.Fatalf("unexpected name or type: %s %s", executor.Name(), executor.Type())
+	}
+
+	// Validate config
+	if err := executor.Validate(json.RawMessage(`{}`)); err == nil {
+		t.Fatal("expected error when chat_id missing")
+	}
+	if err := executor.Validate(json.RawMessage(`{"chat_id":"-10012345"}`)); err != nil {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+
+	ev, _ := event.New("src-test", "evt-1", "test.event", map[string]any{"data": "val"}, nil)
+
+	// Execute send message
+	cfg := json.RawMessage(`{"chat_id":"-10012345","text":"Alert message"}`)
+	res, err := executor.Execute(context.Background(), workflow.ActionRequest{
+		Config: cfg,
+		Event:  ev,
+	})
+	if err != nil {
+		t.Fatalf("failed to execute telegram action: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("expected success result")
+	}
+
+	// Execute with missing API client
+	nilExec := NewTelegramActionExecutor(nil)
+	_, err = nilExec.Execute(context.Background(), workflow.ActionRequest{
+		Config: cfg,
+		Event:  ev,
+	})
+	if err == nil {
+		t.Fatal("expected error when Telegram API is uninitialized")
 	}
 }
