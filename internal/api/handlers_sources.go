@@ -89,6 +89,11 @@ func (h *Handlers) CreateSource(w http.ResponseWriter, r *http.Request) {
 		Enabled:     enabled,
 	}
 
+	if valErrs := ValidateSourceInput(&src, h.sourceReg); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
+		return
+	}
+
 	created, err := h.sources.Create(r.Context(), &src)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 
 	"kerob/internal/core/webhooks"
 )
@@ -34,7 +35,12 @@ func (h *Handlers) CreateWebhook(w http.ResponseWriter, r *http.Request) {
 
 	var wh webhooks.Webhook
 	if err := json.NewDecoder(r.Body).Decode(&wh); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid json body: "+err.Error())
+		respondErrorWithCode(w, http.StatusBadRequest, "MALFORMED_JSON", "invalid json body: "+err.Error(), nil)
+		return
+	}
+
+	if valErrs := ValidateWebhookInput(&wh); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
 		return
 	}
 
@@ -76,10 +82,15 @@ func (h *Handlers) UpdateWebhook(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var wh webhooks.Webhook
 	if err := json.NewDecoder(r.Body).Decode(&wh); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid json body: "+err.Error())
+		respondErrorWithCode(w, http.StatusBadRequest, "MALFORMED_JSON", "invalid json body: "+err.Error(), nil)
 		return
 	}
 	wh.ID = id
+
+	if valErrs := ValidateWebhookInput(&wh); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
+		return
+	}
 
 	updated, err := h.webhookStore.Update(r.Context(), &wh)
 	if errors.Is(err, webhooks.ErrWebhookNotFound) {
@@ -151,9 +162,23 @@ func (h *Handlers) ReceiveWebhook(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "failed to read webhook body: "+err.Error())
 		return
 	}
+	if len(bodyBytes) == 0 {
+		respondErrorWithCode(w, http.StatusBadRequest, "EMPTY_PAYLOAD", "webhook body cannot be empty", nil)
+		return
+	}
 	if len(bodyBytes) > webhooks.MaxWebhookPayloadBytes {
 		respondError(w, http.StatusRequestEntityTooLarge, "payload exceeds maximum limit of 1MB")
 		return
+	}
+
+	// Validate JSON syntax if JSON header or non-empty body
+	contentType := r.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") || len(bodyBytes) > 0 {
+		var js json.RawMessage
+		if err := json.Unmarshal(bodyBytes, &js); err != nil {
+			respondErrorWithCode(w, http.StatusBadRequest, "MALFORMED_JSON", "webhook payload is not valid JSON: "+err.Error(), nil)
+			return
+		}
 	}
 
 	// 4. Normalize to Event

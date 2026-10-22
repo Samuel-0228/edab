@@ -8,6 +8,7 @@ import (
 	"kerob/internal/adapters/sources"
 	"kerob/internal/core/credentials"
 	"kerob/internal/core/delivery"
+	"kerob/internal/core/errtracker"
 	"kerob/internal/core/event"
 	"kerob/internal/core/routing"
 	"kerob/internal/core/webhooks"
@@ -36,6 +37,7 @@ type Handlers struct {
 	sourceReg    *sources.Registry
 	destReg      *destinations.Registry
 	telegramAPI  telegram.API
+	errorTracker errtracker.Provider
 }
 
 // Config bundles all dependencies for NewHandlers.
@@ -57,6 +59,7 @@ type Config struct {
 	SourceReg    *sources.Registry
 	DestReg      *destinations.Registry
 	TelegramAPI  telegram.API
+	ErrorTracker errtracker.Provider
 }
 
 func NewHandlersFromConfig(cfg Config) *Handlers {
@@ -78,7 +81,20 @@ func NewHandlersFromConfig(cfg Config) *Handlers {
 		sourceReg:    cfg.SourceReg,
 		destReg:      cfg.DestReg,
 		telegramAPI:  cfg.TelegramAPI,
+		errorTracker: cfg.ErrorTracker,
 	}
+}
+
+// SetErrorTracker sets the error tracker provider.
+func (h *Handlers) SetErrorTracker(tracker errtracker.Provider) {
+	h.errorTracker = tracker
+}
+
+func (h *Handlers) Tracker() errtracker.Provider {
+	if h.errorTracker != nil {
+		return h.errorTracker
+	}
+	return errtracker.NewLogProvider()
 }
 
 // NewHandlers provides backwards-compatible initialization.
@@ -164,7 +180,5 @@ func respondJSON(w http.ResponseWriter, status int, data any) {
 }
 
 func respondError(w http.ResponseWriter, status int, message string) {
-	respondJSON(w, status, map[string]string{
-		"error": message,
-	})
+	respondErrorWithCode(w, status, "ERROR", message, nil)
 }

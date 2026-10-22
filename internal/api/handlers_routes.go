@@ -69,6 +69,11 @@ func (h *Handlers) CreateRoute(w http.ResponseWriter, r *http.Request) {
 		Filters:       filters,
 	}
 
+	if valErrs := ValidateRouteInput(&rt); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
+		return
+	}
+
 	created, err := h.routes.Create(r.Context(), &rt)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())

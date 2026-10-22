@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Server struct {
@@ -124,7 +126,7 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("GET /deliveries/{id}", handlers.GetDelivery)
 	mux.HandleFunc("POST /deliveries/{id}/retry", handlers.RetryDelivery)
 
-	loggedHandler := loggingMiddleware(securityMiddleware(authMiddleware(mux, options.APIToken)))
+	loggedHandler := requestIDMiddleware(loggingMiddleware(securityMiddleware(authMiddleware(mux, options.APIToken))))
 
 	return &Server{
 		httpServer: &http.Server{
@@ -196,6 +198,18 @@ func (rec *statusRecorder) WriteHeader(code int) {
 	rec.ResponseWriter.WriteHeader(code)
 }
 
+func requestIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqID := r.Header.Get("X-Request-ID")
+		if reqID == "" {
+			reqID = uuid.NewString()
+		}
+		w.Header().Set("X-Request-ID", reqID)
+		ctx := context.WithValue(r.Context(), requestIDKey, reqID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -207,6 +221,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		duration := time.Since(start)
 
 		slog.Info("http request",
+			slog.String("request_id", getRequestID(r)),
 			slog.String("method", r.Method),
 			slog.String("path", r.URL.Path),
 			slog.Int("status", rec.statusCode),

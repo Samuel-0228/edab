@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"kerob/internal/core/event"
 	"kerob/internal/core/workflow"
@@ -33,7 +34,12 @@ func (h *Handlers) CreateWorkflow(w http.ResponseWriter, r *http.Request) {
 
 	var wf workflow.Workflow
 	if err := json.NewDecoder(r.Body).Decode(&wf); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid json body: "+err.Error())
+		respondErrorWithCode(w, http.StatusBadRequest, "MALFORMED_JSON", "invalid json body: "+err.Error(), nil)
+		return
+	}
+
+	if valErrs := ValidateWorkflowInput(&wf, false); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
 		return
 	}
 
@@ -75,10 +81,15 @@ func (h *Handlers) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var wf workflow.Workflow
 	if err := json.NewDecoder(r.Body).Decode(&wf); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid json body: "+err.Error())
+		respondErrorWithCode(w, http.StatusBadRequest, "MALFORMED_JSON", "invalid json body: "+err.Error(), nil)
 		return
 	}
 	wf.ID = id
+
+	if valErrs := ValidateWorkflowInput(&wf, false); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
+		return
+	}
 
 	updated, err := h.workflows.Update(r.Context(), &wf)
 	if errors.Is(err, workflow.ErrWorkflowNotFound) {
@@ -116,12 +127,21 @@ func (h *Handlers) PatchWorkflow(w http.ResponseWriter, r *http.Request) {
 		Enabled     *bool   `json:"enabled,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&patchInput); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid json body: "+err.Error())
+		respondErrorWithCode(w, http.StatusBadRequest, "MALFORMED_JSON", "invalid json body: "+err.Error(), nil)
 		return
 	}
 
 	if patchInput.Name != nil {
-		wf.Name = *patchInput.Name
+		trimmed := strings.TrimSpace(*patchInput.Name)
+		if trimmed == "" {
+			respondValidationError(w, r, []FieldError{{Field: "name", Message: "workflow name cannot be empty"}})
+			return
+		}
+		if len(trimmed) > 128 {
+			respondValidationError(w, r, []FieldError{{Field: "name", Message: "workflow name cannot exceed 128 characters"}})
+			return
+		}
+		wf.Name = trimmed
 	}
 	if patchInput.Description != nil {
 		wf.Description = *patchInput.Description
@@ -132,7 +152,7 @@ func (h *Handlers) PatchWorkflow(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.workflows.Update(r.Context(), wf)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
+		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 

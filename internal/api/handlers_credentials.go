@@ -39,16 +39,7 @@ func (h *Handlers) CreateCredential(w http.ResponseWriter, r *http.Request) {
 
 	var input credentialInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid json body: "+err.Error())
-		return
-	}
-
-	if input.Name == "" {
-		respondError(w, http.StatusBadRequest, "name is required")
-		return
-	}
-	if input.Integration == "" {
-		respondError(w, http.StatusBadRequest, "integration is required")
+		respondErrorWithCode(w, http.StatusBadRequest, "MALFORMED_JSON", "invalid json body: "+err.Error(), nil)
 		return
 	}
 
@@ -58,9 +49,14 @@ func (h *Handlers) CreateCredential(w http.ResponseWriter, r *http.Request) {
 		Integration: input.Integration,
 	}
 
+	if valErrs := ValidateCredentialInput(cred, input.Values); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
+		return
+	}
+
 	created, err := h.creds.Create(r.Context(), cred, input.Values)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, err.Error())
+		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -96,7 +92,7 @@ func (h *Handlers) UpdateCredential(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var input credentialInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid json body: "+err.Error())
+		respondErrorWithCode(w, http.StatusBadRequest, "MALFORMED_JSON", "invalid json body: "+err.Error(), nil)
 		return
 	}
 
@@ -106,13 +102,18 @@ func (h *Handlers) UpdateCredential(w http.ResponseWriter, r *http.Request) {
 		Integration: input.Integration,
 	}
 
+	if valErrs := ValidateCredentialInput(cred, input.Values); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
+		return
+	}
+
 	updated, err := h.creds.Update(r.Context(), cred, input.Values)
 	if errors.Is(err, credentials.ErrCredentialNotFound) {
 		respondError(w, http.StatusNotFound, "credential not found")
 		return
 	}
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, err.Error())
+		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

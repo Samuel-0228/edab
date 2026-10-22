@@ -75,6 +75,11 @@ func (h *Handlers) CreateDestination(w http.ResponseWriter, r *http.Request) {
 		Enabled:     enabled,
 	}
 
+	if valErrs := ValidateDestinationInput(&dest, h.destReg); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
+		return
+	}
+
 	created, err := h.destinations.Create(r.Context(), &dest)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
