@@ -4,32 +4,22 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync/atomic"
+
+	"kerob/internal/observability"
 )
-
-// MetricsTracker records application execution statistics for Prometheus scraping.
-type MetricsTracker struct {
-	workflowExecutions atomic.Uint64
-	workflowSuccesses  atomic.Uint64
-	workflowFailures   atomic.Uint64
-	eventsProcessed    atomic.Uint64
-}
-
-var globalMetrics = &MetricsTracker{}
 
 // RecordWorkflowExecution increments execution counters.
 func RecordWorkflowExecution(status string) {
-	globalMetrics.workflowExecutions.Add(1)
 	if status == "success" {
-		globalMetrics.workflowSuccesses.Add(1)
+		observability.RecordExecutionSucceeded()
 	} else if status == "failed" {
-		globalMetrics.workflowFailures.Add(1)
+		observability.RecordExecutionFailed()
 	}
 }
 
 // RecordEventProcessed increments the events counter.
 func RecordEventProcessed() {
-	globalMetrics.eventsProcessed.Add(1)
+	observability.RecordEvent()
 }
 
 func (h *Handlers) Metrics(w http.ResponseWriter, r *http.Request) {
@@ -52,19 +42,32 @@ func (h *Handlers) Metrics(w http.ResponseWriter, r *http.Request) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# HELP kerob_workflow_executions_total Total number of workflow executions\n")
 	fmt.Fprintf(&b, "# TYPE kerob_workflow_executions_total counter\n")
-	fmt.Fprintf(&b, "kerob_workflow_executions_total %d\n\n", globalMetrics.workflowExecutions.Load())
+	started := observability.DefaultMetrics.ExecutionsStarted.Load()
+	fmt.Fprintf(&b, "kerob_workflow_executions_total %d\n\n", started)
 
 	fmt.Fprintf(&b, "# HELP kerob_workflow_successes_total Total successful workflow executions\n")
 	fmt.Fprintf(&b, "# TYPE kerob_workflow_successes_total counter\n")
-	fmt.Fprintf(&b, "kerob_workflow_successes_total %d\n\n", globalMetrics.workflowSuccesses.Load())
+	fmt.Fprintf(&b, "kerob_workflow_successes_total %d\n\n", observability.DefaultMetrics.ExecutionsSucceeded.Load())
 
 	fmt.Fprintf(&b, "# HELP kerob_workflow_failures_total Total failed workflow executions\n")
 	fmt.Fprintf(&b, "# TYPE kerob_workflow_failures_total counter\n")
-	fmt.Fprintf(&b, "kerob_workflow_failures_total %d\n\n", globalMetrics.workflowFailures.Load())
+	fmt.Fprintf(&b, "kerob_workflow_failures_total %d\n\n", observability.DefaultMetrics.ExecutionsFailed.Load())
 
 	fmt.Fprintf(&b, "# HELP kerob_events_processed_total Total normalized events ingested\n")
 	fmt.Fprintf(&b, "# TYPE kerob_events_processed_total counter\n")
-	fmt.Fprintf(&b, "kerob_events_processed_total %d\n\n", globalMetrics.eventsProcessed.Load())
+	fmt.Fprintf(&b, "kerob_events_processed_total %d\n\n", observability.DefaultMetrics.EventsProcessed.Load())
+
+	fmt.Fprintf(&b, "# HELP kerob_workflow_retries_total Total scheduled workflow retries\n")
+	fmt.Fprintf(&b, "# TYPE kerob_workflow_retries_total counter\n")
+	fmt.Fprintf(&b, "kerob_workflow_retries_total %d\n\n", observability.DefaultMetrics.Retries.Load())
+
+	fmt.Fprintf(&b, "# HELP kerob_action_failures_total Total failed actions\n")
+	fmt.Fprintf(&b, "# TYPE kerob_action_failures_total counter\n")
+	fmt.Fprintf(&b, "kerob_action_failures_total %d\n\n", observability.DefaultMetrics.ActionFailures.Load())
+
+	fmt.Fprintf(&b, "# HELP kerob_workflow_execution_duration_milliseconds_total Total execution duration\n")
+	fmt.Fprintf(&b, "# TYPE kerob_workflow_execution_duration_milliseconds_total counter\n")
+	fmt.Fprintf(&b, "kerob_workflow_execution_duration_milliseconds_total %d\n\n", observability.DefaultMetrics.ExecutionDurationMs.Load())
 
 	fmt.Fprintf(&b, "# HELP kerob_active_workflows Number of active workflows\n")
 	fmt.Fprintf(&b, "# TYPE kerob_active_workflows gauge\n")

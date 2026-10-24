@@ -1,8 +1,11 @@
 package api
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"net/http"
+	"time"
 
 	"kerob/internal/core/workflow"
 )
@@ -91,21 +94,29 @@ func (h *Handlers) RetryFailure(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Mark dead letter as discarded/resolved
-	_ = h.deadLetters.Discard(r.Context(), id)
+	if err := h.deadLetters.Discard(r.Context(), id); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to resolve failure")
+		return
+	}
 
 	// Trigger immediate retry execution if engine is active
 	if h.workflowEngine != nil && h.workflows != nil && h.events != nil {
 		go func() {
-			ctx := r.Context()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
 			wf, err := h.workflows.GetByID(ctx, exec.WorkflowID)
 			if err != nil {
+				slog.ErrorContext(ctx, "failure retry failed to load workflow", slog.String("execution_id", exec.ID), slog.String("error", err.Error()))
 				return
 			}
 			ev, err := h.events.GetByID(ctx, exec.EventID)
 			if err != nil {
+				slog.ErrorContext(ctx, "failure retry failed to load event", slog.String("execution_id", exec.ID), slog.String("error", err.Error()))
 				return
 			}
-			_, _ = h.workflowEngine.ExecuteWorkflow(ctx, wf, ev, exec)
+			if _, err := h.workflowEngine.ExecuteWorkflow(ctx, wf, ev, exec); err != nil {
+				slog.ErrorContext(ctx, "failure retry execution failed", slog.String("execution_id", exec.ID), slog.String("error", err.Error()))
+			}
 		}()
 	}
 

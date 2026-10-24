@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -47,10 +48,24 @@ type APIError struct {
 }
 
 func respondErrorWithCode(w http.ResponseWriter, status int, code, message string, details []FieldError) {
+	requestID := w.Header().Get("X-Request-ID")
+	if status >= http.StatusInternalServerError {
+		slog.Error("request failed",
+			slog.Int("status", status),
+			slog.String("request_id", requestID),
+			slog.String("code", code),
+			slog.String("error", message),
+		)
+		message = "internal server error"
+		if code == "ERROR" {
+			code = "INTERNAL_ERROR"
+		}
+	}
 	resp := APIError{
-		Error:   message,
-		Code:    code,
-		Details: details,
+		Error:     message,
+		Code:      code,
+		RequestID: requestID,
+		Details:   details,
 	}
 	respondJSON(w, status, resp)
 }

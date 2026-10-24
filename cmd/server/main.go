@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -16,11 +15,13 @@ import (
 	"kerob/internal/config"
 	"kerob/internal/core/credentials"
 	"kerob/internal/core/delivery"
+	"kerob/internal/core/errtracker"
 	"kerob/internal/core/event"
 	"kerob/internal/core/routing"
 	"kerob/internal/core/webhooks"
 	"kerob/internal/core/workflow"
 	"kerob/internal/database"
+	"kerob/internal/observability"
 	"kerob/internal/telegram"
 )
 
@@ -117,6 +118,7 @@ func main() {
 			MaxBackoff:  cfg.MaxBackoff,
 		},
 	)
+	wfEngine.SetErrorTracker(errtracker.NewLogProvider())
 
 	// 6. Initialize Engine Pipeline & Delivery Worker
 	routingEngine := routing.NewRoutingEngine(routeStore)
@@ -163,7 +165,13 @@ func main() {
 			return err
 		}
 		if ev != nil && wfEngine != nil {
-			_, _ = wfEngine.ProcessEvent(ctx, ev)
+			if _, err := wfEngine.ProcessEvent(ctx, ev); err != nil {
+				slog.ErrorContext(ctx, "failed to process ingested event",
+					slog.String("event_id", ev.ID),
+					slog.String("error", err.Error()),
+				)
+				return err
+			}
 		}
 		return nil
 	}
@@ -217,6 +225,7 @@ func main() {
 		SourceReg:    srcRegistry,
 		DestReg:      destRegistry,
 		TelegramAPI:  teleAPI,
+		ErrorTracker: errtracker.NewLogProvider(),
 	})
 
 	server := api.NewServerWithOptions(cfg.ServerPort, handlers, api.ServerOptions{
@@ -263,20 +272,5 @@ func main() {
 }
 
 func setupLogger(levelStr string) {
-	var level slog.Level
-	switch strings.ToLower(levelStr) {
-	case "debug":
-		level = slog.LevelDebug
-	case "warn", "warning":
-		level = slog.LevelWarn
-	case "error":
-		level = slog.LevelError
-	default:
-		level = slog.LevelInfo
-	}
-
-	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: level,
-	})
-	slog.SetDefault(slog.New(handler))
+	observability.ConfigureLogger(levelStr)
 }

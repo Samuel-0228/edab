@@ -12,6 +12,7 @@ import (
 	"kerob/internal/core/errtracker"
 	"kerob/internal/core/event"
 	"kerob/internal/core/transformations"
+	"kerob/internal/observability"
 )
 
 // EngineConfig holds tuning parameters for the workflow engine.
@@ -97,7 +98,7 @@ func (e *Engine) ProcessEvent(ctx context.Context, ev *event.Event) ([]*Executio
 				slog.String("event_id", ev.ID),
 				slog.String("error", err.Error()),
 			)
-			continue
+			return results, fmt.Errorf("failed to create execution for workflow %s: %w", wf.ID, err)
 		}
 
 		// If execution was already completed successfully, skip re-execution (strict idempotency)
@@ -134,8 +135,14 @@ func (e *Engine) ExecuteWorkflow(
 	exec *Execution,
 ) (*Execution, error) {
 	start := time.Now().UTC()
+	if err := ctx.Err(); err != nil {
+		return exec, fmt.Errorf("workflow execution cancelled: %w", err)
+	}
 	exec.Attempts++
-	_ = e.executions.UpdateStatus(ctx, exec.ID, ExecutionRunning, nil, 0)
+	if err := e.executions.UpdateStatus(ctx, exec.ID, ExecutionRunning, nil, 0); err != nil {
+		return exec, fmt.Errorf("failed to mark execution running: %w", err)
+	}
+	observability.RecordExecutionStarted()
 
 	// Step 1: Trigger Received
 	triggerStep := &ExecutionStep{
@@ -148,7 +155,7 @@ func (e *Engine) ExecuteWorkflow(
 		CompletedAt: time.Now().UTC(),
 		DurationMs:  time.Since(start).Milliseconds(),
 	}
-	_ = e.executions.RecordStep(ctx, triggerStep)
+	e.recordStep(ctx, triggerStep)
 
 	// Step 2: Evaluate Conditions
 	condStart := time.Now().UTC()
@@ -166,10 +173,10 @@ func (e *Engine) ExecuteWorkflow(
 		errStr := fmt.Sprintf("condition evaluation error: %v", err)
 		condStep.Status = "failed"
 		condStep.Error = &errStr
-		_ = e.executions.RecordStep(ctx, condStep)
+		e.recordStep(ctx, condStep)
 
 		totalDuration := time.Since(start).Milliseconds()
-		_ = e.executions.UpdateStatus(ctx, exec.ID, ExecutionFailed, &errStr, totalDuration)
+		e.updateStatus(ctx, exec.ID, ExecutionFailed, &errStr, totalDuration)
 		e.recordDeadLetter(ctx, exec, wf, ev, "", errStr)
 		return exec, err
 	}
@@ -177,10 +184,12 @@ func (e *Engine) ExecuteWorkflow(
 	if !matched {
 		// Condition not met: skip execution cleanly
 		condStep.Status = "skipped"
-		_ = e.executions.RecordStep(ctx, condStep)
+		e.recordStep(ctx, condStep)
 
 		totalDuration := time.Since(start).Milliseconds()
-		_ = e.executions.UpdateStatus(ctx, exec.ID, ExecutionSuccess, nil, totalDuration)
+		e.updateStatus(ctx, exec.ID, ExecutionSuccess, nil, totalDuration)
+		observability.RecordExecutionSucceeded()
+		observability.RecordExecutionDuration(time.Since(start))
 		slog.Info("workflow conditions not met, skipped cleanly",
 			slog.String("workflow_id", wf.ID),
 			slog.String("execution_id", exec.ID),
@@ -189,7 +198,7 @@ func (e *Engine) ExecuteWorkflow(
 	}
 
 	condStep.Status = "success"
-	_ = e.executions.RecordStep(ctx, condStep)
+	e.recordStep(ctx, condStep)
 
 	// Step 3: Transformation
 	transStart := time.Now().UTC()
@@ -207,20 +216,23 @@ func (e *Engine) ExecuteWorkflow(
 		errStr := fmt.Sprintf("transformation error: %v", err)
 		transStep.Status = "failed"
 		transStep.Error = &errStr
-		_ = e.executions.RecordStep(ctx, transStep)
+		e.recordStep(ctx, transStep)
 
 		totalDuration := time.Since(start).Milliseconds()
-		_ = e.executions.UpdateStatus(ctx, exec.ID, ExecutionFailed, &errStr, totalDuration)
+		e.updateStatus(ctx, exec.ID, ExecutionFailed, &errStr, totalDuration)
 		e.recordDeadLetter(ctx, exec, wf, ev, "", errStr)
 		return exec, err
 	}
 
 	transStep.Status = "success"
 	transStep.Output = transformedPayload
-	_ = e.executions.RecordStep(ctx, transStep)
+	e.recordStep(ctx, transStep)
 
 	// Step 4: Execute Actions Sequentially
 	for _, act := range wf.Actions {
+		if err := ctx.Err(); err != nil {
+			return e.handleExecutionFailure(ctx, exec, wf, ev, act.ID, err.Error(), start)
+		}
 		actStart := time.Now().UTC()
 		actionStep := &ExecutionStep{
 			ExecutionID: exec.ID,
@@ -237,7 +249,7 @@ func (e *Engine) ExecuteWorkflow(
 			actionStep.Error = &errStr
 			actionStep.CompletedAt = time.Now().UTC()
 			actionStep.DurationMs = time.Since(actStart).Milliseconds()
-			_ = e.executions.RecordStep(ctx, actionStep)
+			e.recordStep(ctx, actionStep)
 
 			return e.handleExecutionFailure(ctx, exec, wf, ev, act.ID, errStr, start)
 		}
@@ -252,7 +264,7 @@ func (e *Engine) ExecuteWorkflow(
 				actionStep.Error = &errStr
 				actionStep.CompletedAt = time.Now().UTC()
 				actionStep.DurationMs = time.Since(actStart).Milliseconds()
-				_ = e.executions.RecordStep(ctx, actionStep)
+				e.recordStep(ctx, actionStep)
 
 				return e.handleExecutionFailure(ctx, exec, wf, ev, act.ID, errStr, start)
 			}
@@ -267,7 +279,7 @@ func (e *Engine) ExecuteWorkflow(
 			actionStep.Error = &errStr
 			actionStep.CompletedAt = time.Now().UTC()
 			actionStep.DurationMs = time.Since(actStart).Milliseconds()
-			_ = e.executions.RecordStep(ctx, actionStep)
+			e.recordStep(ctx, actionStep)
 
 			return e.handleExecutionFailure(ctx, exec, wf, ev, act.ID, errStr, start)
 		}
@@ -302,19 +314,22 @@ func (e *Engine) ExecuteWorkflow(
 			}
 			actionStep.Status = "failed"
 			actionStep.Error = &errStr
-			_ = e.executions.RecordStep(ctx, actionStep)
+			e.recordStep(ctx, actionStep)
+			observability.RecordActionFailure()
 
 			return e.handleExecutionFailure(ctx, exec, wf, ev, act.ID, errStr, start)
 		}
 
 		actionStep.Status = "success"
 		actionStep.Output = result.Output
-		_ = e.executions.RecordStep(ctx, actionStep)
+		e.recordStep(ctx, actionStep)
 	}
 
 	// All steps succeeded
 	totalDuration := time.Since(start).Milliseconds()
-	_ = e.executions.UpdateStatus(ctx, exec.ID, ExecutionSuccess, nil, totalDuration)
+	e.updateStatus(ctx, exec.ID, ExecutionSuccess, nil, totalDuration)
+	observability.RecordExecutionSucceeded()
+	observability.RecordExecutionDuration(time.Since(start))
 	slog.Info("workflow execution completed successfully",
 		slog.String("execution_id", exec.ID),
 		slog.String("workflow_id", wf.ID),
@@ -339,7 +354,8 @@ func (e *Engine) handleExecutionFailure(
 		// Schedule retry with exponential backoff
 		backoff := e.calculateBackoff(exec.Attempts)
 		exec.NextAttemptAt = time.Now().UTC().Add(backoff)
-		_ = e.executions.UpdateStatus(ctx, exec.ID, ExecutionRetrying, &errStr, totalDuration)
+		e.updateStatus(ctx, exec.ID, ExecutionRetrying, &errStr, totalDuration)
+		observability.RecordRetry()
 		slog.Warn("action execution failed, scheduled retry",
 			slog.String("execution_id", exec.ID),
 			slog.Int("attempt", exec.Attempts),
@@ -351,7 +367,10 @@ func (e *Engine) handleExecutionFailure(
 	}
 
 	// Retries exhausted: mark failed and record in dead-letter
-	_ = e.executions.UpdateStatus(ctx, exec.ID, ExecutionFailed, &errStr, totalDuration)
+	e.updateStatus(ctx, exec.ID, ExecutionFailed, &errStr, totalDuration)
+	observability.RecordExecutionFailed()
+	observability.RecordExecutionDuration(time.Since(start))
+	observability.RecordActionFailure()
 	e.recordDeadLetter(ctx, exec, wf, ev, actionID, errStr)
 	if e.errTracker != nil {
 		e.errTracker.CaptureError(ctx, fmt.Errorf("%s", errStr), errtracker.Scope{
@@ -391,7 +410,7 @@ func (e *Engine) recordDeadLetter(
 	if e.deadLetter == nil {
 		return
 	}
-	_, _ = e.deadLetter.Record(ctx, &DeadLetterRecord{
+	if _, err := e.deadLetter.Record(ctx, &DeadLetterRecord{
 		ExecutionID: exec.ID,
 		WorkflowID:  wf.ID,
 		EventID:     ev.ID,
@@ -400,5 +419,31 @@ func (e *Engine) recordDeadLetter(
 		Payload:     ev.Payload,
 		Attempts:    exec.Attempts,
 		FailedAt:    time.Now().UTC(),
-	})
+	}); err != nil {
+		slog.ErrorContext(ctx, "failed to record dead letter",
+			slog.String("execution_id", exec.ID),
+			slog.String("workflow_id", wf.ID),
+			slog.String("error", err.Error()),
+		)
+	}
+}
+
+func (e *Engine) recordStep(ctx context.Context, step *ExecutionStep) {
+	if err := e.executions.RecordStep(ctx, step); err != nil {
+		slog.ErrorContext(ctx, "failed to persist execution step",
+			slog.String("execution_id", step.ExecutionID),
+			slog.String("step_type", step.StepType),
+			slog.String("error", err.Error()),
+		)
+	}
+}
+
+func (e *Engine) updateStatus(ctx context.Context, id string, status ExecutionStatus, errStr *string, durationMs int64) {
+	if err := e.executions.UpdateStatus(ctx, id, status, errStr, durationMs); err != nil {
+		slog.ErrorContext(ctx, "failed to persist execution status",
+			slog.String("execution_id", id),
+			slog.String("status", string(status)),
+			slog.String("error", err.Error()),
+		)
+	}
 }

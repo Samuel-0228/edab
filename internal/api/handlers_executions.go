@@ -1,9 +1,12 @@
 package api
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"kerob/internal/core/workflow"
 )
@@ -90,16 +93,33 @@ func (h *Handlers) RetryExecution(w http.ResponseWriter, r *http.Request) {
 	// If engine is present, immediately execute retry asynchronously or synchronously
 	if h.workflowEngine != nil && h.workflows != nil && h.events != nil {
 		go func() {
-			ctx := r.Context()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
 			wf, err := h.workflows.GetByID(ctx, exec.WorkflowID)
 			if err != nil {
+				slog.ErrorContext(ctx, "retry failed to load workflow",
+					slog.String("execution_id", exec.ID),
+					slog.String("workflow_id", exec.WorkflowID),
+					slog.String("error", err.Error()),
+				)
 				return
 			}
 			ev, err := h.events.GetByID(ctx, exec.EventID)
 			if err != nil {
+				slog.ErrorContext(ctx, "retry failed to load event",
+					slog.String("execution_id", exec.ID),
+					slog.String("event_id", exec.EventID),
+					slog.String("error", err.Error()),
+				)
 				return
 			}
-			_, _ = h.workflowEngine.ExecuteWorkflow(ctx, wf, ev, exec)
+			if _, err := h.workflowEngine.ExecuteWorkflow(ctx, wf, ev, exec); err != nil {
+				slog.ErrorContext(ctx, "retry execution failed",
+					slog.String("execution_id", exec.ID),
+					slog.String("workflow_id", exec.WorkflowID),
+					slog.String("error", err.Error()),
+				)
+			}
 		}()
 	}
 
