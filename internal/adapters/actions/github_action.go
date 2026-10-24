@@ -131,7 +131,12 @@ func (g *GitHubActionExecutor) Execute(ctx context.Context, req workflow.ActionR
 		Number  int    `json:"number"`
 		HTMLURL string `json:"html_url"`
 	}
-	_ = json.Unmarshal(respBytes, &issueResp)
+	if err := json.Unmarshal(respBytes, &issueResp); err != nil {
+		return workflow.ActionResult{Success: false}, fmt.Errorf("github api returned malformed success response: %w", err)
+	}
+	if issueResp.Number <= 0 {
+		return workflow.ActionResult{Success: false}, fmt.Errorf("github api returned success response without issue number")
+	}
 
 	return workflow.ActionResult{
 		Success:    true,

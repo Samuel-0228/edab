@@ -258,6 +258,41 @@ func TestGitHubActionValidationAndExecution(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error on github 403")
 	}
+
+	malformed := NewGitHubActionExecutorWithClient(mockHTTPClient(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusCreated,
+			Body:       io.NopCloser(strings.NewReader(`{"id":"not-an-issue-response"}`)),
+			Header:     make(http.Header),
+		}, nil
+	}))
+	_, err = malformed.Execute(context.Background(), workflow.ActionRequest{
+		Config:      cfg,
+		Event:       ev,
+		Credentials: map[string]string{"token": "test-token"},
+	})
+	if err == nil {
+		t.Fatal("expected malformed GitHub success response to fail")
+	}
+}
+
+func TestHTTPActionCancellationIsPropagated(t *testing.T) {
+	ev, _ := event.New("src-test", "evt-1", "test.event", nil, nil)
+	client := mockHTTPClient(func(req *http.Request) (*http.Response, error) {
+		<-req.Context().Done()
+		return nil, req.Context().Err()
+	})
+	executor := NewHTTPActionExecutorWithClient(client)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := executor.Execute(ctx, workflow.ActionRequest{
+		Config: json.RawMessage(`{"url":"https://8.8.8.8/slow","method":"GET"}`),
+		Event:  ev,
+	})
+	if err == nil || !strings.Contains(err.Error(), "context canceled") {
+		t.Fatalf("expected cancellation error, got %v", err)
+	}
 }
 
 func TestTelegramActionExecutor(t *testing.T) {

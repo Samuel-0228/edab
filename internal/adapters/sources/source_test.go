@@ -2,7 +2,11 @@ package sources
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"errors"
+	"fmt"
+	"net/http"
 	"testing"
 )
 
@@ -141,6 +145,27 @@ func TestWebhookSourceAdapter(t *testing.T) {
 	}
 	if ev.SourceID != "src-wh" {
 		t.Errorf("expected source_id src-wh, got %s", ev.SourceID)
+	}
+}
+
+func TestValidateWebhookRequestSecretAndSignature(t *testing.T) {
+	body := []byte(`{"event":"created"}`)
+	secret := "unit-test-secret"
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write(body)
+	signature := "sha256=" + fmt.Sprintf("%x", mac.Sum(nil))
+
+	headers := http.Header{
+		"X-Webhook-Secret":        []string{secret},
+		"X-Webhook-Signature-256": []string{signature},
+	}
+	config := []byte(`{"secret":"unit-test-secret"}`)
+	if err := ValidateRequest(config, headers, body); err != nil {
+		t.Fatalf("expected valid webhook request, got %v", err)
+	}
+	headers.Set("X-Webhook-Secret", "wrong")
+	if err := ValidateRequest(config, headers, body); err == nil {
+		t.Fatal("expected invalid webhook secret to fail")
 	}
 }
 

@@ -177,6 +177,34 @@ func TestWebhookDestinationAdapter(t *testing.T) {
 	}
 }
 
+func TestWebhookDestinationErrorsAndCancellation(t *testing.T) {
+	ctx := context.Background()
+	adapter := NewWebhookDestinationAdapter()
+	if err := adapter.Connect(ctx, []byte(`{"target_url":"https://8.8.8.8/hook"}`)); err != nil {
+		t.Fatalf("connect failed: %v", err)
+	}
+	adapter.client.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusBadGateway,
+			Body:       io.NopCloser(strings.NewReader("upstream failed")),
+			Header:     make(http.Header),
+		}, nil
+	})
+	ev, _ := event.New("src", "external", "event", map[string]any{"value": "x"}, nil)
+	if err := adapter.Deliver(ctx, ev); err == nil || !strings.Contains(err.Error(), "502") {
+		t.Fatalf("expected non-2xx delivery error, got %v", err)
+	}
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	adapter.client.Transport = mockRoundTripper(func(req *http.Request) (*http.Response, error) {
+		return nil, req.Context().Err()
+	})
+	if err := adapter.Deliver(cancelled, ev); err == nil || !strings.Contains(err.Error(), "context canceled") {
+		t.Fatalf("expected cancellation error, got %v", err)
+	}
+}
+
 func TestMemoryDestinationStore(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
