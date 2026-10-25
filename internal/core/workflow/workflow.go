@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"kerob/internal/core/conditions"
 	"kerob/internal/core/event"
 	"kerob/internal/core/transformations"
@@ -104,91 +103,4 @@ type Store interface {
 	ListActive(ctx context.Context) ([]*Workflow, error)
 	Update(ctx context.Context, wf *Workflow) (*Workflow, error)
 	Delete(ctx context.Context, id string) error
-}
-
-// MemoryStore provides in-memory workflow storage.
-type MemoryStore struct {
-	workflows map[string]*Workflow
-}
-
-func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{
-		workflows: make(map[string]*Workflow),
-	}
-}
-
-func (s *MemoryStore) Create(ctx context.Context, wf *Workflow) (*Workflow, error) {
-	if err := wf.Validate(); err != nil {
-		return nil, err
-	}
-	if wf.ID == "" {
-		wf.ID = uuid.NewString()
-	}
-	if wf.MaxRetries <= 0 {
-		wf.MaxRetries = 3
-	}
-	if wf.TimeoutSeconds <= 0 {
-		wf.TimeoutSeconds = 30
-	}
-	now := time.Now().UTC()
-	wf.CreatedAt = now
-	wf.UpdatedAt = now
-
-	for i := range wf.Actions {
-		if wf.Actions[i].ID == "" {
-			wf.Actions[i].ID = uuid.NewString()
-		}
-	}
-
-	s.workflows[wf.ID] = wf
-	return wf, nil
-}
-
-func (s *MemoryStore) GetByID(ctx context.Context, id string) (*Workflow, error) {
-	wf, ok := s.workflows[id]
-	if !ok {
-		return nil, ErrWorkflowNotFound
-	}
-	return wf, nil
-}
-
-func (s *MemoryStore) List(ctx context.Context) ([]*Workflow, error) {
-	list := make([]*Workflow, 0, len(s.workflows))
-	for _, wf := range s.workflows {
-		list = append(list, wf)
-	}
-	return list, nil
-}
-
-func (s *MemoryStore) ListActive(ctx context.Context) ([]*Workflow, error) {
-	list := make([]*Workflow, 0)
-	for _, wf := range s.workflows {
-		if wf.Enabled {
-			list = append(list, wf)
-		}
-	}
-	return list, nil
-}
-
-func (s *MemoryStore) Update(ctx context.Context, wf *Workflow) (*Workflow, error) {
-	if err := wf.Validate(); err != nil {
-		return nil, err
-	}
-	existing, ok := s.workflows[wf.ID]
-	if !ok {
-		return nil, ErrWorkflowNotFound
-	}
-
-	wf.UpdatedAt = time.Now().UTC()
-	wf.CreatedAt = existing.CreatedAt
-	s.workflows[wf.ID] = wf
-	return wf, nil
-}
-
-func (s *MemoryStore) Delete(ctx context.Context, id string) error {
-	if _, ok := s.workflows[id]; !ok {
-		return ErrWorkflowNotFound
-	}
-	delete(s.workflows, id)
-	return nil
 }

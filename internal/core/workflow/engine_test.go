@@ -459,3 +459,225 @@ func TestWorkflowEngineActionErrorsAndRetries(t *testing.T) {
 	_ = wfTimeout
 	_ = wfRetry
 }
+
+func TestWorkflowEngineMultiActionSequentialSuccess(t *testing.T) {
+	ctx := context.Background()
+	wfStore := NewMemoryStore()
+	execStore := NewMemoryExecutionStore()
+	dlStore := NewMemoryDeadLetterStore()
+	credStore := credentials.NewMemoryStore(credentials.DeriveKey("test-key"))
+	registry := NewActionRegistry()
+
+	action1 := &MockActionExecutor{TypeStr: "step1"}
+	action2 := &MockActionExecutor{TypeStr: "step2"}
+	registry.Register(action1)
+	registry.Register(action2)
+
+	wf, err := wfStore.Create(ctx, &Workflow{
+		Name:    "Sequential Pipeline",
+		Enabled: true,
+		Trigger: TriggerConfig{Type: "webhook", EventTypes: []string{"pipeline.start"}},
+		Actions: []ActionStep{
+			{Integration: "step1", ActionType: "first"},
+			{Integration: "step2", ActionType: "second"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create workflow: %v", err)
+	}
+
+	engine := NewEngine(wfStore, execStore, dlStore, credStore, registry)
+	ev, _ := event.New("src-pipe", "evt-pipe-1", "pipeline.start", map[string]any{"data": "start"}, nil)
+
+	execs, err := engine.ProcessEvent(ctx, ev)
+	if err != nil {
+		t.Fatalf("ProcessEvent failed: %v", err)
+	}
+	if len(execs) != 1 || execs[0].Status != ExecutionSuccess {
+		t.Fatalf("expected 1 execution with success status, got: %+v", execs)
+	}
+
+	if action1.Executed != 1 || action2.Executed != 1 {
+		t.Fatalf("expected both actions executed once, got action1=%d action2=%d", action1.Executed, action2.Executed)
+	}
+
+	// Verify step history in execution store
+	storedExec, err := execStore.GetByID(ctx, execs[0].ID)
+	if err != nil {
+		t.Fatalf("failed to get execution: %v", err)
+	}
+	// trigger, condition, transform, action1, action2 = 5 steps
+	if len(storedExec.Steps) != 5 {
+		t.Fatalf("expected 5 steps recorded, got %d", len(storedExec.Steps))
+	}
+	_ = wf
+}
+
+func TestWorkflowEngineMultiActionMidFailure(t *testing.T) {
+	ctx := context.Background()
+	wfStore := NewMemoryStore()
+	execStore := NewMemoryExecutionStore()
+	dlStore := NewMemoryDeadLetterStore()
+	credStore := credentials.NewMemoryStore(credentials.DeriveKey("test-key"))
+	registry := NewActionRegistry()
+
+	action1 := &MockActionExecutor{TypeStr: "step1"}
+	action2Fails := &MockActionExecutor{TypeStr: "step2_fail", FailUntil: 999}
+	action3Never := &MockActionExecutor{TypeStr: "step3_never"}
+
+	registry.Register(action1)
+	registry.Register(action2Fails)
+	registry.Register(action3Never)
+
+	wf, err := wfStore.Create(ctx, &Workflow{
+		Name:       "Partial Fail Pipeline",
+		Enabled:    true,
+		MaxRetries: 1,
+		Trigger:    TriggerConfig{Type: "webhook", EventTypes: []string{"pipeline.run"}},
+		Actions: []ActionStep{
+			{Integration: "step1", ActionType: "run1"},
+			{Integration: "step2_fail", ActionType: "run2"},
+			{Integration: "step3_never", ActionType: "run3"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create workflow: %v", err)
+	}
+
+	engine := NewEngine(wfStore, execStore, dlStore, credStore, registry)
+	ev, _ := event.New("src-pipe", "evt-pipe-2", "pipeline.run", map[string]any{}, nil)
+
+	execs, _ := engine.ProcessEvent(ctx, ev)
+	if len(execs) != 1 || execs[0].Status != ExecutionFailed {
+		t.Fatalf("expected ExecutionFailed, got: %+v", execs)
+	}
+
+	if action1.Executed != 1 {
+		t.Errorf("expected action1 to have executed, got %d", action1.Executed)
+	}
+	if action2Fails.Executed != 1 {
+		t.Errorf("expected action2 to have executed and failed, got %d", action2Fails.Executed)
+	}
+	if action3Never.Executed != 0 {
+		t.Errorf("expected action3 NEVER to have executed, got %d", action3Never.Executed)
+	}
+
+	// Verify dead letter recorded specifically for action2
+	dls, _ := dlStore.List(ctx, false)
+	if len(dls) != 1 {
+		t.Fatalf("expected 1 dead letter record, got %d", len(dls))
+	}
+	if dls[0].ActionID != wf.Actions[1].ID {
+		t.Errorf("expected dead letter action ID %s, got %s", wf.Actions[1].ID, dls[0].ActionID)
+	}
+}
+
+func TestWorkflowEngineDisabledWorkflowIgnored(t *testing.T) {
+	ctx := context.Background()
+	wfStore := NewMemoryStore()
+	execStore := NewMemoryExecutionStore()
+	dlStore := NewMemoryDeadLetterStore()
+	credStore := credentials.NewMemoryStore(credentials.DeriveKey("test-key"))
+	registry := NewActionRegistry()
+
+	spy := &MockActionExecutor{TypeStr: "test_action"}
+	registry.Register(spy)
+
+	// Disabled workflow
+	_, err := wfStore.Create(ctx, &Workflow{
+		Name:    "Disabled Workflow",
+		Enabled: false,
+		Trigger: TriggerConfig{Type: "webhook", EventTypes: []string{"active.event"}},
+		Actions: []ActionStep{{Integration: "test_action", ActionType: "run"}},
+	})
+	if err != nil {
+		t.Fatalf("failed to create workflow: %v", err)
+	}
+
+	engine := NewEngine(wfStore, execStore, dlStore, credStore, registry)
+	ev, _ := event.New("src-1", "evt-1", "active.event", map[string]any{}, nil)
+
+	execs, err := engine.ProcessEvent(ctx, ev)
+	if err != nil {
+		t.Fatalf("ProcessEvent failed: %v", err)
+	}
+	if len(execs) != 0 {
+		t.Fatalf("expected 0 executions for disabled workflow, got %d", len(execs))
+	}
+	if spy.Executed != 0 {
+		t.Errorf("expected action not executed for disabled workflow, got %d", spy.Executed)
+	}
+}
+
+func TestWorkflowEngineTriggerSourceFiltering(t *testing.T) {
+	ctx := context.Background()
+	wfStore := NewMemoryStore()
+	execStore := NewMemoryExecutionStore()
+	dlStore := NewMemoryDeadLetterStore()
+	credStore := credentials.NewMemoryStore(credentials.DeriveKey("test-key"))
+	registry := NewActionRegistry()
+
+	spy := &MockActionExecutor{TypeStr: "action_spy"}
+	registry.Register(spy)
+
+	_, _ = wfStore.Create(ctx, &Workflow{
+		Name:    "Restricted to Telegram Source",
+		Enabled: true,
+		Trigger: TriggerConfig{
+			Type:       "telegram",
+			SourceID:   "tele-source-123",
+			EventTypes: []string{"telegram.message"},
+		},
+		Actions: []ActionStep{{Integration: "action_spy", ActionType: "run"}},
+	})
+
+	engine := NewEngine(wfStore, execStore, dlStore, credStore, registry)
+
+	// Event from wrong source -> does not trigger
+	evWrongSource, _ := event.New("other-source-999", "msg-1", "telegram.message", map[string]any{}, nil)
+	execs1, _ := engine.ProcessEvent(ctx, evWrongSource)
+	if len(execs1) != 0 {
+		t.Errorf("expected 0 executions from mismatched source, got %d", len(execs1))
+	}
+
+	// Event from correct source -> triggers
+	evRightSource, _ := event.New("tele-source-123", "msg-2", "telegram.message", map[string]any{}, nil)
+	execs2, _ := engine.ProcessEvent(ctx, evRightSource)
+	if len(execs2) != 1 || execs2[0].Status != ExecutionSuccess {
+		t.Errorf("expected 1 execution with success from matching source, got: %+v", execs2)
+	}
+}
+
+func TestWorkflowEngineContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	wfStore := NewMemoryStore()
+	execStore := NewMemoryExecutionStore()
+	dlStore := NewMemoryDeadLetterStore()
+	credStore := credentials.NewMemoryStore(credentials.DeriveKey("test-key"))
+	registry := NewActionRegistry()
+
+	wf, _ := wfStore.Create(context.Background(), &Workflow{
+		Name:    "Cancelled Workflow",
+		Enabled: true,
+		Trigger: TriggerConfig{Type: "webhook"},
+		Actions: []ActionStep{{Integration: "mock", ActionType: "test"}},
+	})
+
+	engine := NewEngine(wfStore, execStore, dlStore, credStore, registry)
+	ev, _ := event.New("src-1", "evt-canc", "webhook.test", map[string]any{}, nil)
+
+	exec := &Execution{
+		ID:          "exec-canc-1",
+		WorkflowID:  wf.ID,
+		EventID:     ev.ID,
+		Status:      ExecutionPending,
+		MaxAttempts: 1,
+	}
+
+	_, err := engine.ExecuteWorkflow(ctx, wf, ev, exec)
+	if err == nil {
+		t.Fatal("expected error on cancelled context, got nil")
+	}
+}
