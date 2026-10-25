@@ -205,7 +205,12 @@ func (h *Handlers) TestWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input testWorkflowInput
-	_ = json.NewDecoder(r.Body).Decode(&input)
+	if r.Body != nil && r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			respondValidationError(w, r, []FieldError{{Field: "body", Message: "invalid JSON body: " + err.Error()}})
+			return
+		}
+	}
 
 	eventType := input.EventType
 	if eventType == "" {

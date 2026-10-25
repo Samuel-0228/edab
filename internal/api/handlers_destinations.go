@@ -46,18 +46,10 @@ func (h *Handlers) CreateDestination(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid json body: "+err.Error())
 		return
 	}
-	if input.Name == "" {
-		respondError(w, http.StatusBadRequest, "name is required")
-		return
-	}
 
 	if input.TelegramChatID != "" && input.AdapterType == "" {
 		input.AdapterType = "telegram"
 		input.Config = json.RawMessage(fmt.Sprintf(`{"telegram_chat_id":%q}`, input.TelegramChatID))
-	}
-	if input.AdapterType == "" {
-		respondError(w, http.StatusBadRequest, "adapter_type or telegram_chat_id is required")
-		return
 	}
 	if len(input.Config) == 0 {
 		input.Config = json.RawMessage(`{}`)
@@ -120,6 +112,10 @@ func (h *Handlers) UpdateDestination(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dest.ID = id
+	if valErrs := ValidateDestinationInput(&dest, h.destReg); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
+		return
+	}
 
 	updated, err := h.destinations.Update(r.Context(), &dest)
 	if errors.Is(err, destinations.ErrDestinationNotFound) {
@@ -171,6 +167,11 @@ func (h *Handlers) PatchDestination(w http.ResponseWriter, r *http.Request) {
 		dest.Config = json.RawMessage(fmt.Sprintf(`{"telegram_chat_id":%q}`, *input.TelegramChatID))
 	} else if len(input.Config) > 0 {
 		dest.Config = input.Config
+	}
+
+	if valErrs := ValidateDestinationInput(dest, h.destReg); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
+		return
 	}
 
 	updated, err := h.destinations.Update(r.Context(), dest)

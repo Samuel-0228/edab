@@ -84,14 +84,11 @@ func (h *Handlers) IngestEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if input.SourceID == "" {
-		respondError(w, http.StatusBadRequest, "source_id is required")
+	if valErrs := ValidateEventInput(input.SourceID, input.ExternalEventID, input.EventType, input.Payload); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
 		return
 	}
-	if input.ExternalEventID == "" {
-		respondError(w, http.StatusBadRequest, "external_event_id is required")
-		return
-	}
+
 	if input.EventType == "" {
 		input.EventType = "default"
 	}

@@ -114,6 +114,10 @@ func (h *Handlers) UpdateRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rt.ID = id
+	if valErrs := ValidateRouteInput(&rt); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
+		return
+	}
 
 	updated, err := h.routes.Update(r.Context(), &rt)
 	if errors.Is(err, routing.ErrRouteNotFound) {
@@ -158,6 +162,11 @@ func (h *Handlers) PatchRoute(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(input.Filters) > 0 {
 		rt.Filters = input.Filters
+	}
+
+	if valErrs := ValidateRouteInput(rt); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
+		return
 	}
 
 	updated, err := h.routes.Update(r.Context(), rt)

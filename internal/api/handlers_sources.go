@@ -49,10 +49,6 @@ func (h *Handlers) CreateSource(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid json body: "+err.Error())
 		return
 	}
-	if input.Name == "" {
-		respondError(w, http.StatusBadRequest, "name is required")
-		return
-	}
 
 	// Automatic convenience detection for Telegram sources
 	if input.ChannelUsername != "" {
@@ -67,11 +63,6 @@ func (h *Handlers) CreateSource(w http.ResponseWriter, r *http.Request) {
 			input.AdapterType = "telegram"
 			input.Config = json.RawMessage(fmt.Sprintf(`{"telegram_chat_id":%q}`, trimmed))
 		}
-	}
-
-	if input.AdapterType == "" {
-		respondError(w, http.StatusBadRequest, "adapter_type or telegram_chat_id is required")
-		return
 	}
 	if len(input.Config) == 0 {
 		input.Config = json.RawMessage(`{}`)
@@ -134,6 +125,10 @@ func (h *Handlers) UpdateSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	src.ID = id
+	if valErrs := ValidateSourceInput(&src, h.sourceReg); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
+		return
+	}
 
 	updated, err := h.sources.Update(r.Context(), &src)
 	if errors.Is(err, sources.ErrSourceNotFound) {
@@ -195,6 +190,11 @@ func (h *Handlers) PatchSource(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if len(input.Config) > 0 {
 		src.Config = input.Config
+	}
+
+	if valErrs := ValidateSourceInput(src, h.sourceReg); len(valErrs) > 0 {
+		respondValidationError(w, r, valErrs)
+		return
 	}
 
 	updated, err := h.sources.Update(r.Context(), src)

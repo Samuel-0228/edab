@@ -90,6 +90,41 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("POST /api/v1/events", handlers.IngestEvent)
 	mux.HandleFunc("GET /api/v1/events/{id}", handlers.GetEvent)
 
+	// Sources API
+	mux.HandleFunc("GET /api/v1/sources", handlers.ListSources)
+	mux.HandleFunc("POST /api/v1/sources", handlers.CreateSource)
+	mux.HandleFunc("GET /api/v1/sources/{id}", handlers.GetSource)
+	mux.HandleFunc("PUT /api/v1/sources/{id}", handlers.UpdateSource)
+	mux.HandleFunc("PATCH /api/v1/sources/{id}", handlers.PatchSource)
+	mux.HandleFunc("DELETE /api/v1/sources/{id}", handlers.DeleteSource)
+	mux.HandleFunc("GET /api/v1/sources/{id}/access", handlers.CheckSourceAccess)
+	mux.HandleFunc("POST /api/v1/sources/{id}/sync", handlers.SyncSource)
+	mux.HandleFunc("POST /api/v1/sources/{id}/ingest", handlers.IngestRawSourceEvent)
+
+	// Destinations API
+	mux.HandleFunc("GET /api/v1/destinations", handlers.ListDestinations)
+	mux.HandleFunc("POST /api/v1/destinations", handlers.CreateDestination)
+	mux.HandleFunc("GET /api/v1/destinations/{id}", handlers.GetDestination)
+	mux.HandleFunc("PUT /api/v1/destinations/{id}", handlers.UpdateDestination)
+	mux.HandleFunc("PATCH /api/v1/destinations/{id}", handlers.PatchDestination)
+	mux.HandleFunc("DELETE /api/v1/destinations/{id}", handlers.DeleteDestination)
+	mux.HandleFunc("GET /api/v1/destinations/{id}/access", handlers.CheckDestinationAccess)
+
+	// Routes API
+	mux.HandleFunc("GET /api/v1/routes", handlers.ListRoutes)
+	mux.HandleFunc("POST /api/v1/routes", handlers.CreateRoute)
+	mux.HandleFunc("GET /api/v1/routes/{id}", handlers.GetRoute)
+	mux.HandleFunc("PUT /api/v1/routes/{id}", handlers.UpdateRoute)
+	mux.HandleFunc("PATCH /api/v1/routes/{id}", handlers.PatchRoute)
+	mux.HandleFunc("DELETE /api/v1/routes/{id}", handlers.DeleteRoute)
+
+	// Deliveries API
+	mux.HandleFunc("GET /api/v1/deliveries", handlers.ListDeliveries)
+	mux.HandleFunc("GET /api/v1/deliveries/failed", handlers.ListFailedDeliveries)
+	mux.HandleFunc("GET /api/v1/deliveries/stats", handlers.DeliveryStats)
+	mux.HandleFunc("GET /api/v1/deliveries/{id}", handlers.GetDelivery)
+	mux.HandleFunc("POST /api/v1/deliveries/{id}/retry", handlers.RetryDelivery)
+
 	// Legacy routes for backwards compatibility
 	mux.HandleFunc("GET /sources", handlers.ListSources)
 	mux.HandleFunc("POST /sources", handlers.CreateSource)
