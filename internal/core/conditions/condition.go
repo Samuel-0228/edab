@@ -56,6 +56,9 @@ func Evaluate(c *Condition, ev *event.Event) (bool, error) {
 	if c == nil {
 		return true, nil
 	}
+	if ev == nil {
+		return false, nil
+	}
 
 	// 1. Group / compound condition
 	if len(c.Rules) > 0 || c.Logical != "" {

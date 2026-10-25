@@ -444,3 +444,61 @@ func TestHelperComparisons(t *testing.T) {
 		t.Error("expected false for struct")
 	}
 }
+
+func TestConditionsInvalidInputAndEdgeCases(t *testing.T) {
+	ev, _ := event.New("src-test", "ext-1", "test.event", map[string]any{"count": 10}, nil)
+
+	// 1. Unsupported operator
+	condUnsupported := &Condition{
+		Field:    "payload.count",
+		Operator: "invalid_unsupported_op",
+		Value:    10,
+	}
+	_, err := Evaluate(condUnsupported, ev)
+	if err == nil {
+		t.Error("expected error for unsupported operator, got nil")
+	}
+
+	// 2. Invalid regex pattern
+	condBadRegex := &Condition{
+		Field:    "payload.count",
+		Operator: OpMatches,
+		Value:    "[unclosed",
+	}
+	_, err = Evaluate(condBadRegex, ev)
+	if err == nil {
+		t.Error("expected error for invalid regex, got nil")
+	}
+
+	// 3. Logical NOT operator
+	condNot := &Condition{
+		Logical: LogicalNot,
+		Rules: []Condition{
+			{
+				Field:    "payload.count",
+				Operator: OpEquals,
+				Value:    10,
+			},
+		},
+	}
+	res, err := Evaluate(condNot, ev)
+	if err != nil {
+		t.Fatalf("unexpected error for logical NOT: %v", err)
+	}
+	if res != false {
+		t.Errorf("expected logical NOT of true condition to be false, got %v", res)
+	}
+
+	// 4. Logical NOT with empty subconditions
+	condNotNil := &Condition{Logical: LogicalNot}
+	res, err = Evaluate(condNotNil, ev)
+	if err != nil || !res {
+		t.Errorf("expected true when LogicalNot has no subconditions, got %v", res)
+	}
+
+	// 5. Evaluate with nil event
+	resNilEvent, err := Evaluate(&Condition{Field: "payload.count", Operator: OpExists}, nil)
+	if err != nil || resNilEvent {
+		t.Errorf("expected false without error when evaluating nil event, got res=%v, err=%v", resNilEvent, err)
+	}
+}

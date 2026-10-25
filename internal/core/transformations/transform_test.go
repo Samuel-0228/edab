@@ -208,3 +208,60 @@ func TestTransformationEdgeCases(t *testing.T) {
 		t.Errorf("expected string to be returned safely: %s", unclosed)
 	}
 }
+
+func TestTransformDefaultsAndPathLookups(t *testing.T) {
+	ev, _ := event.New("src-1", "ext-1", "test.event", map[string]any{
+		"user": map[string]any{
+			"profile": map[string]any{
+				"email": "user@example.com",
+			},
+		},
+		"tags": []any{"production", "backend"},
+	}, nil)
+
+	// 1. Defaults applied when fields are missing
+	tfWithDefaults := &Transformation{
+		Type: "mapping",
+		Defaults: map[string]any{
+			"env":     "development",
+			"retries": 3,
+		},
+		FieldMaps: map[string]string{
+			"email":   "payload.user.profile.email",
+			"tag":     "payload.tags.0",
+			"missing": "payload.user.missing_field",
+		},
+	}
+
+	out, err := Transform(tfWithDefaults, ev)
+	if err != nil {
+		t.Fatalf("Transform failed: %v", err)
+	}
+
+	if out["env"] != "development" {
+		t.Errorf("expected default env 'development', got %v", out["env"])
+	}
+	if out["retries"] != 3 {
+		t.Errorf("expected default retries 3, got %v", out["retries"])
+	}
+	if out["email"] != "user@example.com" {
+		t.Errorf("expected mapped email 'user@example.com', got %v", out["email"])
+	}
+	if out["tag"] != "production" {
+		t.Errorf("expected mapped tag 'production', got %v", out["tag"])
+	}
+
+	// 2. Unknown transformation type falls back to template render
+	tfFallback := &Transformation{
+		Type:      "unknown_type",
+		Template:  "User: {{payload.user.profile.email}}",
+		OutputKey: "summary",
+	}
+	fallbackOut, err := Transform(tfFallback, ev)
+	if err != nil {
+		t.Fatalf("Transform fallback failed: %v", err)
+	}
+	if fallbackOut["summary"] != "User: user@example.com" {
+		t.Errorf("expected fallback summary 'User: user@example.com', got %v", fallbackOut["summary"])
+	}
+}

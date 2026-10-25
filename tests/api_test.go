@@ -12,9 +12,12 @@ import (
 	"kerob/internal/adapters/destinations"
 	"kerob/internal/adapters/sources"
 	"kerob/internal/api"
+	"kerob/internal/core/credentials"
 	"kerob/internal/core/delivery"
 	"kerob/internal/core/event"
 	"kerob/internal/core/routing"
+	"kerob/internal/core/webhooks"
+	"kerob/internal/core/workflow"
 	"kerob/internal/telegram"
 )
 
@@ -284,6 +287,176 @@ func TestAPITelegramAndManagementEndpoints(t *testing.T) {
 	}
 	if ct := resp.Header.Get("Content-Type"); ct != "image/png" {
 		t.Fatalf("GET /favicon.ico invalid Content-Type: %s", ct)
+	}
+	_ = resp.Body.Close()
+}
+
+func setupFullAPITestServer() (*httptest.Server, *workflow.MemoryStore, *workflow.MemoryExecutionStore, *workflow.MemoryDeadLetterStore) {
+	wfStore := workflow.NewMemoryStore()
+	execStore := workflow.NewMemoryExecutionStore()
+	dlStore := workflow.NewMemoryDeadLetterStore()
+	credStore := credentials.NewMemoryStore(credentials.DeriveKey("api-test-key-32-bytes-long!"))
+	whStore := webhooks.NewMemoryStore()
+
+	srcStore := sources.NewMemoryStore()
+	destStore := destinations.NewMemoryStore()
+	routeStore := routing.NewMemoryStore()
+	eventStore := event.NewMemoryStore()
+	deliveryStore := delivery.NewMemoryStore()
+
+	srcReg := sources.NewRegistry()
+	srcReg.Register("webhook", func() sources.SourceAdapter { return sources.NewWebhookSourceAdapter() })
+	destReg := destinations.NewRegistry()
+	destReg.Register("stdout", func() destinations.DestinationAdapter { return destinations.NewStdoutDestinationAdapter() })
+
+	actionReg := workflow.NewActionRegistry()
+	actionReg.Register(&TestActionSpy{IntegrationType: "discord"})
+	wfEngine := workflow.NewEngine(wfStore, execStore, dlStore, credStore, actionReg)
+
+	router := routing.NewRoutingEngine(routeStore)
+	pipe := workflow.NewPipeline(srcStore, srcReg, eventStore, router, deliveryStore, destStore, 3)
+
+	cfg := api.Config{
+		Workflows:      wfStore,
+		Executions:     execStore,
+		DeadLetters:    dlStore,
+		WorkflowEngine: wfEngine,
+		ActionReg:      actionReg,
+		Creds:          credStore,
+		WebhookStore:   whStore,
+		Sources:        srcStore,
+		Destinations:   destStore,
+		Routes:         routeStore,
+		Events:         eventStore,
+		Deliveries:     deliveryStore,
+		Pipeline:       pipe,
+		SourceReg:      srcReg,
+		DestReg:        destReg,
+	}
+
+	handlers := api.NewHandlersFromConfig(cfg)
+	server := api.NewServer("0", handlers)
+	ts := httptest.NewServer(server.Handler())
+	return ts, wfStore, execStore, dlStore
+}
+
+func TestAPIWorkflowCRUDAndValidation(t *testing.T) {
+	ts, _, _, _ := setupFullAPITestServer()
+	defer ts.Close()
+
+	client := ts.Client()
+
+	// 1. Invalid JSON body -> 400
+	resp, err := client.Post(ts.URL+"/api/v1/workflows", "application/json", bytes.NewReader([]byte("{invalid-json")))
+	if err != nil || resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for malformed json, got %d, err: %v", resp.StatusCode, err)
+	}
+	_ = resp.Body.Close()
+
+	// 2. Validation failure: missing name and actions -> 400 with field errors
+	badPayload := `{"name":"","trigger":{"type":""},"actions":[]}`
+	resp, err = client.Post(ts.URL+"/api/v1/workflows", "application/json", bytes.NewReader([]byte(badPayload)))
+	if err != nil || resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty workflow validation, got %d", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if !strings.Contains(string(body), "VALIDATION_ERROR") {
+		t.Errorf("expected VALIDATION_ERROR code, got: %s", string(body))
+	}
+
+	// 3. Valid Workflow Creation -> 201 Created
+	validPayload := `{
+		"name": "Discord Alert Dispatcher",
+		"enabled": true,
+		"trigger": {
+			"type": "webhook",
+			"event_types": ["alert.critical"]
+		},
+		"actions": [
+			{
+				"integration": "discord",
+				"action_type": "send_message",
+				"config": {"content": "Alert!"}
+			}
+		]
+	}`
+	resp, err = client.Post(ts.URL+"/api/v1/workflows", "application/json", bytes.NewReader([]byte(validPayload)))
+	if err != nil || resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 for valid workflow creation, got %d", resp.StatusCode)
+	}
+	var created struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&created)
+	_ = resp.Body.Close()
+
+	if created.ID == "" || created.Name != "Discord Alert Dispatcher" {
+		t.Fatalf("unexpected created workflow: %+v", created)
+	}
+
+	// 4. GET /api/v1/workflows/{id} -> 200 OK
+	resp, err = client.Get(ts.URL + "/api/v1/workflows/" + created.ID)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for GET /api/v1/workflows/{id}, got %d", resp.StatusCode)
+	}
+	_ = resp.Body.Close()
+
+	// 5. GET /api/v1/workflows/nonexistent -> 404
+	resp, err = client.Get(ts.URL + "/api/v1/workflows/nonexistent-id")
+	if err != nil || resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 for nonexistent workflow, got %d", resp.StatusCode)
+	}
+	_ = resp.Body.Close()
+
+	// 6. List Workflows -> 200 OK
+	resp, err = client.Get(ts.URL + "/api/v1/workflows")
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for GET /api/v1/workflows, got %d", resp.StatusCode)
+	}
+	var list []*workflow.Workflow
+	_ = json.NewDecoder(resp.Body).Decode(&list)
+	_ = resp.Body.Close()
+	if len(list) != 1 || list[0].ID != created.ID {
+		t.Fatalf("expected 1 workflow in list, got %d", len(list))
+	}
+
+	// 7. PATCH /api/v1/workflows/{id} (disable workflow) -> 200 OK
+	patchPayload := `{"enabled": false}`
+	reqPatch, _ := http.NewRequest(http.MethodPatch, ts.URL+"/api/v1/workflows/"+created.ID, bytes.NewReader([]byte(patchPayload)))
+	reqPatch.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(reqPatch)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for PATCH workflow, got %d", resp.StatusCode)
+	}
+	var patched workflow.Workflow
+	_ = json.NewDecoder(resp.Body).Decode(&patched)
+	_ = resp.Body.Close()
+	if patched.Enabled {
+		t.Errorf("expected patched workflow enabled=false, got true")
+	}
+
+	// 8. Test Workflow execution: POST /api/v1/workflows/{id}/test -> 200 OK
+	testPayload := `{"event_type": "alert.critical", "payload": {"message": "Server down"}}`
+	resp, err = client.Post(ts.URL+"/api/v1/workflows/"+created.ID+"/test", "application/json", bytes.NewReader([]byte(testPayload)))
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for workflow test endpoint, got %d", resp.StatusCode)
+	}
+	_ = resp.Body.Close()
+
+	// 9. DELETE /api/v1/workflows/{id} -> 200 or 204
+	reqDel, _ := http.NewRequest(http.MethodDelete, ts.URL+"/api/v1/workflows/"+created.ID, nil)
+	resp, err = client.Do(reqDel)
+	if err != nil || (resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent) {
+		t.Fatalf("expected 200 or 204 for DELETE workflow, got %d", resp.StatusCode)
+	}
+	_ = resp.Body.Close()
+
+	// 10. GET /api/v1/workflows/{id} after delete -> 404 Not Found
+	resp, err = client.Get(ts.URL + "/api/v1/workflows/" + created.ID)
+	if err != nil || resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 after deletion, got %d", resp.StatusCode)
 	}
 	_ = resp.Body.Close()
 }
