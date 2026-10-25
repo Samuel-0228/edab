@@ -100,7 +100,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each failures as f}
+            {#each failures as f (f.id)}
               <tr>
                 <td class="text-muted">{new Date(f.failed_at).toLocaleTimeString()}</td>
                 <td>

@@ -178,7 +178,7 @@
     <div class="grid-3">
       <Card title="Registered Triggers" subtitle="Sources listening for inbound events">
         <div class="tags-list">
-          {#each ready.registered_sources as s}
+          {#each ready.registered_sources as s (s)}
             <Badge variant="stage-when">{s}</Badge>
           {/each}
         </div>
@@ -186,7 +186,7 @@
 
       <Card title="Registered Destinations" subtitle="Outbound delivery targets">
         <div class="tags-list">
-          {#each ready.registered_destinations as d}
+          {#each ready.registered_destinations as d (d)}
             <Badge variant="stage-then">{d}</Badge>
           {/each}
         </div>
@@ -194,7 +194,7 @@
 
       <Card title="Registered Actions" subtitle="Pipeline action executors">
         <div class="tags-list">
-          {#each ready.registered_actions as a}
+          {#each ready.registered_actions as a (a)}
             <Badge variant="neutral">{a}</Badge>
           {/each}
         </div>

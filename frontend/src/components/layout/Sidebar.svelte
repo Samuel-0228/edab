@@ -59,7 +59,7 @@
     <div class="nav-section">
       <div class="nav-section-title">ENGINE CONTROL</div>
       <div class="nav-items-group">
-        {#each engineNav as item}
+        {#each engineNav as item (item.id)}
           <button
             class="nav-link {$currentRoute === item.id ? 'active' : ''}"
             onclick={() => navigate(item.id)}
@@ -85,7 +85,7 @@
     <div class="nav-section">
       <div class="nav-section-title">CONNECTIVITY</div>
       <div class="nav-items-group">
-        {#each connectivityNav as item}
+        {#each connectivityNav as item (item.id)}
           <button
             class="nav-link {$currentRoute === item.id ? 'active' : ''}"
             onclick={() => navigate(item.id)}
@@ -102,7 +102,7 @@
     <div class="nav-section">
       <div class="nav-section-title">OBSERVABILITY</div>
       <div class="nav-items-group">
-        {#each systemNav as item}
+        {#each systemNav as item (item.id)}
           <button
             class="nav-link {$currentRoute === item.id ? 'active' : ''}"
             onclick={() => navigate(item.id)}

@@ -20,17 +20,20 @@ jobs:
           go-version: '1.23'
           cache: true
 
-      - name: Verify dependencies
-        run: go mod verify
-
-      - name: Dependency freshness check
+      - name: Verify dependencies and go.sum synchronization
         run: |
-          echo "Checking for direct dependency updates..."
-          go list -u -m all || true
+          go mod verify
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Investigate Go dependency freshness
+        run: |
+          echo "Investigating direct dependency freshness..."
+          go list -u -m all
 
       - name: Check code formatting (gofmt)
         run: |
-          unformatted=$(gofmt -l . | grep -v node_modules || true)
+          unformatted=$(gofmt -l . | grep -v node_modules || :)
           if [ -n "$unformatted" ]; then
             echo "Unformatted files found:"
             echo "$unformatted"
@@ -66,8 +69,31 @@ jobs:
       - name: Install frontend dependencies
         run: cd frontend && npm ci
 
-      - name: Dependency freshness check
-        run: cd frontend && npm outdated || true
+      - name: Blocking dependency security audit (npm audit)
+        run: cd frontend && npm audit --audit-level=high
+
+      - name: Investigate frontend dependency freshness
+        run: |
+          cd frontend
+          npm outdated --json > outdated.json || [ $? -le 1 ]
+          node -e '
+            const fs = require("fs");
+            try {
+              const data = JSON.parse(fs.readFileSync("outdated.json", "utf8"));
+              const pkgs = Object.keys(data);
+              if (pkgs.length === 0) {
+                console.log("All frontend dependencies are fresh.");
+              } else {
+                console.log(`Investigated ${pkgs.length} packages with newer upstream versions:`);
+                for (const [pkg, info] of Object.entries(data)) {
+                  console.log(`  - ${pkg}: current ${info.current}, latest ${info.latest}`);
+                }
+              }
+            } catch (e) {
+              console.log("No outdated packages found or error parsing json.");
+            }
+          '
+          rm -f outdated.json
 
       - name: Svelte TypeScript check (npm run check)
         run: cd frontend && npm run check

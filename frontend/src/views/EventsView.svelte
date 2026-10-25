@@ -93,7 +93,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each events as ev}
+            {#each events as ev (ev.id)}
               <tr>
                 <td class="text-muted timestamp-cell">
                   {new Date(ev.created_at).toLocaleTimeString()}

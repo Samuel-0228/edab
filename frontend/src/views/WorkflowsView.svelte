@@ -169,7 +169,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each filteredWorkflows as wf}
+            {#each filteredWorkflows as wf (wf.id)}
               <tr>
                 <td>
                   <div class="wf-title">{wf.name}</div>
@@ -207,7 +207,7 @@
                 <td>
                   {#if wf.actions && wf.actions.length > 0}
                     <div class="actions-list">
-                      {#each wf.actions as act}
+                      {#each wf.actions as act, actIdx (actIdx)}
                         <div class="action-item mono">
                           <Badge variant="stage-then">THEN</Badge>
                           <span>{act.integration}:{act.action_type}</span>

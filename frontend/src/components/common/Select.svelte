@@ -61,7 +61,7 @@
       {#if children}
         {@render children()}
       {:else}
-        {#each options as opt}
+        {#each options as opt (opt.value)}
           <option value={opt.value} disabled={opt.disabled}>{opt.label}</option>
         {/each}
       {/if}

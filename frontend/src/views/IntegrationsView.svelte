@@ -47,7 +47,7 @@
     {/snippet}
 
     <div class="catalog-grid">
-      {#each catalog as item}
+      {#each catalog as item (item.id)}
         <div class="catalog-card">
           <div class="card-top">
             <div class="card-title-group">
@@ -63,7 +63,7 @@
               <span class="capability-label">SUPPORTED TRIGGERS</span>
               {#if item.triggers.length > 0}
                 <div class="caps-list">
-                  {#each item.triggers as t}
+                  {#each item.triggers as t (t.type)}
                     <div class="cap-entry">
                       <code class="cap-type">{t.type}</code>
                       <span class="cap-desc">{t.name}</span>
@@ -80,7 +80,7 @@
               <span class="capability-label">SUPPORTED ACTIONS</span>
               {#if item.actions.length > 0}
                 <div class="caps-list">
-                  {#each item.actions as a}
+                  {#each item.actions as a (a.type)}
                     <div class="cap-entry">
                       <code class="cap-type">{a.type}</code>
                       <span class="cap-desc">{a.name}</span>

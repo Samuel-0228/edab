@@ -99,7 +99,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each webhooks as wh}
+            {#each webhooks as wh (wh.id)}
               <tr>
                 <td>
                   <div class="wh-name">{wh.name}</div>

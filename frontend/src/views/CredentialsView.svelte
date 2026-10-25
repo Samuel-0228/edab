@@ -86,7 +86,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each credentials as c}
+            {#each credentials as c (c.id)}
               <tr>
                 <td>
                   <div class="cred-name">{c.name}</div>

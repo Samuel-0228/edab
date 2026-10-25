@@ -111,7 +111,7 @@
 
         {#if execution.steps && execution.steps.length > 0}
           <div class="timeline-container">
-            {#each execution.steps as step, idx}
+            {#each execution.steps as step, idx (step.id || idx)}
               <div class="timeline-item">
                 <div class="timeline-rail">
                   <div class="timeline-marker {step.status}"></div>

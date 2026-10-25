@@ -202,7 +202,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each data.recent_executions as exec}
+            {#each data.recent_executions as exec (exec.id)}
               <tr>
                 <td>
                   <code class="mono-id">{exec.id.slice(0, 10)}...</code>
