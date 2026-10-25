@@ -3,14 +3,11 @@ package workflow
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
-	"kerob/internal/core/conditions"
-	"kerob/internal/core/transformations"
 )
 
 type PostgresStore struct {
@@ -46,19 +43,7 @@ func (s *PostgresStore) Create(ctx context.Context, wf *Workflow) (*Workflow, er
 		}
 	}
 
-	trigJSON, err := json.Marshal(wf.Trigger)
-	if err != nil {
-		return nil, err
-	}
-	condJSON, err := json.Marshal(wf.Conditions)
-	if err != nil {
-		return nil, err
-	}
-	transJSON, err := json.Marshal(wf.Transformations)
-	if err != nil {
-		return nil, err
-	}
-	actsJSON, err := json.Marshal(wf.Actions)
+	payloads, err := marshalWorkflowComponents(wf)
 	if err != nil {
 		return nil, err
 	}
@@ -73,10 +58,10 @@ func (s *PostgresStore) Create(ctx context.Context, wf *Workflow) (*Workflow, er
 		wf.Description,
 		wf.Enabled,
 		wf.Trigger.Type,
-		trigJSON,
-		condJSON,
-		transJSON,
-		actsJSON,
+		payloads.Trigger,
+		payloads.Conditions,
+		payloads.Transformations,
+		payloads.Actions,
 		wf.MaxRetries,
 		wf.TimeoutSeconds,
 		wf.CreatedAt,
@@ -119,25 +104,7 @@ func (s *PostgresStore) GetByID(ctx context.Context, id string) (*Workflow, erro
 		return nil, fmt.Errorf("failed to get workflow: %w", err)
 	}
 
-	if len(trigJSON) > 0 {
-		_ = json.Unmarshal(trigJSON, &wf.Trigger)
-	}
-	if len(condJSON) > 0 && string(condJSON) != "null" && string(condJSON) != "{}" {
-		var c conditions.Condition
-		if err := json.Unmarshal(condJSON, &c); err == nil {
-			wf.Conditions = &c
-		}
-	}
-	if len(transJSON) > 0 && string(transJSON) != "null" && string(transJSON) != "{}" {
-		var t transformations.Transformation
-		if err := json.Unmarshal(transJSON, &t); err == nil {
-			wf.Transformations = &t
-		}
-	}
-	if len(actsJSON) > 0 {
-		_ = json.Unmarshal(actsJSON, &wf.Actions)
-	}
-
+	unmarshalWorkflowComponents(&wf, trigJSON, condJSON, transJSON, actsJSON)
 	return &wf, nil
 }
 
@@ -177,25 +144,7 @@ func (s *PostgresStore) queryList(ctx context.Context, query string) ([]*Workflo
 			return nil, fmt.Errorf("failed to scan workflow row: %w", err)
 		}
 
-		if len(trigJSON) > 0 {
-			_ = json.Unmarshal(trigJSON, &wf.Trigger)
-		}
-		if len(condJSON) > 0 && string(condJSON) != "null" && string(condJSON) != "{}" {
-			var c conditions.Condition
-			if err := json.Unmarshal(condJSON, &c); err == nil {
-				wf.Conditions = &c
-			}
-		}
-		if len(transJSON) > 0 && string(transJSON) != "null" && string(transJSON) != "{}" {
-			var t transformations.Transformation
-			if err := json.Unmarshal(transJSON, &t); err == nil {
-				wf.Transformations = &t
-			}
-		}
-		if len(actsJSON) > 0 {
-			_ = json.Unmarshal(actsJSON, &wf.Actions)
-		}
-
+		unmarshalWorkflowComponents(&wf, trigJSON, condJSON, transJSON, actsJSON)
 		list = append(list, &wf)
 	}
 	if err := rows.Err(); err != nil {
@@ -213,19 +162,7 @@ func (s *PostgresStore) Update(ctx context.Context, wf *Workflow) (*Workflow, er
 	}
 	wf.UpdatedAt = time.Now().UTC()
 
-	trigJSON, err := json.Marshal(wf.Trigger)
-	if err != nil {
-		return nil, err
-	}
-	condJSON, err := json.Marshal(wf.Conditions)
-	if err != nil {
-		return nil, err
-	}
-	transJSON, err := json.Marshal(wf.Transformations)
-	if err != nil {
-		return nil, err
-	}
-	actsJSON, err := json.Marshal(wf.Actions)
+	payloads, err := marshalWorkflowComponents(wf)
 	if err != nil {
 		return nil, err
 	}
@@ -241,10 +178,10 @@ func (s *PostgresStore) Update(ctx context.Context, wf *Workflow) (*Workflow, er
 		wf.Description,
 		wf.Enabled,
 		wf.Trigger.Type,
-		trigJSON,
-		condJSON,
-		transJSON,
-		actsJSON,
+		payloads.Trigger,
+		payloads.Conditions,
+		payloads.Transformations,
+		payloads.Actions,
 		wf.MaxRetries,
 		wf.TimeoutSeconds,
 		wf.UpdatedAt,
@@ -524,8 +461,7 @@ func (s *PostgresExecutionStore) RecordStep(ctx context.Context, step *Execution
 	if step.ID == "" {
 		step.ID = uuid.NewString()
 	}
-	inJSON, _ := json.Marshal(step.Input)
-	outJSON, _ := json.Marshal(step.Output)
+	inJSON, outJSON := marshalStepIO(step.Input, step.Output)
 
 	query := `
 		INSERT INTO execution_steps (id, execution_id, step_type, name, status, input, output, error, duration_ms, started_at, completed_at)
@@ -611,12 +547,7 @@ func (s *PostgresExecutionStore) getExecutionSteps(ctx context.Context, executio
 		); err != nil {
 			return nil, err
 		}
-		if len(inJSON) > 0 {
-			_ = json.Unmarshal(inJSON, &step.Input)
-		}
-		if len(outJSON) > 0 {
-			_ = json.Unmarshal(outJSON, &step.Output)
-		}
+		unmarshalStepIO(&step, inJSON, outJSON)
 		steps = append(steps, step)
 	}
 	return steps, nil
