@@ -226,18 +226,73 @@ curl -X POST http://localhost:8080/api/v1/workflows \
 
 ## 5. Local Development & Testing
 
+Kerob is designed for genuine testability immediately after a fresh clone **without requiring Docker, PostgreSQL, Telegram, Discord, GitHub, or any external services** for the standard test suites.
+
+### Testing Without External Services (Fresh Clone)
+
+On any machine with Go 1.23+ installed, all core tests run out-of-the-box using lightweight in-memory storage implementations and dependency injection:
+
 ```bash
-# 1. Format code according to Go standards
+# Download dependencies
+go mod download
+
+# Run the complete offline test suite with race detector
+go test ./...
+```
+
+### Make Test Targets
+
+Kerob provides standard `make` targets to separate test tiers:
+
+```bash
+# 1. Run unit tests only (fast, completely isolated, no external dependencies)
+make test-unit
+
+# 2. Run integration tests (in-memory multi-component pipelines & API server)
+make test-integration
+
+# 3. Run end-to-end lifecycle, failure, and dead-letter retry tests
+make test-e2e
+
+# 4. Run Docker Compose validation tests (cleanly skipped if Docker is not installed)
+make test-docker
+
+# 5. Run frontend unit and component tests (Vitest + JSDOM, no backend needed)
+make test-frontend
+
+# 6. Run all test tiers together
+make test-all
+```
+
+### Infrastructure Requirements & Test Matrix
+
+| Test Suite | Command | External Infrastructure Required? | Behavior Without Infrastructure |
+| :--- | :--- | :--- | :--- |
+| **Unit Tests** | `make test-unit` | **None** (pure in-memory stores & mocks) | Always passes |
+| **Integration Tests** | `make test-integration` | **None** (in-memory pipeline & HTTP test servers) | Always passes |
+| **E2E Automation Tests** | `make test-e2e` | **None** (in-memory engine & action spies) | Always passes |
+| **Docker / Compose Tests** | `make test-docker` | **Docker CLI & Compose** | **Skips cleanly** (`t.Skip`) if Docker unavailable |
+| **Frontend Tests** | `make test-frontend` | **Node.js 20+** (mocked fetch in JSDOM) | Always passes independently without backend |
+| **Standard Suite** | `go test ./...` | **None** | Always passes on a clean clone |
+
+### Storage & Dependency Injection
+
+The platform defines the `workflow.Store`, `workflow.ExecutionStore`, and `workflow.DeadLetterStore` interfaces:
+- **`MemoryStore`**: Thread-safe in-memory store with full deep-copy isolation and CRUD operations, used in all unit, integration, and E2E test suites without touching a database.
+- **`PostgresStore`**: Production PostgreSQL implementation utilized when running the live server binary or docker containers.
+
+### Building & Code Quality
+
+```bash
+# Format Go code
 gofmt -w .
 
-# 2. Run static analysis
+# Run static analysis
 go vet ./...
 
-# 3. Run complete test suite with race detector
-go test -v -count=1 -race ./...
-
-# 4. Build statically-linked server binary
-CGO_ENABLED=0 go build -ldflags="-w -s" -o kerob ./cmd/server
+# Build statically-linked server binary
+make build
+# or: CGO_ENABLED=0 go build -ldflags="-w -s" -o bin/kerob ./cmd/server
 ```
 
 ---

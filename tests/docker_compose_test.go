@@ -31,15 +31,19 @@ func getRepoRoot(t *testing.T) string {
 	return ""
 }
 
-func hasDocker(t *testing.T) bool {
+func hasDockerCompose(t *testing.T) bool {
 	t.Helper()
-	_, err := exec.LookPath("docker")
-	return err == nil
+	if _, err := exec.LookPath("docker"); err != nil {
+		return false
+	}
+	// Verify docker compose plugin/subcommand is available and functioning
+	cmd := exec.Command("docker", "compose", "version")
+	return cmd.Run() == nil
 }
 
 func TestDockerCompose_DevelopmentModeWithoutToken(t *testing.T) {
-	if !hasDocker(t) {
-		t.Skip("docker CLI not found; skipping CLI invocation test")
+	if !hasDockerCompose(t) {
+		t.Skip("Docker Compose is not available; skipping Docker-dependent test")
 	}
 
 	root := getRepoRoot(t)
@@ -72,8 +76,8 @@ func TestDockerCompose_DevelopmentModeWithoutToken(t *testing.T) {
 }
 
 func TestDockerCompose_EnvExampleCompatibility(t *testing.T) {
-	if !hasDocker(t) {
-		t.Skip("docker CLI not found; skipping CLI invocation test")
+	if !hasDockerCompose(t) {
+		t.Skip("Docker Compose is not available; skipping Docker-dependent test")
 	}
 
 	root := getRepoRoot(t)
@@ -99,8 +103,8 @@ func TestDockerCompose_EnvExampleCompatibility(t *testing.T) {
 }
 
 func TestDockerCompose_ProductionOverlayRequiresToken(t *testing.T) {
-	if !hasDocker(t) {
-		t.Skip("docker CLI not found; skipping CLI invocation test")
+	if !hasDockerCompose(t) {
+		t.Skip("Docker Compose is not available; skipping Docker-dependent test")
 	}
 
 	root := getRepoRoot(t)
@@ -129,8 +133,8 @@ func TestDockerCompose_ProductionOverlayRequiresToken(t *testing.T) {
 }
 
 func TestDockerCompose_ProductionOverlayWithValidCredentials(t *testing.T) {
-	if !hasDocker(t) {
-		t.Skip("docker CLI not found; skipping CLI invocation test")
+	if !hasDockerCompose(t) {
+		t.Skip("Docker Compose is not available; skipping Docker-dependent test")
 	}
 
 	root := getRepoRoot(t)
