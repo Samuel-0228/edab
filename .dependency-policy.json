@@ -27,6 +27,11 @@
         "track": "26.x",
         "major": 26,
         "reason": "jsdom 26.x is the compatible DOM simulation environment for Vitest 5."
+      },
+      "vitest": {
+        "track": "5.x",
+        "major": 5,
+        "reason": "Vitest 5 is the unit and component test runner aligned with Vite 6."
       }
     },
     "allowOutdated": []

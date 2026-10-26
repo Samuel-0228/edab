@@ -53,10 +53,26 @@ try {
   }
 }
 
+function semverGte(a, b) {
+  const pa = (a || '0').split('.').map(n => parseInt(n, 10) || 0);
+  const pb = (b || '0').split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return true;
+    if ((pa[i] || 0) < (pb[i] || 0)) return false;
+  }
+  return true;
+}
+
 const violations = [];
 const approvedPins = frontendPolicy.pinnedMajorTracks || {};
 
 for (const [pkg, info] of Object.entries(outdated)) {
+  // If current is equal to or newer than upstream tag, it is not outdated
+  if (semverGte(info.current, info.latest)) {
+    console.log(`  ✓ ${pkg}@${info.current} (current >= latest ${info.latest})`);
+    continue;
+  }
+
   // Rule 1: Strict semver drift: current must equal wanted
   if (info.current !== info.wanted) {
     violations.push({
