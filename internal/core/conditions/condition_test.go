@@ -502,3 +502,43 @@ func TestConditionsInvalidInputAndEdgeCases(t *testing.T) {
 		t.Errorf("expected false without error when evaluating nil event, got res=%v, err=%v", resNilEvent, err)
 	}
 }
+
+func TestCheckContainsAndToFloat64(t *testing.T) {
+	// checkContains with slice
+	slice := []any{"apple", "banana", "cherry"}
+	if !checkContains(slice, "banana") {
+		t.Error("expected slice to contain banana")
+	}
+	if checkContains(slice, "orange") {
+		t.Error("expected slice not to contain orange")
+	}
+	if checkContains(nil, "something") {
+		t.Error("expected checkContains(nil, ...) to return false")
+	}
+
+	// toFloat64 conversions
+	if val, ok := toFloat64(int(8)); !ok || val != 8.0 {
+		t.Errorf("failed int toFloat64: %v", val)
+	}
+	if val, ok := toFloat64(int64(16)); !ok || val != 16.0 {
+		t.Errorf("failed int64 toFloat64: %v", val)
+	}
+	if val, ok := toFloat64(int32(32)); !ok || val != 32.0 {
+		t.Errorf("failed int32 toFloat64: %v", val)
+	}
+	if val, ok := toFloat64(uint(42)); !ok || val != 42.0 {
+		t.Errorf("failed uint toFloat64: %v", val)
+	}
+	if val, ok := toFloat64(uint64(64)); !ok || val != 64.0 {
+		t.Errorf("failed uint64 toFloat64: %v", val)
+	}
+	if val, ok := toFloat64(float32(3.14)); !ok || float32(val) != float32(3.14) {
+		t.Errorf("failed float32 toFloat64: %v", val)
+	}
+	if val, ok := toFloat64("123.45"); !ok || val != 123.45 {
+		t.Errorf("failed string toFloat64: %v", val)
+	}
+	if _, ok := toFloat64(struct{}{}); ok {
+		t.Error("expected false for unsupported struct type")
+	}
+}

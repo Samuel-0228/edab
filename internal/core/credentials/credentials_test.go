@@ -202,4 +202,33 @@ func TestCryptoErrorCases(t *testing.T) {
 	if len(k1) != 32 || len(k2) != 32 || string(k1) != string(k2) {
 		t.Fatalf("DeriveKey must produce deterministic 32-byte keys")
 	}
+
+	// 5. DeriveKey with empty string uses default fallback
+	kDefault := DeriveKey("")
+	if len(kDefault) != 32 {
+		t.Fatalf("DeriveKey('') must produce 32-byte key, got %d", len(kDefault))
+	}
+}
+
+func TestMemoryStoreValidationErrors(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore(DeriveKey("key"))
+
+	// Empty name
+	_, err := store.Create(ctx, &Credential{Name: "", Integration: "telegram"}, nil)
+	if err == nil {
+		t.Fatal("expected error on empty credential name")
+	}
+
+	// Empty integration
+	_, err = store.Create(ctx, &Credential{Name: "cred", Integration: ""}, nil)
+	if err == nil {
+		t.Fatal("expected error on empty credential integration")
+	}
+
+	// GetByID nonexistent
+	_, err = store.GetByID(ctx, "nonexistent")
+	if err != ErrCredentialNotFound {
+		t.Fatalf("expected ErrCredentialNotFound, got %v", err)
+	}
 }

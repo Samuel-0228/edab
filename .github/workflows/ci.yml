@@ -86,40 +86,8 @@ jobs:
       - name: Run golangci-lint
         run: golangci-lint run --config=.golangci.yml --timeout=5m
 
-  frontend-quality:
-    name: Frontend Quality & Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install frontend dependencies
-        run: cd frontend && npm ci
-
-      - name: Svelte TypeScript check (npm run check)
-        run: cd frontend && npm run check
-
-      - name: ESLint check (npm run lint)
-        run: cd frontend && npm run lint
-
-      - name: Prettier check (npm run format:check)
-        run: cd frontend && npm run format:check
-
-      - name: Run frontend unit & component tests (npm test)
-        run: cd frontend && npm test
-
-      - name: Production dashboard build
-        run: cd frontend && npm run build
-
-  backend-test-and-build:
-    name: Backend Test, Coverage & Build
+  test-pipeline:
+    name: Test & Coverage Enforcement Pipeline
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -132,12 +100,33 @@ jobs:
           check-latest: true
           cache: true
 
-      - name: Run test suite with race detector
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies (npm ci)
+        run: cd frontend && npm ci
+
+      # 1. Go tests
+      - name: Go unit & integration tests
+        run: go test -v $(go list ./... | grep -v node_modules)
+
+      # 2. Race detector tests
+      - name: Go race tests
         run: go test -v -count=1 -race $(go list ./... | grep -v node_modules)
 
-      - name: Enforce Go test coverage threshold (>=60.0%)
+      # 3. Coverage generation
+      - name: Go coverage generation
         run: |
           go test -coverprofile=coverage.out $(go list ./... | grep -v node_modules)
+          go tool cover -func=coverage.out
+
+      # 4. Coverage threshold enforcement (>=60.0%)
+      - name: Enforce Go test coverage threshold (>=60.0%)
+        run: |
           coverage=$(go tool cover -func=coverage.out | grep total: | awk '{print substr($3, 1, length($3)-1)}')
           echo "=================================================="
           echo "Go Total Statement Coverage: ${coverage}%"
@@ -152,6 +141,23 @@ jobs:
               exit 0
             }
           }'
+
+      # 5. Frontend tests
+      - name: Frontend tests
+        run: cd frontend && npm test
+
+      # 6. Frontend coverage
+      - name: Frontend coverage threshold enforcement
+        run: cd frontend && npm test -- --coverage
+
+      # 7. Frontend quality checks
+      - name: Frontend quality checks (check, lint, format, build)
+        run: |
+          cd frontend
+          npm run check
+          npm run lint
+          npm run format:check
+          npm run build
 
       - name: Build kerob binary
         run: CGO_ENABLED=0 go build -v -ldflags="-w -s" -o /dev/null ./cmd/server

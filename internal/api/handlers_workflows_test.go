@@ -181,6 +181,7 @@ func TestAdvancedCRUDAndEdgeCases(t *testing.T) {
 	RecordWorkflowExecution("success")
 	RecordWorkflowExecution("failed")
 	handlers.SetTelegramAPI(nil)
+	handlers.SetErrorTracker(nil)
 	handlers.SetWorkflowServices(cfg.Workflows, cfg.Executions, cfg.DeadLetters, cfg.WorkflowEngine, cfg.ActionReg, cfg.Creds, cfg.WebhookStore)
 	_ = handlers.Tracker()
 }

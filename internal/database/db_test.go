@@ -3,6 +3,7 @@ package database
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestConnectEmptyURL(t *testing.T) {
@@ -14,7 +15,12 @@ func TestConnectEmptyURL(t *testing.T) {
 
 func TestConnectInvalidURL(t *testing.T) {
 	// A non-routable dummy address should fail to ping within timeout
-	_, err := Connect(Config{URL: "postgres://invalid:user@127.0.0.1:54329/nonexistent?sslmode=disable&connect_timeout=1"})
+	_, err := Connect(Config{
+		URL:             "postgres://invalid:user@127.0.0.1:54329/nonexistent?sslmode=disable&connect_timeout=1",
+		MaxOpenConns:    10,
+		MaxIdleConns:    5,
+		ConnMaxLifetime: 2 * time.Minute,
+	})
 	if err == nil {
 		t.Fatal("expected connection failure for invalid database address, got nil")
 	}

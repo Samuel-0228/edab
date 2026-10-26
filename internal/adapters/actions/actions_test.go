@@ -335,4 +335,156 @@ func TestTelegramActionExecutor(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when Telegram API is uninitialized")
 	}
+
+	// Validate malformed config
+	if err := executor.Validate(json.RawMessage(`{invalid`)); err == nil {
+		t.Fatal("expected error on malformed json")
+	}
+
+	// Execute with invalid json
+	if _, err := executor.Execute(context.Background(), workflow.ActionRequest{
+		Config: json.RawMessage(`{invalid`),
+		Event:  ev,
+	}); err == nil {
+		t.Fatal("expected error on invalid config in Execute")
+	}
+
+	// Execute with non-numeric chat_id
+	if _, err := executor.Execute(context.Background(), workflow.ActionRequest{
+		Config: json.RawMessage(`{"chat_id":"not-a-number","text":"hi"}`),
+		Event:  ev,
+	}); err == nil {
+		t.Fatal("expected error on invalid chat_id format")
+	}
+}
+
+func TestDiscordActionExecutor(t *testing.T) {
+	executor := NewDiscordActionExecutor()
+	if executor.Name() != "Discord" || executor.Type() != "discord" {
+		t.Fatalf("unexpected name or type: %s %s", executor.Name(), executor.Type())
+	}
+
+	// Validate
+	if err := executor.Validate(json.RawMessage(`{"webhook_url":"https://8.8.8.8/hook"}`)); err != nil {
+		t.Fatalf("expected valid config, got %v", err)
+	}
+	if err := executor.Validate(json.RawMessage(`{malformed`)); err == nil {
+		t.Fatal("expected validation error on malformed json")
+	}
+
+	ev, _ := event.New("src-1", "ext-1", "test.event", nil, nil)
+
+	// Execute with invalid json
+	if _, err := executor.Execute(context.Background(), workflow.ActionRequest{
+		Config: json.RawMessage(`{malformed`),
+		Event:  ev,
+	}); err == nil {
+		t.Fatal("expected error for malformed json")
+	}
+
+	// Execute with missing webhook url and no credentials
+	if _, err := executor.Execute(context.Background(), workflow.ActionRequest{
+		Config: json.RawMessage(`{"content":"hello"}`),
+		Event:  ev,
+	}); err == nil {
+		t.Fatal("expected error for missing webhook url")
+	}
+
+	// Execute with SSRF-blocked URL
+	if _, err := executor.Execute(context.Background(), workflow.ActionRequest{
+		Config: json.RawMessage(`{"webhook_url":"http://127.0.0.1:8080/webhook","content":"hello"}`),
+		Event:  ev,
+	}); err == nil {
+		t.Fatal("expected SSRF error")
+	}
+
+	// Execute with mock client - HTTP 500 error
+	mockClient := mockHTTPClient(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusInternalServerError,
+			Body:       io.NopCloser(strings.NewReader("internal server error")),
+			Header:     make(http.Header),
+		}, nil
+	})
+	clientExec := NewDiscordActionExecutorWithClient(mockClient)
+	res, err := clientExec.Execute(context.Background(), workflow.ActionRequest{
+		Config: json.RawMessage(`{"webhook_url":"https://8.8.8.8/webhook","content":"hello"}`),
+		Event:  ev,
+	})
+	if err == nil {
+		t.Fatal("expected error on 500 response")
+	}
+	if res.Success {
+		t.Fatal("expected res.Success to be false")
+	}
+}
+
+func TestGitHubActionExecutor(t *testing.T) {
+	executor := NewGitHubActionExecutor()
+	if executor.Name() != "GitHub" || executor.Type() != "github" {
+		t.Fatalf("unexpected name or type: %s %s", executor.Name(), executor.Type())
+	}
+
+	// Validate
+	if err := executor.Validate(json.RawMessage(`{"owner":"owner","repo":"repo","title":"Issue"}`)); err != nil {
+		t.Fatalf("expected valid config, got %v", err)
+	}
+	if err := executor.Validate(json.RawMessage(`{"owner":""}`)); err == nil {
+		t.Fatal("expected error when owner or repo missing")
+	}
+	if err := executor.Validate(json.RawMessage(`{malformed`)); err == nil {
+		t.Fatal("expected validation error on malformed json")
+	}
+
+	ev, _ := event.New("src-1", "ext-1", "test.event", nil, nil)
+
+	// Execute with invalid json
+	if _, err := executor.Execute(context.Background(), workflow.ActionRequest{
+		Config: json.RawMessage(`{malformed`),
+		Event:  ev,
+	}); err == nil {
+		t.Fatal("expected error for malformed json")
+	}
+
+	// Execute without token
+	if _, err := executor.Execute(context.Background(), workflow.ActionRequest{
+		Config: json.RawMessage(`{"owner":"org","repo":"repo","title":"Bug"}`),
+		Event:  ev,
+	}); err == nil {
+		t.Fatal("expected error when token is missing")
+	}
+
+	// Execute without title
+	if _, err := executor.Execute(context.Background(), workflow.ActionRequest{
+		Config: json.RawMessage(`{"owner":"org","repo":"repo","title":""}`),
+		Event:  ev,
+		Credentials: map[string]string{
+			"token": "ghp_mock_token_123",
+		},
+	}); err == nil {
+		t.Fatal("expected error when title is empty")
+	}
+
+	// Execute with HTTP 403 error
+	mockClient := mockHTTPClient(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusForbidden,
+			Body:       io.NopCloser(strings.NewReader(`{"message":"Forbidden"}`)),
+			Header:     make(http.Header),
+		}, nil
+	})
+	clientExec := NewGitHubActionExecutorWithClient(mockClient)
+	res, err := clientExec.Execute(context.Background(), workflow.ActionRequest{
+		Config: json.RawMessage(`{"owner":"org","repo":"repo","title":"Bug"}`),
+		Event:  ev,
+		Credentials: map[string]string{
+			"personal_access_token": "ghp_mock_token_123",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error on 403 response")
+	}
+	if res.Success {
+		t.Fatal("expected res.Success to be false")
+	}
 }

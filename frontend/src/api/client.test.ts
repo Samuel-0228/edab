@@ -106,4 +106,37 @@ describe('KerobApiClient', () => {
     expect(callUrl).toContain('limit=25');
     expect(callUrl).toContain('offset=10');
   });
+
+  it('handles network failure and notifies status listeners', async () => {
+    let onlineStatus: boolean | null = null;
+    let statusError: string | undefined = undefined;
+
+    client.onStatusChange((online, err) => {
+      onlineStatus = online;
+      statusError = err;
+    });
+
+    const mockFetch = vi.fn().mockRejectedValue(new Error('Failed to fetch'));
+    vi.stubGlobal('fetch', mockFetch);
+
+    await expect(client.getOverview()).rejects.toThrow('Failed to fetch');
+    expect(onlineStatus).toBe(false);
+    expect(statusError).toContain('Failed to fetch');
+  });
+
+  it('handles 500 error responses with plain text or json fallback', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: new Headers({ 'content-type': 'text/plain' }),
+      text: async () => 'Database connection timeout',
+      json: async () => {
+        throw new Error('not json');
+      }
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    await expect(client.listWorkflows()).rejects.toThrow();
+  });
 });

@@ -260,9 +260,46 @@ make test-docker
 # 5. Run frontend unit and component tests (Vitest + JSDOM, no backend needed)
 make test-frontend
 
-# 6. Run all test tiers together
+# 6. Generate and enforce Go statement test coverage (minimum 60.0% threshold)
+make test-coverage
+
+# 7. Generate and enforce frontend test coverage (minimum 65.0% threshold)
+make test-coverage-frontend
+
+# 8. Run all test tiers together with coverage checks
 make test-all
 ```
+
+### Test Coverage Enforcement
+
+Test coverage is strictly enforced both locally and in CI to guarantee high-confidence test coverage across all layers:
+
+- **Go Statement Coverage**: Measured with `go test -coverprofile=coverage.out ./...` and `go tool cover -func=coverage.out`. A minimum **60.0% total statement coverage threshold** is strictly enforced. Builds fail if coverage drops below this baseline.
+- **Frontend Statement & Line Coverage**: Measured via Vitest with `@vitest/coverage-v8`. Covers modal workflows (WorkflowBuilder, ExecutionDetail, Webhook, Credential, DispatchEvent), toasts, buttons, badges, and API client error handling. A minimum **65.0% line and statement threshold** is enforced in `vite.config.ts`.
+- **Reproducible Local Commands**:
+  ```bash
+  # Go coverage check
+  make test-coverage
+
+  # Frontend coverage check
+  make test-coverage-frontend
+  ```
+
+### CI / CD Pipeline Flow
+
+On every push and pull request, GitHub Actions runs the enforced pipeline in strict dependency order:
+
+```text
+Go tests
+→ race detector tests
+→ coverage generation
+→ coverage threshold enforcement (>=60.0%)
+→ frontend unit & component tests
+→ frontend coverage threshold enforcement (>=65.0%)
+→ frontend quality checks (svelte-check, eslint, prettier, singlefile build)
+```
+
+Coverage failures block the build immediately.
 
 ### Infrastructure Requirements & Test Matrix
 
@@ -273,6 +310,8 @@ make test-all
 | **E2E Automation Tests** | `make test-e2e` | **None** (in-memory engine & action spies) | Always passes |
 | **Docker / Compose Tests** | `make test-docker` | **Docker CLI & Compose** | **Skips cleanly** (`t.Skip`) if Docker unavailable |
 | **Frontend Tests** | `make test-frontend` | **Node.js 20+** (mocked fetch in JSDOM) | Always passes independently without backend |
+| **Go Coverage (>=60%)** | `make test-coverage` | **None** (Go tool cover on in-memory suite) | Enforces >= 60.0% statement coverage |
+| **Frontend Coverage (>=65%)** | `make test-coverage-frontend` | **Node.js 20+** (Vitest coverage-v8) | Enforces >= 65.0% line & statement coverage |
 | **Standard Suite** | `go test ./...` | **None** | Always passes on a clean clone |
 
 ### Storage & Dependency Injection

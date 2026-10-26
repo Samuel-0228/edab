@@ -171,4 +171,26 @@ func TestRoutingEngineAndMemoryStore(t *testing.T) {
 	if len(resolvedEmpty) != 0 {
 		t.Fatalf("expected 0 resolved routes, got %d", len(resolvedEmpty))
 	}
+
+	// 8. Update nonexistent route
+	_, err = store.Update(ctx, &Route{ID: "nonexistent"})
+	if err == nil {
+		t.Fatal("expected error updating nonexistent route")
+	}
+
+	// 9. RoutingEngine with failing store
+	failingStore := &mockFailingStore{}
+	failingEngine := NewRoutingEngine(failingStore)
+	_, err = failingEngine.ResolveRoutes(ctx, evMatching)
+	if err == nil {
+		t.Fatal("expected error from failing store in ResolveRoutes")
+	}
+}
+
+type mockFailingStore struct {
+	Store
+}
+
+func (m *mockFailingStore) GetBySourceID(ctx context.Context, sourceID string) ([]*Route, error) {
+	return nil, context.DeadlineExceeded
 }

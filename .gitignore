@@ -23,5 +23,7 @@
 node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/coverage/
+coverage/
 .pnpm-debug.log*
 npm-debug.log*

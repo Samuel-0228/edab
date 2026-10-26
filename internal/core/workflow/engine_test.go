@@ -681,3 +681,50 @@ func TestWorkflowEngineContextCancellation(t *testing.T) {
 		t.Fatal("expected error on cancelled context, got nil")
 	}
 }
+
+func TestActionRegistryTypesAndUnregisteredAction(t *testing.T) {
+	ctx := context.Background()
+	reg := NewActionRegistry()
+	if len(reg.RegisteredTypes()) != 0 {
+		t.Fatalf("expected empty types, got %v", reg.RegisteredTypes())
+	}
+
+	reg.Register(&MockActionExecutor{TypeStr: "telegram"})
+	reg.Register(&MockActionExecutor{TypeStr: "discord"})
+	types := reg.RegisteredTypes()
+	if len(types) != 2 {
+		t.Fatalf("expected 2 registered types, got %v", types)
+	}
+
+	// Unknown action type execution
+	wfStore := NewMemoryStore()
+	execStore := NewMemoryExecutionStore()
+	engine := NewEngine(wfStore, execStore, nil, nil, reg)
+
+	wf := &Workflow{
+		ID:      "wf-unknown-action",
+		Name:    "Unknown Action Workflow",
+		Enabled: true,
+		Actions: []ActionStep{
+			{Integration: "nonexistent", ActionType: "run"},
+		},
+	}
+	ev, _ := event.New("src-1", "ext-1", "test", map[string]any{}, nil)
+	exec := &Execution{
+		ID:          "exec-unk-1",
+		WorkflowID:  wf.ID,
+		EventID:     ev.ID,
+		Status:      ExecutionPending,
+		MaxAttempts: 1,
+	}
+	_, _ = execStore.Create(ctx, exec)
+
+	_, err := engine.ExecuteWorkflow(ctx, wf, ev, exec)
+	if err == nil {
+		t.Fatal("expected error for unregistered action executor")
+	}
+	updated, _ := execStore.GetByID(ctx, exec.ID)
+	if updated.Status != ExecutionFailed {
+		t.Fatalf("expected ExecutionFailed in store, got status %s", updated.Status)
+	}
+}

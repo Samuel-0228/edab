@@ -265,3 +265,54 @@ func TestTransformDefaultsAndPathLookups(t *testing.T) {
 		t.Errorf("expected fallback summary 'User: user@example.com', got %v", fallbackOut["summary"])
 	}
 }
+
+func TestRenderTemplateEventTopLevelPaths(t *testing.T) {
+	ev, _ := event.New("src-test", "ext-test-1", "test.topic", map[string]any{"direct_field": "val"}, nil)
+
+	tests := []struct {
+		tpl      string
+		expected string
+	}{
+		{"ID: {{event.id}}", "ID: " + ev.ID},
+		{"Type: {{event.event_type}}", "Type: test.topic"},
+		{"Source: {{event.source_id}}", "Source: src-test"},
+		{"Ext: {{event.external_event_id}}", "Ext: ext-test-1"},
+		{"Direct: {{direct_field}}", "Direct: val"},
+	}
+
+	for _, tt := range tests {
+		got := RenderTemplate(tt.tpl, ev)
+		if got != tt.expected {
+			t.Errorf("RenderTemplate(%q) = %q, expected %q", tt.tpl, got, tt.expected)
+		}
+	}
+}
+
+func TestRenderJSONConfigNested(t *testing.T) {
+	ev, _ := event.New("src", "ext", "alert", map[string]any{"msg": "service down", "code": 503}, nil)
+
+	input := json.RawMessage(`{
+		"items": ["{{payload.msg}}", "{{payload.code}}", "static"],
+		"nested": {
+			"detail": "{{payload.msg}}"
+		}
+	}`)
+
+	rendered, err := RenderJSONConfig(input, ev)
+	if err != nil {
+		t.Fatalf("RenderJSONConfig failed: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(rendered, &parsed); err != nil {
+		t.Fatalf("failed unmarshaling rendered JSON: %v", err)
+	}
+
+	items, ok := parsed["items"].([]any)
+	if !ok {
+		t.Fatalf("expected []any items in rendered JSON, got %T", parsed["items"])
+	}
+	if items[0] != "service down" || items[1] != "503" || items[2] != "static" {
+		t.Errorf("unexpected rendered items: %v", items)
+	}
+}

@@ -179,4 +179,46 @@ func TestTelegramDestinationDeliverDirect(t *testing.T) {
 	if len(res.MessageIDs) != 1 || res.MessageIDs[0] == 0 {
 		t.Errorf("expected delivered message id, got %v", res.MessageIDs)
 	}
+
+	// Also test Deliver (discards result)
+	if err := adapter.Deliver(ctx, ev); err != nil {
+		t.Fatalf("Deliver failed: %v", err)
+	}
+}
+
+func TestTelegramDestinationAdapterHelpers(t *testing.T) {
+	adapter := NewTelegramDestinationAdapter()
+	if adapter == nil {
+		t.Fatal("expected non-nil adapter")
+	}
+
+	mockAPI := telegram.NewMockAPI()
+	adapter.SetAPI(mockAPI)
+
+	// Test truncateCaption
+	short := truncateCaption("hello world", 20)
+	if short != "hello world" {
+		t.Errorf("expected 'hello world', got %q", short)
+	}
+	long := truncateCaption("abcdefghijklmnopqrstuvwxyz", 10)
+	if len([]rune(long)) != 10 || long != "abcdefghij" {
+		t.Errorf("expected 10 rune truncated string, got %q", long)
+	}
+
+	// Test deliverDirect with no content (neither media nor text)
+	ctx := context.Background()
+	if err := adapter.Connect(ctx, []byte(`{"telegram_chat_id":"-100123"}`)); err != nil {
+		t.Fatalf("connect failed: %v", err)
+	}
+
+	emptyPayload := telegram.MessagePayload{
+		ChannelUsername: "empty_channel",
+	}
+	emptyBytes, _ := json.Marshal(emptyPayload)
+	ev, _ := event.New("src-empty", "ext-empty", "telegram.public_post", emptyBytes, nil)
+
+	_, err := adapter.DeliverWithResult(ctx, ev)
+	if err == nil {
+		t.Fatal("expected error delivering empty public post")
+	}
 }

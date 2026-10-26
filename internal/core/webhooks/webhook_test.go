@@ -101,6 +101,47 @@ func TestWebhookAuthentication(t *testing.T) {
 	if err := Authenticate(wh, reqMissing); err != ErrInvalidSecretToken {
 		t.Errorf("expected ErrInvalidSecretToken for missing token, got %v", err)
 	}
+
+	// 6. Authenticate with ?secret= query param
+	reqSecretQuery := httptest.NewRequest(http.MethodPost, "/webhooks/wh-123?secret=valid-secret-token", nil)
+	if err := Authenticate(wh, reqSecretQuery); err != nil {
+		t.Errorf("expected success with ?secret=, got %v", err)
+	}
+
+	// 7. Webhook without secret token requires no auth
+	whNoSecret := &Webhook{ID: "wh-open", Name: "Open"}
+	if err := Authenticate(whNoSecret, reqMissing); err != nil {
+		t.Errorf("expected success when secret token is empty, got %v", err)
+	}
+}
+
+func TestWebhookMemoryStoreValidationErrors(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	// Empty name
+	_, err := store.Create(ctx, &Webhook{Name: ""})
+	if err == nil {
+		t.Fatal("expected error creating webhook with empty name")
+	}
+
+	// Default rate limit
+	wh, err := store.Create(ctx, &Webhook{Name: "Webhook 1", RateLimitPerMinute: 0})
+	if err != nil || wh.RateLimitPerMinute != 60 {
+		t.Fatalf("expected default rate limit 60, got %d (err: %v)", wh.RateLimitPerMinute, err)
+	}
+
+	// Update nonexistent
+	_, err = store.Update(ctx, &Webhook{ID: "nonexistent"})
+	if err != ErrWebhookNotFound {
+		t.Fatalf("expected ErrWebhookNotFound, got %v", err)
+	}
+
+	// Delete nonexistent
+	err = store.Delete(ctx, "nonexistent")
+	if err != ErrWebhookNotFound {
+		t.Fatalf("expected ErrWebhookNotFound, got %v", err)
+	}
 }
 
 func TestNormalizeWebhookEvent(t *testing.T) {

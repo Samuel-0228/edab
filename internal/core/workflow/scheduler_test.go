@@ -24,6 +24,10 @@ func TestSchedulerMatchesCron(t *testing.T) {
 		{"16 14 * * *", false},
 		{"15 * * * 3", true}, // Wednesday = 3
 		{"15 * * * 4", false},
+		{"5,15,25 * * * *", true},
+		{"5,20,30 * * * *", false},
+		{"invalid cron format", false},
+		{"* * * * * *", false},
 	}
 
 	for _, tt := range tests {
@@ -79,5 +83,47 @@ func TestSchedulerExecution(t *testing.T) {
 
 	if mockExecutor.Executed == 0 {
 		t.Errorf("expected scheduled workflow to execute at least once, got %d", mockExecutor.Executed)
+	}
+}
+
+func TestSchedulerShouldRunBranches(t *testing.T) {
+	scheduler := NewScheduler(nil, nil, 1*time.Minute)
+	now := time.Now()
+
+	// 1. Cron config
+	cronCfg, _ := json.Marshal(ScheduleConfig{CronExpr: "* * * * *"})
+	wfCron := &Workflow{
+		ID: "wf-cron",
+		Trigger: TriggerConfig{
+			Type:   "schedule",
+			Config: cronCfg,
+		},
+	}
+	// First run should return true
+	if !scheduler.shouldRun(wfCron, now) {
+		t.Fatal("expected shouldRun=true on first run of cron")
+	}
+	// Record run now
+	scheduler.lastRun[wfCron.ID] = now
+	// Within 59 seconds should return false
+	if scheduler.shouldRun(wfCron, now.Add(10*time.Second)) {
+		t.Fatal("expected shouldRun=false within 59 seconds")
+	}
+	// After 60 seconds should return true
+	if !scheduler.shouldRun(wfCron, now.Add(65*time.Second)) {
+		t.Fatal("expected shouldRun=true after 65 seconds")
+	}
+
+	// 2. Default fallback (no config)
+	wfDefault := &Workflow{ID: "wf-def"}
+	if !scheduler.shouldRun(wfDefault, now) {
+		t.Fatal("expected shouldRun=true on first run of default fallback")
+	}
+	scheduler.lastRun[wfDefault.ID] = now
+	if scheduler.shouldRun(wfDefault, now.Add(2*time.Minute)) {
+		t.Fatal("expected shouldRun=false before 5 minutes")
+	}
+	if !scheduler.shouldRun(wfDefault, now.Add(6*time.Minute)) {
+		t.Fatal("expected shouldRun=true after 6 minutes")
 	}
 }

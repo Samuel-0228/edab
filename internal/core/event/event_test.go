@@ -149,4 +149,41 @@ func TestMemoryEventStore(t *testing.T) {
 	if err != nil || len(listPaging) != 1 {
 		t.Fatalf("expected 1 event with paging, got %d", len(listPaging))
 	}
+
+	// Filter by EventType
+	listType, err := store.List(ctx, ListFilter{EventType: "order.shipped"})
+	if err != nil || len(listType) != 1 {
+		t.Fatalf("expected 1 event with order.shipped, got %d", len(listType))
+	}
+
+	// Out of range offset
+	listEmpty, err := store.List(ctx, ListFilter{Offset: 50})
+	if err != nil || len(listEmpty) != 0 {
+		t.Fatalf("expected 0 events for out-of-range offset, got %d", len(listEmpty))
+	}
+}
+
+func TestMarshalJSONEdgeCases(t *testing.T) {
+	// 1. Unmarshalable type (channel)
+	_, err := New("src", "ext", "type", make(chan int), nil)
+	if err == nil {
+		t.Fatal("expected error with unmarshalable channel payload")
+	}
+
+	_, err = New("src", "ext", "type", nil, make(chan int))
+	if err == nil {
+		t.Fatal("expected error with unmarshalable channel metadata")
+	}
+
+	// 2. RawMessage empty
+	ev, err := New("src", "ext", "type", json.RawMessage(""), json.RawMessage(""))
+	if err != nil || string(ev.Payload) != "{}" || string(ev.Metadata) != "{}" {
+		t.Fatalf("expected {} for empty RawMessage, got payload=%s meta=%s", string(ev.Payload), string(ev.Metadata))
+	}
+
+	// 3. Byte slice empty
+	evBytes, err := New("src", "ext", "type", []byte(""), []byte(""))
+	if err != nil || string(evBytes.Payload) != "{}" {
+		t.Fatalf("expected {} for empty byte slice")
+	}
 }

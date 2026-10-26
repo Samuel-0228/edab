@@ -1,4 +1,4 @@
-.PHONY: all build test test-unit test-integration test-e2e test-docker test-frontend test-all lint deps deps-health deps-verify deps-audit deps-freshness clean help
+.PHONY: all build test test-unit test-integration test-e2e test-docker test-frontend test-coverage test-coverage-frontend coverage test-all lint deps deps-health deps-verify deps-audit deps-freshness clean help
 
 # Default target runs all offline tests
 all: test-unit
@@ -50,7 +50,19 @@ test-docker:
 test-frontend:
 	cd frontend && npm test
 
-test-all: test-unit test-integration test-e2e test-frontend
+test-coverage:
+	go test -coverprofile=coverage.out $$(go list ./... | grep -v node_modules)
+	go tool cover -func=coverage.out
+	@coverage=$$(go tool cover -func=coverage.out | grep total: | awk '{print substr($$3, 1, length($$3)-1)}'); \
+	echo "Go Total Coverage: $${coverage}% (minimum required: 60.0%)"; \
+	awk -v cov="$$coverage" 'BEGIN { if (cov + 0 < 60.0) { print "FAILED: Go coverage below 60.0%"; exit 1; } else { print "PASSED: Go coverage threshold met"; exit 0; } }'
+
+test-coverage-frontend:
+	cd frontend && npm test -- --coverage
+
+coverage: test-coverage test-coverage-frontend
+
+test-all: test-unit test-integration test-e2e test-frontend coverage
 
 ## Lint & Format
 lint:

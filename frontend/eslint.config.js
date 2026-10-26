@@ -39,6 +39,13 @@ export default [
     }
   },
   {
-    ignores: ['dist/**', 'node_modules/**', '.svelte-kit/**', '*.config.js', '*.config.ts']
+    ignores: [
+      'dist/**',
+      'coverage/**',
+      'node_modules/**',
+      '.svelte-kit/**',
+      '*.config.js',
+      '*.config.ts'
+    ]
   }
 ];

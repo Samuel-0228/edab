@@ -243,3 +243,25 @@ func TestMemorySourceStoreAndResolvers(t *testing.T) {
 		t.Fatal("expected error deleting nonexistent source")
 	}
 }
+
+func TestSourceAdapterPollAndEdgeCases(t *testing.T) {
+	ctx := context.Background()
+
+	// Webhook source Poll and empty Normalize
+	whAdapter := NewWebhookSourceAdapter()
+	events, err := whAdapter.Poll(ctx)
+	if err != nil || events != nil {
+		t.Fatalf("expected nil poll events, got %v, err=%v", events, err)
+	}
+	_, err = whAdapter.Normalize(ctx, "src-wh", nil)
+	if err == nil {
+		t.Fatal("expected error normalizing empty webhook body")
+	}
+
+	// Telegram source Poll
+	tgAdapter := NewTelegramSourceAdapter()
+	tgEvents, err := tgAdapter.Poll(ctx)
+	if err != nil || tgEvents != nil {
+		t.Fatalf("expected nil poll events, got %v, err=%v", tgEvents, err)
+	}
+}

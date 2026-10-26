@@ -235,3 +235,25 @@ func TestRSSPollerWithClient(t *testing.T) {
 		t.Fatal("expected SSRF error blocking 127.0.0.1 feed URL")
 	}
 }
+
+func TestRSSPollerStartStop(t *testing.T) {
+	sample := `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>T</title><link>https://8.8.8.8</link><item><title>A</title><guid>1</guid></item></channel></rss>`
+	ingester := IngesterFunc(func(ctx context.Context, ev *event.Event) error {
+		return nil
+	})
+	mockClient := mockHTTPClient(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(sample)),
+			Header:     make(http.Header),
+		}, nil
+	})
+
+	poller := NewRSSPollerWithClient("src-poller", "https://8.8.8.8/feed.xml", 10*time.Millisecond, ingester, mockClient)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	poller.Start(ctx)
+	time.Sleep(30 * time.Millisecond)
+	poller.Stop()
+}
