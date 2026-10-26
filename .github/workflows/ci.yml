@@ -17,7 +17,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.26.10'
+          check-latest: true
           cache: true
 
       - name: Set up Node.js
@@ -66,7 +67,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.26.10'
+          check-latest: true
           cache: true
 
       - name: Check code formatting (gofmt)
@@ -81,7 +83,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.61
+          version: v1.64
           args: --config=.golangci.yml --timeout=5m
 
   frontend-quality:
@@ -126,7 +128,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.26.10'
+          check-latest: true
           cache: true
 
       - name: Run test suite with race detector

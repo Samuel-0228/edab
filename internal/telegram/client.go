@@ -73,11 +73,16 @@ func NewClient(token string, opts ClientOptions) (*Client, error) {
 
 func limiterForToken(token string, opts ClientOptions) *RateLimiter {
 	if existing, ok := sharedLimiters.Load(token); ok {
-		return existing.(*RateLimiter)
+		if rl, ok := existing.(*RateLimiter); ok {
+			return rl
+		}
 	}
 	limiter := NewRateLimiter(opts.GlobalRate, opts.PerChatRate)
 	actual, _ := sharedLimiters.LoadOrStore(token, limiter)
-	return actual.(*RateLimiter)
+	if rl, ok := actual.(*RateLimiter); ok {
+		return rl
+	}
+	return limiter
 }
 
 // ClientOptionsFromEnv reads client options from environment variables.

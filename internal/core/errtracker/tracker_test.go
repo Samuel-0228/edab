@@ -76,7 +76,8 @@ func TestSanitizeScope(t *testing.T) {
 	if clean.Extra["user_password"] != "[REDACTED]" {
 		t.Errorf("expected user_password to be redacted, got: %v", clean.Extra["user_password"])
 	}
-	if !strings.Contains(clean.Extra["details"].(string), "Bearer [REDACTED]") {
+	detailsStr, _ := clean.Extra["details"].(string)
+	if !strings.Contains(detailsStr, "Bearer [REDACTED]") {
 		t.Errorf("expected details to be sanitized, got: %v", clean.Extra["details"])
 	}
 }
