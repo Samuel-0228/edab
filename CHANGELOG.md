@@ -5,6 +5,20 @@ The project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ---
 
+## [v0.1.1] - 2026-10-26
+
+### Added
+- **Enforced Dependency Health & Freshness System**:
+  - Dedicated `dependency-health` job in GitHub Actions CI running on all PRs and pushes.
+  - Blocking `govulncheck ./...` vulnerability scanning in CI with zero vulnerabilities.
+  - Blocking `npm audit --audit-level=high` frontend vulnerability auditing.
+  - Enforced Go and frontend dependency freshness policies (`scripts/check-go-deps.sh`, `scripts/check-frontend-deps.sh`, `scripts/check-dependencies.sh`).
+  - Active policy rules defined in `.dependency-policy.json` preventing lockfile drift and unreviewed upstream bumps.
+  - Comprehensive documentation in `docs/DEPENDENCY_POLICY.md` and `README.md`.
+  - Reproducible `make deps`, `make deps-verify`, `make deps-audit`, and `make deps-freshness` commands.
+
+---
+
 ## [v0.1.0] - 2026-10-22
 
 ### Added

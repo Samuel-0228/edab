@@ -7,8 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  backend-lint:
-    name: Backend Lint & Security
+  dependency-health:
+    name: Dependency Health & Auditing
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -17,19 +17,57 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.23'
+          go-version: '1.26'
           cache: true
 
-      - name: Verify dependencies and go.sum synchronization
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Verify Go module tidy and sum synchronization
         run: |
-          go mod verify
           go mod tidy
           git diff --exit-code go.mod go.sum
 
-      - name: Investigate Go dependency freshness
-        run: |
-          echo "Investigating direct dependency freshness..."
-          go list -u -m all
+      - name: Verify Go module integrity (go mod verify)
+        run: go mod verify
+
+      - name: Blocking vulnerability scan (govulncheck ./...)
+        run: govulncheck ./...
+
+      - name: Install and verify frontend dependencies (npm ci)
+        run: cd frontend && npm ci
+
+      - name: Verify frontend package-lock synchronization
+        run: git diff --exit-code frontend/package.json frontend/package-lock.json
+
+      - name: Blocking frontend security audit (npm audit)
+        run: cd frontend && npm audit --audit-level=high
+
+      - name: Enforce Go dependency freshness policy
+        run: ./scripts/check-go-deps.sh --freshness-only
+
+      - name: Enforce frontend dependency freshness policy
+        run: ./scripts/check-frontend-deps.sh --freshness-only
+
+  backend-lint:
+    name: Backend Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache: true
 
       - name: Check code formatting (gofmt)
         run: |
@@ -45,12 +83,6 @@ jobs:
         with:
           version: v1.61
           args: --config=.golangci.yml --timeout=5m
-
-      - name: Run govulncheck
-        uses: golang/govulncheck-action@v1
-        with:
-          go-version: '1.23'
-          go-package: ./...
 
   frontend-quality:
     name: Frontend Quality & Tests
@@ -68,32 +100,6 @@ jobs:
 
       - name: Install frontend dependencies
         run: cd frontend && npm ci
-
-      - name: Blocking dependency security audit (npm audit)
-        run: cd frontend && npm audit --audit-level=high
-
-      - name: Investigate frontend dependency freshness
-        run: |
-          cd frontend
-          npm outdated --json > outdated.json || [ $? -le 1 ]
-          node -e '
-            const fs = require("fs");
-            try {
-              const data = JSON.parse(fs.readFileSync("outdated.json", "utf8"));
-              const pkgs = Object.keys(data);
-              if (pkgs.length === 0) {
-                console.log("All frontend dependencies are fresh.");
-              } else {
-                console.log(`Investigated ${pkgs.length} packages with newer upstream versions:`);
-                for (const [pkg, info] of Object.entries(data)) {
-                  console.log(`  - ${pkg}: current ${info.current}, latest ${info.latest}`);
-                }
-              }
-            } catch (e) {
-              console.log("No outdated packages found or error parsing json.");
-            }
-          '
-          rm -f outdated.json
 
       - name: Svelte TypeScript check (npm run check)
         run: cd frontend && npm run check
@@ -120,7 +126,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.23'
+          go-version: '1.26'
           cache: true
 
       - name: Run test suite with race detector

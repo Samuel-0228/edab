@@ -1,0 +1,34 @@
+{
+  "version": "1.0",
+  "lastReviewed": "2026-10-26",
+  "go": {
+    "policy": "zero-vulnerabilities, zero-lockfile-drift, strict-freshness",
+    "allowUpdates": []
+  },
+  "frontend": {
+    "policy": "zero-vulnerabilities, zero-semver-drift, deliberate-framework-compatibility",
+    "pinnedMajorTracks": {
+      "vite": {
+        "track": "6.x",
+        "major": 6,
+        "reason": "Vite 6 is the stable toolchain supported by @sveltejs/vite-plugin-svelte v5 and vite-plugin-singlefile v2."
+      },
+      "@sveltejs/vite-plugin-svelte": {
+        "track": "5.x",
+        "major": 5,
+        "reason": "Plugin v5 is required for Svelte 5 and Vite 6 compatibility."
+      },
+      "typescript": {
+        "track": "5.x",
+        "major": 5,
+        "reason": "TypeScript 5.x is the stable compiler required by svelte-check 4.x and ESLint 10 parser plugins."
+      },
+      "jsdom": {
+        "track": "26.x",
+        "major": 26,
+        "reason": "jsdom 26.x is the compatible DOM simulation environment for Vitest 5."
+      }
+    },
+    "allowOutdated": []
+  }
+}

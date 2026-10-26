@@ -1,4 +1,4 @@
-.PHONY: all build test test-unit test-integration test-e2e test-docker test-frontend test-all lint clean help
+.PHONY: all build test test-unit test-integration test-e2e test-docker test-frontend test-all lint deps deps-health deps-verify deps-audit deps-freshness clean help
 
 # Default target runs all offline tests
 all: test-unit
@@ -20,6 +20,12 @@ help:
 	@echo "  make build             Compile kerob server binary (CGO_ENABLED=0)"
 	@echo "  make lint              Run code formatting and linter checks"
 	@echo "  make clean             Clean build artifacts"
+	@echo ""
+	@echo "Dependency Health & Security Auditing:"
+	@echo "  make deps              Run complete enforced dependency health audit (Go + Frontend)"
+	@echo "  make deps-verify       Verify Go module & npm lockfile integrity and sync"
+	@echo "  make deps-audit        Run blocking vulnerability scans (govulncheck + npm audit)"
+	@echo "  make deps-freshness    Enforce Go and frontend dependency freshness policies"
 
 ## Build
 build:
@@ -50,6 +56,33 @@ test-all: test-unit test-integration test-e2e test-frontend
 lint:
 	gofmt -l .
 	cd frontend && npm run check && npm run lint
+
+## Dependency Health & Auditing
+deps: deps-health
+
+deps-verify:
+	@echo "==> Verifying Go module integrity & tidy state..."
+	go mod verify
+	go mod tidy
+	git diff --exit-code go.mod go.sum
+	@echo "==> Verifying frontend lockfile consistency..."
+	cd frontend && npm ci
+	git diff --exit-code frontend/package.json frontend/package-lock.json
+
+deps-audit:
+	@echo "==> Running Go vulnerability scan (govulncheck)..."
+	govulncheck ./...
+	@echo "==> Running frontend security audit (npm audit)..."
+	cd frontend && npm audit --audit-level=high
+
+deps-freshness:
+	@echo "==> Checking Go dependency freshness policy..."
+	./scripts/check-go-deps.sh --freshness-only
+	@echo "==> Checking frontend dependency freshness policy..."
+	./scripts/check-frontend-deps.sh --freshness-only
+
+deps-health:
+	./scripts/check-dependencies.sh
 
 clean:
 	rm -rf bin/ coverage.out

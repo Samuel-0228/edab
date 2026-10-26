@@ -295,11 +295,35 @@ make build
 # or: CGO_ENABLED=0 go build -ldflags="-w -s" -o bin/kerob ./cmd/server
 ```
 
+### Dependency Health & Maintenance
+
+Kerob enforces a strict, reproducible dependency maintenance process across both Go and frontend components. Dependency freshness and security audits are blocking in CI (`dependency-health` job) and fail if dependencies require attention.
+
+```bash
+# Run complete dependency health verification (integrity, audits, freshness)
+make deps
+
+# Verify module hashes and lockfile synchronization
+make deps-verify
+
+# Run blocking vulnerability audits (govulncheck + npm audit)
+make deps-audit
+
+# Enforce Go and frontend dependency freshness policies
+make deps-freshness
+
+# Standalone cross-platform script
+./scripts/check-dependencies.sh
+```
+
+See [Dependency Policy & Maintenance Guide](docs/DEPENDENCY_POLICY.md) for full policy specifications, framework compatibility boundaries, and Dependabot automation details.
+
 ---
 
 ## 6. Project Documentation
 
 - [Architecture Guide](docs/ARCHITECTURE.md): Detailed architectural design, domain models, and execution lifecycle.
+- [Dependency Health Policy](docs/DEPENDENCY_POLICY.md): Enforced dependency security, freshness, and audit process.
 - [Integration Developer Guide](docs/INTEGRATION_GUIDE.md): Guide on adding new trigger and action adapters.
 - [OpenAPI Specification](docs/openapi.yaml): Full OpenAPI 3.0 API schema.
 - [Changelog](CHANGELOG.md): Release version history.
