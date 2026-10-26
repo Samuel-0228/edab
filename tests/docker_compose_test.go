@@ -54,10 +54,11 @@ func TestDockerCompose_DevelopmentModeWithoutToken(t *testing.T) {
 	// Filter out API_TOKEN and force clean environment
 	env := make([]string, 0)
 	for _, e := range os.Environ() {
-		if !strings.HasPrefix(e, "API_TOKEN=") && !strings.HasPrefix(e, "ENVIRONMENT=") {
+		if !strings.HasPrefix(e, "API_TOKEN=") && !strings.HasPrefix(e, "ENVIRONMENT=") && !strings.HasPrefix(e, "KEROB_ENCRYPTION_KEY=") {
 			env = append(env, e)
 		}
 	}
+	env = append(env, "KEROB_ENCRYPTION_KEY=test-random-key-32-bytes-long!")
 	cmd.Env = env
 
 	var stdout, stderr bytes.Buffer
@@ -87,10 +88,11 @@ func TestDockerCompose_EnvExampleCompatibility(t *testing.T) {
 	// Clean environment without API_TOKEN
 	env := make([]string, 0)
 	for _, e := range os.Environ() {
-		if !strings.HasPrefix(e, "API_TOKEN=") && !strings.HasPrefix(e, "ENVIRONMENT=") {
+		if !strings.HasPrefix(e, "API_TOKEN=") && !strings.HasPrefix(e, "ENVIRONMENT=") && !strings.HasPrefix(e, "KEROB_ENCRYPTION_KEY=") {
 			env = append(env, e)
 		}
 	}
+	env = append(env, "KEROB_ENCRYPTION_KEY=test-random-key-32-bytes-long!")
 	cmd.Env = env
 
 	var stderr bytes.Buffer
@@ -114,10 +116,11 @@ func TestDockerCompose_ProductionOverlayRequiresToken(t *testing.T) {
 	cmd.Dir = root
 	env := make([]string, 0)
 	for _, e := range os.Environ() {
-		if !strings.HasPrefix(e, "API_TOKEN=") && !strings.HasPrefix(e, "ENVIRONMENT=") {
+		if !strings.HasPrefix(e, "API_TOKEN=") && !strings.HasPrefix(e, "ENVIRONMENT=") && !strings.HasPrefix(e, "KEROB_ENCRYPTION_KEY=") {
 			env = append(env, e)
 		}
 	}
+	env = append(env, "KEROB_ENCRYPTION_KEY=test-random-key-32-bytes-long!")
 	cmd.Env = env
 
 	var stderr bytes.Buffer
