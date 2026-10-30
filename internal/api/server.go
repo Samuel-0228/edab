@@ -53,6 +53,13 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("PATCH /api/v1/workflows/{id}", handlers.PatchWorkflow)
 	mux.HandleFunc("DELETE /api/v1/workflows/{id}", handlers.DeleteWorkflow)
 	mux.HandleFunc("POST /api/v1/workflows/{id}/test", handlers.TestWorkflow)
+	mux.HandleFunc("GET /api/v1/workflows/{id}/versions", handlers.ListWorkflowVersions)
+	mux.HandleFunc("GET /api/v1/workflows/{id}/versions/{version}", handlers.GetWorkflowVersion)
+	mux.HandleFunc("POST /api/v1/workflows/{id}/rollback/{version}", handlers.RollbackWorkflow)
+	mux.HandleFunc("GET /api/v1/workflows/{id}/diff", handlers.DiffWorkflowVersions)
+	mux.HandleFunc("GET /api/v1/workflows/{id}/export", handlers.ExportWorkflow)
+	mux.HandleFunc("POST /api/v1/workflows/import", handlers.ImportWorkflow)
+	mux.HandleFunc("GET /api/v1/templates", handlers.ListTemplates)
 
 	// Integrations Catalog
 	mux.HandleFunc("GET /api/v1/integrations", handlers.ListIntegrations)
@@ -76,6 +83,10 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("GET /api/v1/failures/{id}", handlers.GetFailure)
 	mux.HandleFunc("POST /api/v1/failures/{id}/discard", handlers.DiscardFailure)
 	mux.HandleFunc("POST /api/v1/failures/{id}/retry", handlers.RetryFailure)
+	mux.HandleFunc("POST /api/v1/failures/retry-bulk", handlers.BulkRetryDeadLetters)
+	mux.HandleFunc("POST /api/v1/failures/discard-bulk", handlers.BulkDiscardDeadLetters)
+	mux.HandleFunc("POST /api/v1/dead-letter/retry-bulk", handlers.BulkRetryDeadLetters)
+	mux.HandleFunc("POST /api/v1/dead-letter/discard-bulk", handlers.BulkDiscardDeadLetters)
 
 	// Webhooks Endpoints
 	mux.HandleFunc("GET /api/v1/webhooks", handlers.ListWebhooks)
@@ -90,6 +101,8 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("GET /api/v1/events", handlers.ListEvents)
 	mux.HandleFunc("POST /api/v1/events", handlers.IngestEvent)
 	mux.HandleFunc("GET /api/v1/events/{id}", handlers.GetEvent)
+	mux.HandleFunc("POST /api/v1/events/{id}/replay", handlers.ReplayEvent)
+	mux.HandleFunc("POST /api/v1/events/replay-bulk", handlers.ReplayBulkEvents)
 
 	// Sources API
 	mux.HandleFunc("GET /api/v1/sources", handlers.ListSources)

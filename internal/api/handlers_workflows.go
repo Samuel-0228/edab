@@ -49,6 +49,11 @@ func (h *Handlers) CreateWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.versionStore != nil {
+		snapshot, _ := json.Marshal(created)
+		_, _ = h.versionStore.RecordVersion(r.Context(), created.ID, snapshot)
+	}
+
 	respondJSON(w, http.StatusCreated, created)
 }
 
@@ -99,6 +104,11 @@ func (h *Handlers) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	if h.versionStore != nil {
+		snapshot, _ := json.Marshal(updated)
+		_, _ = h.versionStore.RecordVersion(r.Context(), updated.ID, snapshot)
 	}
 
 	respondJSON(w, http.StatusOK, updated)
@@ -156,6 +166,11 @@ func (h *Handlers) PatchWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.versionStore != nil {
+		snapshot, _ := json.Marshal(updated)
+		_, _ = h.versionStore.RecordVersion(r.Context(), updated.ID, snapshot)
+	}
+
 	respondJSON(w, http.StatusOK, updated)
 }
 
@@ -180,13 +195,20 @@ func (h *Handlers) DeleteWorkflow(w http.ResponseWriter, r *http.Request) {
 }
 
 type testWorkflowInput struct {
-	EventType string          `json:"event_type,omitempty"`
-	SourceID  string          `json:"source_id,omitempty"`
-	Payload   json.RawMessage `json:"payload,omitempty"`
-	Metadata  json.RawMessage `json:"metadata,omitempty"`
+	EventType   string          `json:"event_type,omitempty"`
+	SourceID    string          `json:"source_id,omitempty"`
+	Payload     json.RawMessage `json:"payload,omitempty"`
+	Metadata    json.RawMessage `json:"metadata,omitempty"`
+	DryRun      *bool           `json:"dry_run,omitempty"`
+	MockActions *bool           `json:"mock_actions,omitempty"`
+	Event       *struct {
+		EventType string          `json:"event_type,omitempty"`
+		Payload   json.RawMessage `json:"payload,omitempty"`
+	} `json:"event,omitempty"`
 }
 
 // TestWorkflow executes a workflow on-demand with synthetic or provided event payload.
+// Supports dry_run mode returning a granular step-by-step trace with optional action mocking.
 func (h *Handlers) TestWorkflow(w http.ResponseWriter, r *http.Request) {
 	if h.workflows == nil || h.workflowEngine == nil {
 		respondError(w, http.StatusInternalServerError, "workflow engine or store not initialized")
@@ -212,6 +234,26 @@ func (h *Handlers) TestWorkflow(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if input.Event != nil {
+		if input.EventType == "" {
+			input.EventType = input.Event.EventType
+		}
+		if len(input.Payload) == 0 {
+			input.Payload = input.Event.Payload
+		}
+	}
+
+	isDryRun := true
+	if input.DryRun != nil {
+		isDryRun = *input.DryRun
+	} else if r.URL.Query().Has("dry_run") {
+		isDryRun = r.URL.Query().Get("dry_run") == "true"
+	}
+	mockActions := true
+	if input.MockActions != nil {
+		mockActions = *input.MockActions
+	}
+
 	eventType := input.EventType
 	if eventType == "" {
 		if len(wf.Trigger.EventTypes) > 0 && wf.Trigger.EventTypes[0] != "*" {
@@ -234,6 +276,16 @@ func (h *Handlers) TestWorkflow(w http.ResponseWriter, r *http.Request) {
 	ev, err := event.New(sourceID, "test_"+wf.ID, eventType, payload, input.Metadata)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "failed to construct test event: "+err.Error())
+		return
+	}
+
+	if isDryRun {
+		trace, err := h.workflowEngine.ExecuteDryRun(r.Context(), wf, ev, mockActions)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "dry run execution failed: "+err.Error())
+			return
+		}
+		respondJSON(w, http.StatusOK, trace)
 		return
 	}
 

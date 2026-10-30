@@ -101,6 +101,246 @@ paths:
         '204':
           description: Workflow deleted
 
+  /api/v1/workflows/{id}/test:
+    post:
+      summary: Dry-run and test a workflow trace against synthetic or provided event payload
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: dry_run
+          in: query
+          required: false
+          schema:
+            type: boolean
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event_type: { type: string }
+                source_id: { type: string }
+                payload: { type: object }
+                dry_run: { type: boolean }
+                mock_actions: { type: boolean }
+      responses:
+        '200':
+          description: Step-by-step dry-run execution trace
+
+  /api/v1/workflows/{id}/versions:
+    get:
+      summary: List revision history snapshots of a workflow
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of workflow version records
+
+  /api/v1/workflows/{id}/versions/{version}:
+    get:
+      summary: Get specific workflow version snapshot
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Workflow version snapshot
+        '404':
+          description: Version not found
+
+  /api/v1/workflows/{id}/rollback/{version}:
+    post:
+      summary: Rollback workflow configuration to a previous version
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Rollback successful
+
+  /api/v1/workflows/{id}/diff:
+    get:
+      summary: Diff two workflow versions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Diff between versions
+
+  /api/v1/workflows/{id}/export:
+    get:
+      summary: Export workflow definition as JSON or YAML
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [json, yaml]
+      responses:
+        '200':
+          description: Exported definition in requested format
+
+  /api/v1/workflows/import:
+    post:
+      summary: Import workflow from JSON or YAML definition
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Workflow'
+          application/x-yaml:
+            schema:
+              type: string
+      responses:
+        '201':
+          description: Workflow imported successfully
+
+  /api/v1/templates:
+    get:
+      summary: List built-in workflow template recipes
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Array of workflow templates
+
+  /api/v1/events/{id}/replay:
+    post:
+      summary: Replay an ingested event through automation engine
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bypass_idempotency: { type: boolean }
+      responses:
+        '200':
+          description: Replay result
+
+  /api/v1/events/replay-bulk:
+    post:
+      summary: Bulk replay multiple events
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event_ids]
+              properties:
+                event_ids:
+                  type: array
+                  items: { type: string }
+                bypass_idempotency: { type: boolean }
+      responses:
+        '200':
+          description: Bulk replay results
+
+  /api/v1/dead-letter/retry-bulk:
+    post:
+      summary: Bulk retry dead-letter failure records
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          description: Retried count
+
+  /api/v1/dead-letter/discard-bulk:
+    post:
+      summary: Bulk discard dead-letter failure records
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          description: Discarded count
+
   /api/v1/integrations:
     get:
       summary: List integration capabilities catalog

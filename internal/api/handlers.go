@@ -27,6 +27,7 @@ type Handlers struct {
 	actionReg      *workflow.ActionRegistry
 	creds          credentials.Store
 	webhookStore   webhooks.Store
+	versionStore   workflow.VersionStore
 
 	// Event & adapter routing
 	sources      sources.Store
@@ -50,6 +51,7 @@ type Config struct {
 	ActionReg      *workflow.ActionRegistry
 	Creds          credentials.Store
 	WebhookStore   webhooks.Store
+	VersionStore   workflow.VersionStore
 
 	Sources      sources.Store
 	Destinations destinations.Store
@@ -64,6 +66,10 @@ type Config struct {
 }
 
 func NewHandlersFromConfig(cfg Config) *Handlers {
+	vStore := cfg.VersionStore
+	if vStore == nil {
+		vStore = workflow.NewMemoryVersionStore()
+	}
 	return &Handlers{
 		workflows:      cfg.Workflows,
 		executions:     cfg.Executions,
@@ -72,6 +78,7 @@ func NewHandlersFromConfig(cfg Config) *Handlers {
 		actionReg:      cfg.ActionReg,
 		creds:          cfg.Creds,
 		webhookStore:   cfg.WebhookStore,
+		versionStore:   vStore,
 
 		sources:      cfg.Sources,
 		destinations: cfg.Destinations,
