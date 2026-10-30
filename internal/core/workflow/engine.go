@@ -247,12 +247,20 @@ func (e *Engine) ExecuteWorkflow(
 			continue
 		}
 
-		outcome, err := e.executeActionStep(ctx, wf, ev, exec, transformedPayload, act, stepStates, start)
+		outcome, err := e.executeStep(ctx, wf, ev, exec, transformedPayload, act, stepStates, nil, start)
 		if outcome == outcomeFailed {
 			return exec, err
 		}
 		if outcome == outcomeSkipRest {
 			break
+		}
+		if outcome == outcomeWaiting {
+			slog.Info("workflow execution waiting for scheduled resume",
+				slog.String("workflow_id", wf.ID),
+				slog.String("execution_id", exec.ID),
+				slog.Time("next_attempt_at", exec.NextAttemptAt),
+			)
+			return exec, nil
 		}
 	}
 

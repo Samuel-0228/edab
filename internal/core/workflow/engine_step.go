@@ -18,6 +18,7 @@ const (
 	outcomeContinue
 	outcomeSkipRest
 	outcomeFailed
+	outcomeWaiting
 )
 
 // loadStepStates reconstructs the outcomes of previously completed steps for an execution.
@@ -54,6 +55,31 @@ func (e *Engine) loadStepStates(ctx context.Context, execID string) map[string]t
 	return stepStates
 }
 
+func (e *Engine) executeStep(
+	ctx context.Context,
+	wf *Workflow,
+	ev *event.Event,
+	exec *Execution,
+	transformedPayload map[string]any,
+	act ActionStep,
+	stepStates map[string]transformations.StepOutput,
+	renderVars map[string]any,
+	start time.Time,
+) (stepExecutionOutcome, error) {
+	switch act.Type {
+	case StepTypeBranch:
+		return e.executeBranchStep(ctx, wf, ev, exec, transformedPayload, act, stepStates, renderVars, start)
+	case StepTypeForEach:
+		return e.executeForEachStep(ctx, wf, ev, exec, transformedPayload, act, stepStates, renderVars, start)
+	case StepTypeDelay, StepTypeWait:
+		return e.executeDelayStep(ctx, wf, ev, exec, transformedPayload, act, stepStates, renderVars, start)
+	case StepTypeParallel:
+		return e.executeParallelStep(ctx, wf, ev, exec, transformedPayload, act, stepStates, renderVars, start)
+	default:
+		return e.executeActionStep(ctx, wf, ev, exec, transformedPayload, act, stepStates, renderVars, start)
+	}
+}
+
 func (e *Engine) executeActionStep(
 	ctx context.Context,
 	wf *Workflow,
@@ -62,6 +88,7 @@ func (e *Engine) executeActionStep(
 	transformedPayload map[string]any,
 	act ActionStep,
 	stepStates map[string]transformations.StepOutput,
+	renderVars map[string]any,
 	start time.Time,
 ) (stepExecutionOutcome, error) {
 	if err := ctx.Err(); err != nil {
@@ -100,11 +127,12 @@ func (e *Engine) executeActionStep(
 		decryptedCreds = creds
 	}
 
-	// 2. Interpolate action configuration with event data, step outputs, and vault secrets
+	// 2. Interpolate action configuration with event data, step outputs, vault secrets, and loop variables
 	renderCtx := transformations.RenderContext{
-		Event:   ev,
-		Steps:   stepStates,
-		Secrets: decryptedCreds,
+		Event:     ev,
+		Steps:     stepStates,
+		Secrets:   decryptedCreds,
+		Variables: renderVars,
 	}
 
 	renderedConfig, err := transformations.RenderJSONConfigWithContext(act.Config, renderCtx)

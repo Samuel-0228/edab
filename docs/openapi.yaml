@@ -257,10 +257,10 @@ components:
           type: array
           items:
             type: object
-            required: [integration, action_type]
             properties:
               id: { type: string, description: "Unique step identifier for pipeline referencing (e.g. step_1)" }
               name: { type: string, description: "Descriptive step label" }
+              type: { type: string, enum: [action, branch, for_each, delay, parallel], default: action }
               integration: { type: string }
               action_type: { type: string }
               credential_id: { type: string }
@@ -268,6 +268,24 @@ components:
               max_retries: { type: integer, default: 0 }
               backoff_seconds: { type: integer, default: 0 }
               timeout_seconds: { type: integer, default: 30 }
+              cases:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    when: { type: object }
+                    steps: { type: array, items: { type: object } }
+              default:
+                type: array
+                items: { type: object }
+              items: { type: string, description: "Path to items array for for_each" }
+              item_var: { type: string, default: "item" }
+              index_var: { type: string, default: "index" }
+              max_iterations: { type: integer, default: 100 }
+              steps: { type: array, items: { type: object } }
+              concurrency: { type: integer, default: 5 }
+              duration: { type: string, description: "Delay duration string (e.g. 5s, 1m)" }
+              duration_seconds: { type: integer }
               config: { type: object }
         max_retries: { type: integer, default: 3 }
         timeout_seconds: { type: integer, default: 30 }

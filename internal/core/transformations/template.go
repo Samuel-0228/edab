@@ -23,9 +23,10 @@ type StepOutput struct {
 
 // RenderContext provides contextual scope for template rendering including events, step outputs, and secrets.
 type RenderContext struct {
-	Event   *event.Event
-	Steps   map[string]StepOutput
-	Secrets map[string]string
+	Event     *event.Event
+	Steps     map[string]StepOutput
+	Secrets   map[string]string
+	Variables map[string]any
 }
 
 // RenderTemplate evaluates a template string containing placeholders such as
@@ -119,8 +120,28 @@ func splitPath(path string) []string {
 	return parts
 }
 
+// ResolvePath resolves dot-notation paths against Context Variables, Step outputs, Secrets, or the Event.
+func ResolvePath(path string, ctx RenderContext) (any, bool) {
+	clean := strings.TrimSpace(path)
+	clean = strings.TrimPrefix(clean, "{{")
+	clean = strings.TrimSuffix(clean, "}}")
+	clean = strings.TrimSpace(clean)
+	return resolvePath(clean, ctx)
+}
+
 // resolvePath resolves dot-notation paths against the Event, Step outputs, or Secrets.
 func resolvePath(path string, ctx RenderContext) (any, bool) {
+	if ctx.Variables != nil {
+		parts := splitPath(path)
+		if len(parts) > 0 {
+			if val, ok := ctx.Variables[parts[0]]; ok {
+				if len(parts) == 1 {
+					return val, true
+				}
+				return lookupPath(val, parts[1:])
+			}
+		}
+	}
 	if strings.HasPrefix(path, "steps.") {
 		trimmed := strings.TrimPrefix(path, "steps.")
 		parts := splitPath(trimmed)

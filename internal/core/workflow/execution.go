@@ -23,6 +23,7 @@ const (
 	ExecutionSuccess   ExecutionStatus = "success"
 	ExecutionFailed    ExecutionStatus = "failed"
 	ExecutionRetrying  ExecutionStatus = "retrying"
+	ExecutionWaiting   ExecutionStatus = "waiting"
 	ExecutionCancelled ExecutionStatus = "cancelled"
 )
 
@@ -191,7 +192,7 @@ func (s *MemoryExecutionStore) ClaimPending(ctx context.Context) (*Execution, er
 
 	now := time.Now().UTC()
 	for _, exec := range s.executions {
-		if (exec.Status == ExecutionPending || exec.Status == ExecutionRetrying) && exec.NextAttemptAt.Before(now) {
+		if (exec.Status == ExecutionPending || exec.Status == ExecutionRetrying || exec.Status == ExecutionWaiting) && (exec.NextAttemptAt.Before(now) || exec.NextAttemptAt.Equal(now)) {
 			exec.Status = ExecutionRunning
 			exec.Attempts++
 			exec.UpdatedAt = now

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
+	"sync"
 	"testing"
 
 	"kerob/internal/core/credentials"
@@ -12,6 +14,7 @@ import (
 
 // DynamicMockExecutor allows customized execution behavior per action ID.
 type DynamicMockExecutor struct {
+	mu       sync.Mutex
 	TypeStr  string
 	Executed map[string]int
 	Handlers map[string]func(req ActionRequest) (ActionResult, error)
@@ -29,9 +32,23 @@ func (m *DynamicMockExecutor) Name() string                          { return m.
 func (m *DynamicMockExecutor) Type() string                          { return m.TypeStr }
 func (m *DynamicMockExecutor) Validate(config json.RawMessage) error { return nil }
 func (m *DynamicMockExecutor) Execute(ctx context.Context, req ActionRequest) (ActionResult, error) {
+	m.mu.Lock()
 	m.Executed[req.ActionID]++
+	var matchedHandler func(req ActionRequest) (ActionResult, error)
 	if handler, ok := m.Handlers[req.ActionID]; ok {
-		return handler(req)
+		matchedHandler = handler
+	} else {
+		for k, handler := range m.Handlers {
+			if strings.HasSuffix(req.ActionID, k) {
+				matchedHandler = handler
+				break
+			}
+		}
+	}
+	m.mu.Unlock()
+
+	if matchedHandler != nil {
+		return matchedHandler(req)
 	}
 	return ActionResult{
 		Success: true,

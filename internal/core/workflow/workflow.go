@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"kerob/internal/core/conditions"
@@ -50,20 +51,52 @@ const (
 	OnErrorFail     = "fail"
 	OnErrorContinue = "continue"
 	OnErrorSkipRest = "skip_rest"
+
+	StepTypeAction   = "action"
+	StepTypeBranch   = "branch"
+	StepTypeForEach  = "for_each"
+	StepTypeDelay    = "delay"
+	StepTypeWait     = "wait"
+	StepTypeParallel = "parallel"
 )
 
-// ActionStep represents an individual action task to run within a workflow.
+// BranchCase defines a conditional branch inside a branch step.
+type BranchCase struct {
+	When  *conditions.Condition `json:"when"`
+	Steps []ActionStep          `json:"steps"`
+}
+
+// ActionStep represents an individual action task or control flow block to run within a workflow.
 type ActionStep struct {
 	ID           string          `json:"id"`
 	Name         string          `json:"name,omitempty"`
-	Integration  string          `json:"integration"`             // "telegram", "discord", "github", "http"
-	ActionType   string          `json:"action_type"`             // e.g. "send_message", "create_issue", "http_request"
+	Type         string          `json:"type,omitempty"`          // "action" (default), "branch", "for_each", "delay", "parallel"
+	Integration  string          `json:"integration,omitempty"`   // "telegram", "discord", "github", "http"
+	ActionType   string          `json:"action_type,omitempty"`   // e.g. "send_message", "create_issue", "http_request"
 	CredentialID string          `json:"credential_id,omitempty"` // encrypted credentials to inject
-	Config       json.RawMessage `json:"config"`                  // action config (with template variables)
+	Config       json.RawMessage `json:"config,omitempty"`        // action config (with template variables)
 	TimeoutSec   int             `json:"timeout_seconds,omitempty"`
 	OnError      string          `json:"on_error,omitempty"`    // "fail" (default), "continue", "skip_rest"
 	MaxRetries   *int            `json:"max_retries,omitempty"` // per-step retry override
 	BackoffSec   int             `json:"backoff_seconds,omitempty"`
+
+	// Control Flow: Branching
+	Cases   []BranchCase `json:"cases,omitempty"`
+	Default []ActionStep `json:"default,omitempty"`
+
+	// Control Flow: ForEach
+	Items         string `json:"items,omitempty"`
+	ItemVar       string `json:"item_var,omitempty"`
+	IndexVar      string `json:"index_var,omitempty"`
+	MaxIterations int    `json:"max_iterations,omitempty"`
+
+	// Control Flow: Parallel / Fan-out / Inner steps
+	Steps       []ActionStep `json:"steps,omitempty"`
+	Concurrency int          `json:"concurrency,omitempty"`
+
+	// Control Flow: Delay / Wait
+	Duration    string `json:"duration,omitempty"`
+	DurationSec int    `json:"duration_seconds,omitempty"`
 }
 
 // Workflow represents a declarative, event-driven automation pipeline.
@@ -95,11 +128,62 @@ func (w *Workflow) Validate() error {
 		return fmt.Errorf("workflow must define at least one action")
 	}
 	for i, act := range w.Actions {
+		if err := validateStep(act, fmt.Sprintf("action[%d]", i)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateStep(act ActionStep, prefix string) error {
+	switch act.Type {
+	case StepTypeBranch:
+		if len(act.Cases) == 0 && len(act.Default) == 0 {
+			return fmt.Errorf("%s (branch) must define at least one case or default", prefix)
+		}
+		for cIdx, c := range act.Cases {
+			for sIdx, sub := range c.Steps {
+				if err := validateStep(sub, fmt.Sprintf("%s.case[%d].step[%d]", prefix, cIdx, sIdx)); err != nil {
+					return err
+				}
+			}
+		}
+		for sIdx, sub := range act.Default {
+			if err := validateStep(sub, fmt.Sprintf("%s.default[%d]", prefix, sIdx)); err != nil {
+				return err
+			}
+		}
+	case StepTypeForEach:
+		if strings.TrimSpace(act.Items) == "" {
+			return fmt.Errorf("%s (for_each) requires 'items' expression", prefix)
+		}
+		if len(act.Steps) == 0 {
+			return fmt.Errorf("%s (for_each) must define at least one child step", prefix)
+		}
+		for sIdx, sub := range act.Steps {
+			if err := validateStep(sub, fmt.Sprintf("%s.step[%d]", prefix, sIdx)); err != nil {
+				return err
+			}
+		}
+	case StepTypeParallel:
+		if len(act.Steps) == 0 {
+			return fmt.Errorf("%s (parallel) must define at least one child step", prefix)
+		}
+		for sIdx, sub := range act.Steps {
+			if err := validateStep(sub, fmt.Sprintf("%s.step[%d]", prefix, sIdx)); err != nil {
+				return err
+			}
+		}
+	case StepTypeDelay, StepTypeWait:
+		if strings.TrimSpace(act.Duration) == "" && act.DurationSec <= 0 {
+			return fmt.Errorf("%s (delay) requires duration or duration_seconds", prefix)
+		}
+	default:
 		if act.Integration == "" {
-			return fmt.Errorf("action[%d].integration is required", i)
+			return fmt.Errorf("%s.integration is required", prefix)
 		}
 		if act.ActionType == "" {
-			return fmt.Errorf("action[%d].action_type is required", i)
+			return fmt.Errorf("%s.action_type is required", prefix)
 		}
 	}
 	return nil
