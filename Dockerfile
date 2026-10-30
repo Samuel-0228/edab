@@ -27,8 +27,15 @@ COPY . .
 COPY --from=frontend-builder /app/internal/api/dashboard.html ./internal/api/dashboard.html
 COPY --from=frontend-builder /app/internal/api/kerob_logo.png ./internal/api/kerob_logo.png
 
+ARG VERSION=v0.1.1
+ARG COMMIT=dev
+ARG BUILD_DATE=""
+
 # Build statically linked binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /app/kerob ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -trimpath \
+    -ldflags="-w -s -X kerob/internal/version.Version=${VERSION} -X kerob/internal/version.Commit=${COMMIT} -X kerob/internal/version.BuildDate=${BUILD_DATE}" \
+    -o /app/kerob ./cmd/server
 
 # Stage 3: Runtime stage
 FROM alpine:3.20

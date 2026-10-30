@@ -14,6 +14,7 @@ import (
 	"kerob/internal/core/webhooks"
 	"kerob/internal/core/workflow"
 	"kerob/internal/telegram"
+	"kerob/internal/version"
 )
 
 // Handlers houses the HTTP handler implementations across all Kerob domains.
@@ -147,7 +148,8 @@ func (h *Handlers) SetWorkflowServices(
 // Health handlers
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{
-		"status": "healthy",
+		"status":  "healthy",
+		"version": version.Version,
 	})
 }
 
@@ -167,6 +169,7 @@ func (h *Handlers) Ready(w http.ResponseWriter, r *http.Request) {
 
 	respondJSON(w, http.StatusOK, map[string]any{
 		"status":                  "ready",
+		"version":                 version.Version,
 		"registered_sources":      registeredSources,
 		"registered_destinations": registeredDestinations,
 		"registered_actions":      registeredActions,

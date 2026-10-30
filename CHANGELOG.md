@@ -5,17 +5,51 @@ The project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ---
 
-## [v0.1.1] - 2026-10-26
+## [v0.1.1] - 2026-10-30
 
 ### Added
+- **Release Engineering & Standalone Distribution**:
+  - Automated multi-platform release builder (`scripts/build-release.sh`) compiling self-contained release distributions for `linux/amd64`, `linux/arm64`, `darwin/amd64` (Intel macOS), `darwin/arm64` (Apple Silicon), and `windows/amd64`.
+  - Embedded single-file Svelte 5 operations dashboard directly compiled into backend binaries—no Node.js runtime or separate asset serving required in production.
+  - Built-in `--version`, `-v`, and `version` CLI flags and startup logs displaying semantic version, git commit SHA, and build timestamp.
+  - Automated GitHub Actions release pipeline (`.github/workflows/release.yml`) running the full verification pipeline (deps, linters, tests, coverage, frontend, docker) before cross-compiling and publishing release assets.
+  - Cryptographic SHA-256 checksums (`checksums.txt`) generated and attached to all downloadable release bundles.
+  - Reproducible `make build`, `make release-artifacts`, and `make release` targets.
+- **Schema-Based Boundary Request Validation Layer**:
+  - Pre-domain schema and parameter validation across all mutation endpoints (`/api/v1/workflows`, `/api/v1/credentials`, `/api/v1/webhooks`, `/api/v1/sources`, `/api/v1/destinations`, `/api/v1/routes`, `/api/v1/events`).
+  - Standardized error schema (`APIError` and `FieldError`) with machine-readable error codes and request tracing IDs.
+  - Table-driven boundary test suite covering edge cases: invalid UUID formats, missing required fields, payload limits, negative rates, and malformed JSON.
+- **In-Memory Storage & Offline Test Architecture**:
+  - Thread-safe, deep-copy in-memory store implementations for workflows, execution tracking, dead-letter records, credentials, routes, and events.
+  - Complete dependency injection architecture allowing all unit, integration, and e2e tests to execute offline in milliseconds without Docker, PostgreSQL, or external network connectivity.
+  - Categorized test tiers: `make test-unit`, `make test-integration`, `make test-e2e`, `make test-docker`, `make test-frontend`, `make test-coverage`, and `make test-all`.
+- **Execution Observability & Error Tracking Hardening**:
+  - Modular `ErrorTracker` provider abstraction (`noop`, `memory`, `log`, `sentry`) for recording unhandled exceptions and security events without coupling core logic.
+  - Contextual error capturing with `request_id`, `workflow_id`, and `execution_id`.
+  - Automatic credential and secret scrubbing in logs and error captures.
+- **Strict Coverage Enforcement Gates**:
+  - Enforced Go statement coverage threshold (≥60.0%) blocking CI on regressions (current statement coverage: 65.4%).
+  - Enforced frontend coverage threshold (≥65.0%) across Svelte components, API client, and modal workflows.
 - **Enforced Dependency Health & Freshness System**:
   - Dedicated `dependency-health` job in GitHub Actions CI running on all PRs and pushes.
   - Blocking `govulncheck ./...` vulnerability scanning in CI with zero vulnerabilities.
   - Blocking `npm audit --audit-level=high` frontend vulnerability auditing.
   - Enforced Go and frontend dependency freshness policies (`scripts/check-go-deps.sh`, `scripts/check-frontend-deps.sh`, `scripts/check-dependencies.sh`).
   - Active policy rules defined in `.dependency-policy.json` preventing lockfile drift and unreviewed upstream bumps.
-  - Comprehensive documentation in `docs/DEPENDENCY_POLICY.md` and `README.md`.
-  - Reproducible `make deps`, `make deps-verify`, `make deps-audit`, and `make deps-freshness` commands.
+  - Synchronized and verified frontend dependencies (`package.json` and `package-lock.json`).
+- **Security & Governance**:
+  - Comprehensive vulnerability disclosure and security policy documented in `SECURITY.md`.
+  - AES-256-GCM encryption for credentials at rest with unique random nonces.
+  - Proactive outbound SSRF protection blocking loopback, link-local, private networks (RFC1918), cloud metadata IPs, and defeating DNS rebinding.
+
+### Changed
+- Refactored monolithic test files into domain-focused test suites (`internal/api`, `internal/core/workflow`, `internal/adapters`).
+- Updated frontend version alignment to match platform version `v0.1.1`.
+- Cleaned and reinforced Docker Compose production configurations with mandatory token validation.
+
+### Known Limitations
+- In-memory storage is optimized for local testing and ephemeral workflows; persistent production deployments require PostgreSQL 15+.
+- SSRF protection strictly prevents outbound HTTP requests to intranet and loopback addresses; external API endpoints must be accessible via public DNS.
 
 ---
 

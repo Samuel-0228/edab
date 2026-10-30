@@ -24,8 +24,8 @@ Thank you for your interest in contributing to **Kerob**, an event-driven automa
 ### Quickstart
 ```bash
 # 1. Clone repository
-git clone https://github.com/Samuel-0228/edab.git
-cd edab
+git clone https://github.com/Samuel-0228/edab.git kerob
+cd kerob
 
 # 2. Copy environment template
 cp .env.example .env
@@ -34,7 +34,7 @@ cp .env.example .env
 docker compose up -d postgres
 
 # 4. Run tests
-go test -v -race ./...
+make test-all
 
 # 5. Start development server
 go run ./cmd/server

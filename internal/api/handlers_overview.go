@@ -7,9 +7,11 @@ import (
 	"kerob/internal/adapters"
 	"kerob/internal/core/delivery"
 	"kerob/internal/core/workflow"
+	"kerob/internal/version"
 )
 
 type OverviewResponse struct {
+	Version              string                         `json:"version"`
 	Status               string                         `json:"status"`
 	ActiveWorkflows      int                            `json:"active_workflows"`
 	TotalWorkflows       int                            `json:"total_workflows"`
@@ -97,6 +99,7 @@ func (h *Handlers) Overview(w http.ResponseWriter, r *http.Request) {
 	catalog := adapters.Catalog()
 
 	resp := OverviewResponse{
+		Version:              version.Version,
 		Status:               "operational",
 		ActiveWorkflows:      activeWorkflows,
 		TotalWorkflows:       totalWorkflows,

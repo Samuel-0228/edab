@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -23,9 +24,17 @@ import (
 	"kerob/internal/database"
 	"kerob/internal/observability"
 	"kerob/internal/telegram"
+	"kerob/internal/version"
 )
 
 func main() {
+	for _, arg := range os.Args[1:] {
+		if arg == "-v" || arg == "--version" || arg == "version" {
+			_, _ = fmt.Fprintln(os.Stdout, version.Info())
+			return
+		}
+	}
+
 	cfg := config.Load()
 	if err := cfg.Validate(); err != nil {
 		slog.Error("invalid configuration", slog.String("error", err.Error()))
@@ -34,6 +43,7 @@ func main() {
 	setupLogger(cfg.LogLevel)
 
 	slog.Info("starting kerob automation engine",
+		slog.String("version", version.Version),
 		slog.String("environment", cfg.Environment),
 		slog.String("port", cfg.ServerPort),
 	)

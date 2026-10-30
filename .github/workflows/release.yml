@@ -1,0 +1,188 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.1.1)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: Pre-Release Verification Pipeline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.10'
+          check-latest: true
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install govulncheck & golangci-lint
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+
+      - name: Verify Go module tidy and sum synchronization
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Verify Go module integrity
+        run: go mod verify
+
+      - name: Blocking vulnerability scan (govulncheck)
+        run: govulncheck ./...
+
+      - name: Install frontend dependencies (npm ci)
+        run: cd frontend && npm ci
+
+      - name: Verify frontend package-lock synchronization
+        run: git diff --exit-code frontend/package.json frontend/package-lock.json
+
+      - name: Blocking frontend security audit (npm audit)
+        run: cd frontend && npm audit --audit-level=high
+
+      - name: Enforce Go dependency freshness policy
+        run: ./scripts/check-go-deps.sh --freshness-only
+
+      - name: Enforce frontend dependency freshness policy
+        run: ./scripts/check-frontend-deps.sh --freshness-only
+
+      - name: Check Go code formatting (gofmt)
+        run: |
+          unformatted=$(gofmt -l . | grep -v node_modules || :)
+          if [ -n "$unformatted" ]; then
+            echo "Unformatted files found: $unformatted"
+            exit 1
+          fi
+
+      - name: Run golangci-lint
+        run: golangci-lint run --config=.golangci.yml --timeout=5m
+
+      - name: Go unit & integration tests
+        run: go test -v $(go list ./... | grep -v node_modules)
+
+      - name: Go race tests
+        run: go test -v -count=1 -race $(go list ./... | grep -v node_modules)
+
+      - name: Go coverage threshold enforcement (>=60.0%)
+        run: |
+          go test -coverprofile=coverage.out $(go list ./... | grep -v node_modules)
+          go tool cover -func=coverage.out
+          coverage=$(go tool cover -func=coverage.out | grep total: | awk '{print substr($3, 1, length($3)-1)}')
+          echo "Go Total Statement Coverage: ${coverage}%"
+          awk -v cov="$coverage" 'BEGIN {
+            if (cov + 0 < 60.0) {
+              print "ERROR: Coverage " cov "% is strictly below 60.0% threshold."
+              exit 1
+            }
+          }'
+
+      - name: Frontend unit & component tests
+        run: cd frontend && npm test
+
+      - name: Frontend coverage threshold enforcement (>=65.0%)
+        run: cd frontend && npm test -- --coverage
+
+      - name: Frontend quality checks (check, lint, format, build)
+        run: |
+          cd frontend
+          npm run check
+          npm run lint
+          npm run format:check
+          npm run build
+
+      - name: Verify Docker build
+        run: docker build -t kerob:release-test .
+
+  build-and-release:
+    name: Build & Publish Release Artifacts
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.10'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Determine Release Tag
+        id: release_tag
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Using release tag: $TAG"
+
+      - name: Install dependencies & build frontend bundle
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Build multi-platform release artifacts
+        env:
+          VERSION: ${{ steps.release_tag.outputs.tag }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          chmod +x ./scripts/build-release.sh
+          ./scripts/build-release.sh
+
+      - name: Extract Release Notes from CHANGELOG.md
+        id: notes
+        run: |
+          TAG="${{ steps.release_tag.outputs.tag }}"
+          node -e '
+            const fs = require("fs");
+            const tag = process.env.TAG;
+            const content = fs.readFileSync("CHANGELOG.md", "utf8");
+            const headerRegex = new RegExp(`## \\\\\\[${tag}\\\\\\][^\n]*\n([\\s\\S]*?)(?=\n## |$)`);
+            const match = content.match(headerRegex);
+            const notes = match ? match[1].trim() : `Release ${tag}`;
+            fs.writeFileSync("release_notes.md", notes);
+          '
+          cat release_notes.md
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release_tag.outputs.tag }}
+        run: |
+          gh release create "${TAG}" \
+            dist/kerob-* \
+            dist/checksums.txt \
+            --title "Kerob ${TAG}" \
+            --notes-file release_notes.md

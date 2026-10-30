@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Kerob Automation Platform API
   description: Production-grade event-driven automation platform API.
-  version: 0.1.0
+  version: 0.1.1
 servers:
   - url: http://localhost:8080
     description: Local Server

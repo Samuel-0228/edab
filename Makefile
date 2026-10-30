@@ -1,4 +1,9 @@
-.PHONY: all build test test-unit test-integration test-e2e test-docker test-frontend test-coverage test-coverage-frontend coverage test-all lint deps deps-health deps-verify deps-audit deps-freshness clean help
+.PHONY: all build build-frontend release-build release-artifacts release test test-unit test-integration test-e2e test-docker test-frontend test-coverage test-coverage-frontend coverage test-all lint deps deps-health deps-verify deps-audit deps-freshness clean help
+
+VERSION ?= $(shell grep -E '^## \[v[0-9]' CHANGELOG.md | head -n 1 | sed -E 's/.*\[(v[0-9]+\.[0-9]+\.[0-9]+)\].*/\1/')
+COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS := -w -s -X kerob/internal/version.Version=$(VERSION) -X kerob/internal/version.Commit=$(COMMIT) -X kerob/internal/version.BuildDate=$(BUILD_DATE)
 
 # Default target runs all offline tests
 all: test-unit
@@ -6,6 +11,13 @@ all: test-unit
 ## Help
 help:
 	@echo "Kerob Automation Engine - Make Targets"
+	@echo ""
+	@echo "Release & Build:"
+	@echo "  make build             Compile kerob server binary with embedded dashboard and version metadata"
+	@echo "  make build-frontend    Compile Svelte dashboard into internal/api embedded bundle"
+	@echo "  make release-artifacts Compile multi-platform distributable binaries and archives with checksums"
+	@echo "  make release           Run all verification suites and produce release artifacts"
+	@echo "  make clean             Clean build and release artifacts"
 	@echo ""
 	@echo "Test Suites:"
 	@echo "  make test-unit         Run unit tests (no external services or Docker required)"
@@ -16,10 +28,8 @@ help:
 	@echo "  make test              Run standard Go test suite for fresh clone verification (go test ./...)"
 	@echo "  make test-all          Run complete test verification (unit, integration, e2e, frontend)"
 	@echo ""
-	@echo "Build & Lint:"
-	@echo "  make build             Compile kerob server binary (CGO_ENABLED=0)"
-	@echo "  make lint              Run code formatting and linter checks"
-	@echo "  make clean             Clean build artifacts"
+	@echo "Lint & Verification:"
+	@echo "  make lint              Run code formatting, type checking, and linter checks"
 	@echo ""
 	@echo "Dependency Health & Security Auditing:"
 	@echo "  make deps              Run complete enforced dependency health audit (Go + Frontend)"
@@ -29,7 +39,16 @@ help:
 
 ## Build
 build:
-	CGO_ENABLED=0 go build -v -ldflags="-w -s" -o bin/kerob ./cmd/server
+	CGO_ENABLED=0 go build -v -ldflags="$(LDFLAGS)" -o bin/kerob ./cmd/server
+
+build-frontend:
+	cd frontend && npm ci && npm run build
+
+## Release Packaging
+release-artifacts:
+	./scripts/build-release.sh
+
+release: test-all lint release-artifacts
 
 ## Tests
 test:
@@ -97,4 +116,4 @@ deps-health:
 	./scripts/check-dependencies.sh
 
 clean:
-	rm -rf bin/ coverage.out
+	rm -rf bin/ dist/ coverage.out coverage_api.out
