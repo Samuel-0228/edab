@@ -2,9 +2,9 @@
 
 [![CI Pipeline](https://github.com/Samuel-0228/edab/actions/workflows/ci.yml/badge.svg)](https://github.com/Samuel-0228/edab/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Samuel-0228/edab?include_prereleases&style=flat-square)](https://github.com/Samuel-0228/edab/releases)
-[![Go Version](https://img.shields.io/badge/go-1.26.10-00ADD8?style=flat-square&logo=go)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/go-1.23.2-00ADD8?style=flat-square&logo=go)](https://go.dev/)
 [![Svelte](https://img.shields.io/badge/svelte-5.x-FF3E00?style=flat-square&logo=svelte)](https://svelte.dev/)
-[![Coverage](https://img.shields.io/badge/coverage-65.4%25-brightgreen?style=flat-square)](Makefile)
+[![Coverage](https://img.shields.io/badge/coverage-66.5%25-brightgreen?style=flat-square)](Makefile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
 > **Kerob** is an extensible, production-grade event-driven automation platform built in Go. It connects heterogeneous services, ingests normalized events, evaluates declarative workflows through safe condition AST and deterministic transformation engines, and reliably dispatches actions across connected targets with end-to-end idempotency, exponential backoff retries, and dead-letter queues.
@@ -42,6 +42,7 @@
 ## Table of Contents
 
 - [Core Capabilities](#core-capabilities)
+- [Workflow Reference Manual](docs/WORKFLOW_REFERENCE.md)
 - [Quick Start Guide](#quick-start-guide)
   - [Step 1: Download or Clone](#step-1-download-or-clone)
   - [Step 2: Configure Environment](#step-2-configure-environment)
@@ -65,14 +66,21 @@
 
 ## Core Capabilities
 
-- **Declarative Workflow Architecture**: Define automation pipelines as structured data (`WHEN [trigger] IF [conditions] TRANSFORM THEN [actions]`). Safe condition AST with zero arbitrary code execution (`equals`, `contains`, `matches`, `greater_than`, `in`, `and/or/not`).
-- **Deterministic Templating**: Contextual JSON navigation (`{{event.payload.title}}`, `{{metadata.author | default: "System"}}`) without side effects.
+- **Multi-Step Execution Pipelines**: Connect actions as ordered pipelines with dynamic data flow (`{{steps.<id>.output.<path>}}`, `{{steps.<id>.status}}`), granular per-step error policies (`fail`, `continue`, `skip_rest`), timeouts, and idempotent failed-step resumption.
+- **Rich Control Flow Primitives**: Built-in branching (`branch`), safe bounded array iteration (`for_each`), asynchronous non-blocking delays (`delay`/`wait`), and bounded parallel fan-out (`parallel`).
+- **Safe Condition AST & Expressions**: 18 operators including `starts_with`, `ends_with`, `exists`, `between`, `regex` (RE2 guarded), `in`/`not_in`, `is_empty`, and IANA timezone-aware `time_window`. JSONPath bracket indexing (`payload.items[0].id`) and wildcard array quantifiers.
+- **Pure Transformation Filters**: 16 safe UNIX-style template filters (`upper`, `lower`, `trim`, `truncate`, `replace`, `split`, `join`, `default`, `json_encode`, `url_encode`, `base64`, `date_format`, `number_format`, `regex_extract`, `coalesce`, `length`).
+- **Comprehensive Integration Catalog**: Inbound webhook signature verification (generic HMAC-SHA256, Slack-style `v0=...`, Stripe-style `t=...,v1=...`), generic HTTP polling trigger (with ETag & Last-Modified caching), Slack, Microsoft Teams, SMTP Email, and Call Workflow (with loop/depth recursion protection).
+- **Traffic Control & Circuit Breakers**: Per-workflow rate limiting (token bucket), execution concurrency bounds, entity serialization concurrency keys, automated circuit breaker protection (Closed/Open/Half-Open), priority queuing, and outbound HMAC-SHA256 request signing.
+- **Workflow Versioning & Operability**: Full revision history tracking, version diffing, instant rollback, dry-run evaluation endpoint (`POST /api/v1/workflows/{id}/test`), JSON/YAML import/export, and event replay with explicit idempotency bypass.
 - **Strict Idempotency & Deduplication**:
   - Event-level uniqueness on `(source_id, external_event_id)` avoids duplicate ingestion.
   - Execution-level uniqueness on `(workflow_id, event_id)` prevents duplicate action execution across restarts.
-- **Proactive Outbound SSRF Defense**: All outbound requests (webhooks, HTTP actions, Discord, GitHub) route through a custom socket dialer that blocks loopback (`127.0.0.0/8`, `::1`), RFC1918 private subnets, link-local, cloud metadata (`169.254.169.254`), and defeats DNS rebinding.
+- **Proactive Outbound SSRF Defense**: All outbound requests (webhooks, HTTP actions, Slack, Discord, Teams) route through a custom socket dialer that blocks loopback (`127.0.0.0/8`, `::1`), RFC1918 private subnets, link-local, cloud metadata (`169.254.169.254`), and defeats DNS rebinding.
 - **AES-256-GCM Vault at Rest**: Third-party integration tokens, secrets, and API keys are encrypted at rest with AES-256-GCM using unique random nonces. Sensitive tokens are never rendered in logs or API responses (`••••••••1234`).
-- **Resilient Execution Lifecycle**: Exponential backoff retry engine with configurable jitter, execution timeline tracking, and inspectable Dead-Letter Queue with manual retry and discard controls.
+- **Resilient Execution Lifecycle**: Exponential backoff retry engine with configurable jitter, execution timeline tracking, and inspectable Dead-Letter Queue with single and bulk retry/discard controls.
+- **Embedded Control Plane**: Modern, high-density Svelte 5 + TypeScript dashboard embedded directly inside the compiled Go binary with dynamic schema-driven integration configuration.
+- **Prometheus Metrics & Probes**: Liveness (`/health`), readiness probe (`/ready`), and standard Prometheus format metrics at `/metrics` including execution counts, durations, and circuit breaker states.
 - **Embedded Control Plane**: Modern, high-density Svelte 5 + TypeScript dashboard embedded directly inside the compiled Go binary. Zero separate frontend server needed.
 - **Prometheus Metrics & Probes**: Liveness (`/health`), readiness probe (`/ready`), and standard Prometheus format metrics at `/metrics`.
 

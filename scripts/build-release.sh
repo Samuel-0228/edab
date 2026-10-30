@@ -79,6 +79,9 @@ for TARGET in "${TARGETS[@]}"; do
   cp "${ROOT_DIR}/README.md" "${STAGE_DIR}/"
   cp "${ROOT_DIR}/LICENSE" "${STAGE_DIR}/"
   cp "${ROOT_DIR}/.env.example" "${STAGE_DIR}/"
+  if [ -f "${ROOT_DIR}/docs/WORKFLOW_REFERENCE.md" ]; then
+    cp "${ROOT_DIR}/docs/WORKFLOW_REFERENCE.md" "${STAGE_DIR}/"
+  fi
   
   if [ "${GOOS}" = "windows" ]; then
     (cd "${DIST_DIR}" && zip -q -r "${ARCHIVE_NAME}.zip" "${ARCHIVE_NAME}")

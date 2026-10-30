@@ -5,6 +5,58 @@ The project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ---
 
+## [v0.2.0] - 2026-10-30
+
+### Added
+- **Multi-Step Execution Pipelines & Data Flow**:
+  - Actions execute as an ordered pipeline with inter-step data referencing (`{{steps.<id>.output.<path>}}`, `{{steps.<id>.status}}`, `{{steps.<id>.error}}`).
+  - Granular per-step error policies: `fail` (halt & fail), `continue` (record warning & proceed), and `skip_rest` (graceful early completion).
+  - Individual step timeouts and retry overrides (`max_retries`, `backoff`).
+  - Idempotent resumption at failed steps without re-executing already completed actions.
+- **Control Flow Primitives**:
+  - Branching step (`branch`): Evaluate condition cases sequentially with fallback default step list.
+  - Safe array iteration (`for_each`): Loop over arrays in event payload with configurable safety cap (up to 100 iterations).
+  - Asynchronous non-blocking delay (`delay` / `wait`): Schedules resumption via background queue without worker thread blocking.
+  - Bounded parallel fan-out (`parallel`): Concurrently executes independent action branches with configurable concurrency limits.
+- **Rich Condition Operators & Expression Evaluation**:
+  - Added 18 condition operators: `starts_with`, `ends_with`, `exists`, `not_exists`, `less_than`, `less_or_equal`, `greater_or_equal`, `between`, `regex` (guarded RE2), `in`, `not_in`, `is_empty`, `is_not_empty`, and `time_window` with IANA timezone support.
+  - JSONPath bracket indexing (`payload.items[0].id`) and wildcard array quantifiers (`payload.items[*].status`).
+- **Deterministic Transformations & Safe Filter Library**:
+  - 16 pure UNIX-pipe template filters: `upper`, `lower`, `trim`, `truncate:N`, `replace`, `split`, `join`, `default`, `json_encode`, `url_encode`, `base64`, `date_format`, `number_format`, `regex_extract`, `coalesce`, `length`.
+  - Transform modes: `mapping`, `pick`, `omit`, `flatten`, `merge`, and `compute` (pure arithmetic & string concatenation).
+  - Secure vault secret resolution (`{{secrets.<name>}}`) injected only into action configurations.
+- **Integration SDK & Schema-Driven Studio**:
+  - Declarative `Integration` interface + registry with manifest, capabilities, and required credential types.
+  - Machine-readable schema endpoint (`GET /api/v1/integrations/{id}/schema`).
+  - Dynamic schema-driven configuration form in Svelte 5 dashboard (`SchemaConfigForm.svelte`), enabling zero-frontend code additions for new connectors.
+- **New Integrations**:
+  - Inbound webhook signature verifiers: Generic HMAC-SHA256, Slack-style (`v0=...`), and Stripe-style (`t=...,v1=...`) with replay window tolerance.
+  - HTTP Polling trigger (`http_poll`): Periodic JSON polling with deduplication and ETag / Last-Modified caching headers.
+  - Slack action: Post to incoming webhooks or `chat.postMessage` API with block kit.
+  - Microsoft Teams action: Deliver Office 365 connector cards and adaptive cards.
+  - SMTP Email action: Authenticated transactional email dispatch.
+  - Call Workflow action (`call_workflow`): Programmatic sub-workflow chaining with loop and depth guards (max depth 5).
+- **Traffic Control & Reliability**:
+  - Per-workflow token-bucket rate limiting (max executions per minute).
+  - Per-workflow concurrency limits and entity serialization concurrency key (`concurrency_key: "payload.chat_id"`).
+  - Automated circuit breakers per integration (Closed/Open/Half-Open states) surfaced in `/health` and Prometheus metrics.
+  - Execution priority levels (high-priority jobs claimed before normal runs).
+  - Outbound HTTP action request signing (`X-Kerob-Signature-256` and `X-Kerob-Timestamp`).
+- **Workflow Operability & Tooling**:
+  - Revision history tracking, version snapshots, diffing (`GET /api/v1/workflows/{id}/diff`), and instant rollback (`POST /api/v1/workflows/{id}/rollback/{version}`).
+  - Dry-run evaluation endpoint (`POST /api/v1/workflows/{id}/test`): Step-by-step trace of trigger matching, conditions, and transforms with mock action outputs.
+  - JSON and YAML workflow import/export (`/api/v1/workflows/export`, `/api/v1/workflows/import`).
+  - Built-in template recipe library (`GET /api/v1/templates`).
+  - Event replay with explicit idempotency bypass (`POST /api/v1/events/{id}/replay`, `POST /api/v1/events/replay-bulk`).
+  - Dead-Letter Queue bulk retry and discard endpoints (`POST /api/v1/dead-letter/retry-bulk`, `POST /api/v1/dead-letter/discard-bulk`).
+- **Quality & Code Health**:
+  - Strict CI coverage gates: Go statement coverage >= 60.0% (current: 66.5%), Frontend coverage >= 65.0% (current: 78.43%).
+  - Zero `as any` casts across Svelte 5 frontend codebase with shared API type models.
+  - Strict enforcement of file length: all Go source and test files maintained strictly under 500 lines of code.
+  - Global error tracking integration with Sentry DSN fallback to structured log scrubbing.
+
+---
+
 ## [v0.1.1] - 2026-10-30
 
 ### Added
