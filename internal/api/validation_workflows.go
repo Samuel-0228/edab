@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"kerob/internal/adapters"
 	"kerob/internal/adapters/ssrf"
 	"kerob/internal/core/workflow"
 )
@@ -149,14 +150,11 @@ func validateActionStepItem(act workflow.ActionStep, prefix string) []FieldError
 		}
 
 	default: // standard action
-		validIntegrations := map[string]bool{
-			"http": true, "discord": true, "github": true, "telegram": true,
-		}
 		integ := strings.ToLower(strings.TrimSpace(act.Integration))
 		if integ == "" {
 			errs = append(errs, FieldError{Field: fmt.Sprintf("%s.integration", prefix), Message: "action integration is required"})
-		} else if !validIntegrations[integ] {
-			errs = append(errs, FieldError{Field: fmt.Sprintf("%s.integration", prefix), Message: fmt.Sprintf("unsupported action integration %q; supported: http, discord, github, telegram", act.Integration)})
+		} else if _, found := adapters.GetManifest(integ); !found {
+			errs = append(errs, FieldError{Field: fmt.Sprintf("%s.integration", prefix), Message: fmt.Sprintf("unsupported action integration %q", act.Integration)})
 		}
 
 		if strings.TrimSpace(act.ActionType) == "" {

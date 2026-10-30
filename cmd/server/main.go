@@ -100,6 +100,9 @@ func main() {
 	actionRegistry.Register(actions.NewHTTPActionExecutor())
 	actionRegistry.Register(actions.NewDiscordActionExecutor())
 	actionRegistry.Register(actions.NewGitHubActionExecutor())
+	actionRegistry.Register(actions.NewSlackActionExecutor())
+	actionRegistry.Register(actions.NewTeamsActionExecutor())
+	actionRegistry.Register(actions.NewSMTPActionExecutor())
 
 	var teleAPI telegram.API
 	if cfg.TelegramEnabled && cfg.TelegramBotToken != "" {
@@ -129,6 +132,7 @@ func main() {
 		},
 	)
 	wfEngine.SetErrorTracker(errtracker.NewLogProvider())
+	actionRegistry.Register(actions.NewCallWorkflowActionExecutor(wfEngine))
 
 	// 6. Initialize Engine Pipeline & Delivery Worker
 	routingEngine := routing.NewRoutingEngine(routeStore)

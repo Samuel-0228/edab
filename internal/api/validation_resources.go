@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"kerob/internal/adapters"
 	"kerob/internal/adapters/destinations"
 	"kerob/internal/adapters/sources"
 	"kerob/internal/core/credentials"
@@ -46,13 +47,12 @@ func ValidateCredentialInput(c *credentials.Credential, data map[string]string) 
 	}
 
 	integ := strings.ToLower(strings.TrimSpace(c.Integration))
-	validIntegrations := map[string]bool{
-		"http": true, "discord": true, "github": true, "telegram": true, "custom": true,
-	}
 	if integ == "" {
 		errs = append(errs, FieldError{Field: "integration", Message: "credential integration is required"})
-	} else if !validIntegrations[integ] {
-		errs = append(errs, FieldError{Field: "integration", Message: fmt.Sprintf("unsupported integration %q", c.Integration)})
+	} else if integ != "custom" {
+		if _, found := adapters.GetManifest(integ); !found {
+			errs = append(errs, FieldError{Field: "integration", Message: fmt.Sprintf("unsupported integration %q", c.Integration)})
+		}
 	}
 
 	if len(data) == 0 {

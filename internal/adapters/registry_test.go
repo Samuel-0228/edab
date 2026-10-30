@@ -35,6 +35,11 @@ func TestCatalogListsSupportedIntegrationsAndCapabilities(t *testing.T) {
 		{"webhook", "trigger", "webhook.received", "", ""},
 		{"http", "action", "", "http_request", "api_key"},
 		{"schedule", "trigger", "schedule.tick", "", ""},
+		{"slack", "action", "", "send_message", "webhook_url"},
+		{"teams", "action", "", "send_card", "webhook_url"},
+		{"smtp", "action", "", "send_email", "password"},
+		{"call_workflow", "action", "", "call", ""},
+		{"http_poll", "trigger", "http.poll", "", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.id, func(t *testing.T) {

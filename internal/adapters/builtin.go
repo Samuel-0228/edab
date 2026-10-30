@@ -10,6 +10,11 @@ func BuiltinIntegrations() []Integration {
 		IntegrationFunc(WebhookManifest),
 		IntegrationFunc(HTTPManifest),
 		IntegrationFunc(ScheduleManifest),
+		IntegrationFunc(SlackManifest),
+		IntegrationFunc(TeamsManifest),
+		IntegrationFunc(SMTPManifest),
+		IntegrationFunc(CallWorkflowManifest),
+		IntegrationFunc(HTTPPollManifest),
 	}
 }
 

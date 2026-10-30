@@ -2,10 +2,13 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
 	"time"
+
+	"github.com/google/uuid"
 
 	"kerob/internal/core/conditions"
 	"kerob/internal/core/credentials"
@@ -61,6 +64,44 @@ func NewEngine(
 		actions:    actions,
 		cfg:        config,
 	}
+}
+
+// InvokeWorkflow invokes a target workflow programmatically (e.g. from call_workflow action).
+func (e *Engine) InvokeWorkflow(ctx context.Context, targetWorkflowID string, payload map[string]any, metadata map[string]string) (string, error) {
+	wf, err := e.workflows.GetByID(ctx, targetWorkflowID)
+	if err != nil {
+		return "", fmt.Errorf("target workflow %s not found: %w", targetWorkflowID, err)
+	}
+
+	payloadBytes, _ := json.Marshal(payload)
+	metaBytes, _ := json.Marshal(metadata)
+
+	ev := &event.Event{
+		ID:              uuid.New().String(),
+		SourceID:        "call_workflow",
+		ExternalEventID: fmt.Sprintf("chain:%s:%d", targetWorkflowID, time.Now().UnixNano()),
+		EventType:       "workflow.invoked",
+		Payload:         payloadBytes,
+		Metadata:        metaBytes,
+		CreatedAt:       time.Now().UTC(),
+	}
+
+	exec, err := e.executions.Create(ctx, &Execution{
+		WorkflowID:  wf.ID,
+		EventID:     ev.ID,
+		Status:      ExecutionPending,
+		Attempts:    0,
+		MaxAttempts: wf.MaxRetries,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create execution for chained workflow: %w", err)
+	}
+
+	executed, err := e.ExecuteWorkflow(ctx, wf, ev, exec)
+	if err != nil {
+		return exec.ID, err
+	}
+	return executed.ID, nil
 }
 
 // ProcessEvent routes an incoming event to all active matching workflows and executes them.

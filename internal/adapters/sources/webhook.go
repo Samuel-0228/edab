@@ -17,8 +17,12 @@ import (
 
 // WebhookConfig defines configuration options for the generic webhook source adapter.
 type WebhookConfig struct {
-	HeaderSecret string `json:"header_secret,omitempty"`
-	Secret       string `json:"secret,omitempty"`
+	HeaderSecret      string `json:"header_secret,omitempty"`
+	Secret            string `json:"secret,omitempty"`
+	SignatureVerifier string `json:"signature_verifier,omitempty"` // "generic_hmac", "slack", "stripe"
+	SignatureHeader   string `json:"signature_header,omitempty"`   // custom header for generic_hmac
+	Encoding          string `json:"encoding,omitempty"`           // "hex" or "base64"
+	ToleranceSeconds  int    `json:"tolerance_seconds,omitempty"`  // replay tolerance in seconds
 }
 
 // ValidateRequest authenticates a webhook before its payload reaches the
@@ -34,25 +38,36 @@ func ValidateRequest(config json.RawMessage, headers http.Header, body []byte) e
 	if expectedSecret == "" {
 		expectedSecret = cfg.HeaderSecret
 	}
-	if expectedSecret == "" {
+
+	switch cfg.SignatureVerifier {
+	case "generic_hmac":
+		return VerifyGenericHMAC(expectedSecret, cfg.SignatureHeader, cfg.Encoding, headers, body)
+	case "slack":
+		return VerifySlackSignature(expectedSecret, headers, body, time.Now(), cfg.ToleranceSeconds)
+	case "stripe":
+		return VerifyStripeSignature(expectedSecret, headers, body, time.Now(), cfg.ToleranceSeconds)
+	default:
+		// Standard secret/signature validation
+		if expectedSecret == "" {
+			return nil
+		}
+
+		provided := headers.Get("X-Webhook-Secret")
+		if subtle.ConstantTimeCompare([]byte(provided), []byte(expectedSecret)) != 1 {
+			return fmt.Errorf("invalid webhook secret")
+		}
+
+		signature := headers.Get("X-Webhook-Signature-256")
+		if signature != "" {
+			mac := hmac.New(sha256.New, []byte(expectedSecret))
+			_, _ = mac.Write(body)
+			expected := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+			if subtle.ConstantTimeCompare([]byte(signature), []byte(expected)) != 1 {
+				return fmt.Errorf("invalid webhook signature")
+			}
+		}
 		return nil
 	}
-
-	provided := headers.Get("X-Webhook-Secret")
-	if subtle.ConstantTimeCompare([]byte(provided), []byte(expectedSecret)) != 1 {
-		return fmt.Errorf("invalid webhook secret")
-	}
-
-	signature := headers.Get("X-Webhook-Signature-256")
-	if signature != "" {
-		mac := hmac.New(sha256.New, []byte(expectedSecret))
-		_, _ = mac.Write(body)
-		expected := "sha256=" + hex.EncodeToString(mac.Sum(nil))
-		if subtle.ConstantTimeCompare([]byte(signature), []byte(expected)) != 1 {
-			return fmt.Errorf("invalid webhook signature")
-		}
-	}
-	return nil
 }
 
 // WebhookSourceAdapter ingests raw HTTP push notifications/webhooks.
