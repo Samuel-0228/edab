@@ -75,7 +75,19 @@ func (h *Handlers) Metrics(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(&b, "# HELP kerob_dead_letter_count Number of unresolved dead-letter failures\n")
 	fmt.Fprintf(&b, "# TYPE kerob_dead_letter_count gauge\n")
-	fmt.Fprintf(&b, "kerob_dead_letter_count %d\n", deadLetters)
+	fmt.Fprintf(&b, "kerob_dead_letter_count %d\n\n", deadLetters)
+
+	fmt.Fprintf(&b, "# HELP kerob_circuit_breaker_open_total Total number of open circuit breakers\n")
+	fmt.Fprintf(&b, "# TYPE kerob_circuit_breaker_open_total gauge\n")
+	openCBs := 0
+	if h.workflowEngine != nil && h.workflowEngine.CircuitBreakers() != nil {
+		for _, state := range h.workflowEngine.CircuitBreakers().Status() {
+			if state == "open" {
+				openCBs++
+			}
+		}
+	}
+	fmt.Fprintf(&b, "kerob_circuit_breaker_open_total %d\n", openCBs)
 
 	_, _ = w.Write([]byte(b.String()))
 }

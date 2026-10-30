@@ -153,3 +153,22 @@ func TestSentryProvider(t *testing.T) {
 	p3 := NewSentryProvider("invalid-dsn-string")
 	p3.CaptureError(ctx, errors.New("fallback test"), Scope{})
 }
+
+func TestGlobalProvider(t *testing.T) {
+	ctx := context.Background()
+
+	mem := NewMemoryProvider()
+	SetGlobalProvider(mem)
+
+	CaptureGlobal(ctx, errors.New("global critical error"), Scope{RequestID: "req-global-1"})
+	records := mem.Records()
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	if records[0].Scope.RequestID != "req-global-1" {
+		t.Errorf("unexpected request ID: %s", records[0].Scope.RequestID)
+	}
+
+	SetGlobalProvider(nil)
+	CaptureGlobal(ctx, errors.New("noop test"), Scope{})
+}

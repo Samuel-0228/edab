@@ -1,10 +1,14 @@
 package api
 
 import (
+	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
+
+	"kerob/internal/core/errtracker"
 )
 
 type contextKey string
@@ -44,6 +48,13 @@ func respondErrorWithCode(w http.ResponseWriter, status int, code, message strin
 			slog.String("code", code),
 			slog.String("error", message),
 		)
+		errtracker.CaptureGlobal(context.Background(), fmt.Errorf("%s: %s", code, message), errtracker.Scope{
+			RequestID: requestID,
+			Tags: map[string]string{
+				"status": fmt.Sprintf("%d", status),
+				"code":   code,
+			},
+		})
 		message = "internal server error"
 		if code == "ERROR" {
 			code = "INTERNAL_ERROR"

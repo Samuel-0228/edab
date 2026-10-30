@@ -50,6 +50,34 @@ type Provider interface {
 	Flush(timeout time.Duration)
 }
 
+var (
+	globalMu       sync.RWMutex
+	globalProvider Provider = NewLogProvider()
+)
+
+// SetGlobalProvider sets the system-wide error tracking provider.
+func SetGlobalProvider(p Provider) {
+	globalMu.Lock()
+	defer globalMu.Unlock()
+	if p == nil {
+		globalProvider = &NoopProvider{}
+		return
+	}
+	globalProvider = p
+}
+
+// GlobalProvider returns the current system-wide provider.
+func GlobalProvider() Provider {
+	globalMu.RLock()
+	defer globalMu.RUnlock()
+	return globalProvider
+}
+
+// CaptureGlobal forwards an error to the global provider.
+func CaptureGlobal(ctx context.Context, err error, scope Scope) {
+	GlobalProvider().CaptureError(ctx, err, scope)
+}
+
 // Sensitive data scrubbers
 var (
 	bearerRegex   = regexp.MustCompile(`(?i)bearer\s+[a-zA-Z0-9_.\-]+`)

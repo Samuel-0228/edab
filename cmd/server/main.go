@@ -131,7 +131,12 @@ func main() {
 			MaxBackoff:  cfg.MaxBackoff,
 		},
 	)
-	wfEngine.SetErrorTracker(errtracker.NewLogProvider())
+	var errTracker errtracker.Provider = errtracker.NewLogProvider()
+	if sentryDSN := os.Getenv("SENTRY_DSN"); sentryDSN != "" {
+		errTracker = errtracker.NewSentryProvider(sentryDSN)
+	}
+	errtracker.SetGlobalProvider(errTracker)
+	wfEngine.SetErrorTracker(errTracker)
 	actionRegistry.Register(actions.NewCallWorkflowActionExecutor(wfEngine))
 
 	// 6. Initialize Engine Pipeline & Delivery Worker
@@ -239,7 +244,7 @@ func main() {
 		SourceReg:    srcRegistry,
 		DestReg:      destRegistry,
 		TelegramAPI:  teleAPI,
-		ErrorTracker: errtracker.NewLogProvider(),
+		ErrorTracker: errTracker,
 	})
 
 	server := api.NewServerWithOptions(cfg.ServerPort, handlers, api.ServerOptions{
