@@ -252,7 +252,7 @@ components:
         conditions:
           $ref: '#/components/schemas/Condition'
         transformations:
-          type: object
+          $ref: '#/components/schemas/Transformation'
         actions:
           type: array
           items:
@@ -308,6 +308,37 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Condition'
+
+    Transformation:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [template, mapping, json, passthrough, pick, omit, flatten, merge, compute]
+        template: { type: string }
+        output_key: { type: string }
+        field_maps:
+          type: object
+          additionalProperties: { type: string }
+        defaults:
+          type: object
+        pick_keys:
+          type: array
+          items: { type: string }
+        omit_keys:
+          type: array
+          items: { type: string }
+        data:
+          type: object
+        compute:
+          type: array
+          items:
+            type: object
+            required: [target, op, args]
+            properties:
+              target: { type: string }
+              op: { type: string, enum: [add, sub, mul, div, concat] }
+              args: { type: array, items: { type: string } }
 
     APIError:
       type: object

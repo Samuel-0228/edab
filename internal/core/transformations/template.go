@@ -50,34 +50,26 @@ func RenderTemplateWithContext(tmpl string, ctx RenderContext) string {
 		}
 		expr := strings.TrimSpace(submatches[1])
 
-		// Check for default fallback operator e.g. "path | default: fallback" or "path || fallback"
-		var path string
-		var defaultVal string
-		hasDefault := false
-
-		if strings.Contains(expr, "| default:") {
-			parts := strings.SplitN(expr, "| default:", 2)
-			path = strings.TrimSpace(parts[0])
-			defaultVal = cleanDefault(strings.TrimSpace(parts[1]))
-			hasDefault = true
-		} else if strings.Contains(expr, "||") {
+		// Check for || fallback shorthand
+		if strings.Contains(expr, "||") {
 			parts := strings.SplitN(expr, "||", 2)
-			path = strings.TrimSpace(parts[0])
-			defaultVal = cleanDefault(strings.TrimSpace(parts[1]))
-			hasDefault = true
-		} else {
-			path = expr
+			expr = fmt.Sprintf("%s | default: %s", parts[0], parts[1])
+		}
+
+		segments := strings.Split(expr, "|")
+		path := strings.TrimSpace(segments[0])
+		var filters []string
+		if len(segments) > 1 {
+			filters = segments[1:]
 		}
 
 		val, exists := resolvePath(path, ctx)
-		if !exists || val == nil {
-			if hasDefault {
-				return defaultVal
-			}
+		finalVal := applyFilterPipeline(val, exists, filters, ctx)
+		if finalVal == nil {
 			return ""
 		}
 
-		switch v := val.(type) {
+		switch v := finalVal.(type) {
 		case string:
 			return v
 		case time.Time:
@@ -92,17 +84,6 @@ func RenderTemplateWithContext(tmpl string, ctx RenderContext) string {
 			return fmt.Sprintf("%v", v)
 		}
 	})
-}
-
-func cleanDefault(s string) string {
-	s = strings.TrimSpace(s)
-	if (strings.HasPrefix(s, `"`) && strings.HasSuffix(s, `"`)) ||
-		(strings.HasPrefix(s, `'`) && strings.HasSuffix(s, `'`)) {
-		if len(s) >= 2 {
-			return s[1 : len(s)-1]
-		}
-	}
-	return s
 }
 
 func splitPath(path string) []string {
