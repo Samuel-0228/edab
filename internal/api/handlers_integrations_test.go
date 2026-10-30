@@ -26,6 +26,30 @@ func TestIntegrationsAndStaticAssets(t *testing.T) {
 		t.Fatalf("expected 200 for get telegram integration, got %d", wIntGet.Code)
 	}
 
+	// Get Integration Schema
+	reqSchema := httptest.NewRequest(http.MethodGet, "/api/v1/integrations/telegram/schema", nil)
+	wSchema := httptest.NewRecorder()
+	handler.ServeHTTP(wSchema, reqSchema)
+	if wSchema.Code != http.StatusOK {
+		t.Fatalf("expected 200 for get telegram schema, got %d", wSchema.Code)
+	}
+
+	// Get Integration Schema with action_type query
+	reqSchemaAction := httptest.NewRequest(http.MethodGet, "/api/v1/integrations/telegram/schema?action_type=copy_message", nil)
+	wSchemaAction := httptest.NewRecorder()
+	handler.ServeHTTP(wSchemaAction, reqSchemaAction)
+	if wSchemaAction.Code != http.StatusOK {
+		t.Fatalf("expected 200 for get telegram copy_message schema, got %d", wSchemaAction.Code)
+	}
+
+	// Get Integration Schema not found
+	reqSchema404 := httptest.NewRequest(http.MethodGet, "/api/v1/integrations/unknown_xyz/schema", nil)
+	wSchema404 := httptest.NewRecorder()
+	handler.ServeHTTP(wSchema404, reqSchema404)
+	if wSchema404.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for unknown integration schema, got %d", wSchema404.Code)
+	}
+
 	// Dashboard UI Assets
 	reqUI := httptest.NewRequest(http.MethodGet, "/ui/", nil)
 	wUI := httptest.NewRecorder()

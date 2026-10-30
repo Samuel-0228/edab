@@ -1,133 +1,128 @@
 package adapters
 
-// IntegrationMetadata describes an integration and its capabilities.
-type IntegrationMetadata struct {
-	ID          string               `json:"id"`
-	Name        string               `json:"name"`
-	Description string               `json:"description"`
-	Category    string               `json:"category"` // "messaging", "developer", "feeds", "network"
-	Icon        string               `json:"icon"`
-	Triggers    []TriggerMetadata    `json:"triggers"`
-	Actions     []ActionMetadata     `json:"actions"`
-	Credentials []CredentialProperty `json:"credentials"`
+import (
+	"sync"
+)
+
+// Registry manages registered integrations and their manifests.
+type Registry struct {
+	mu           sync.RWMutex
+	integrations map[string]Integration
+	order        []string
 }
 
-type TriggerMetadata struct {
-	Type        string `json:"type"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-}
-
-type ActionMetadata struct {
-	Type        string `json:"type"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-}
-
-type CredentialProperty struct {
-	Key         string `json:"key"`
-	Label       string `json:"label"`
-	Type        string `json:"type"` // "text", "password"
-	Required    bool   `json:"required"`
-	Description string `json:"description"`
-}
-
-// Catalog returns all available integrations in the Kerob platform.
-func Catalog() []IntegrationMetadata {
-	return []IntegrationMetadata{
-		{
-			ID:          "telegram",
-			Name:        "Telegram",
-			Description: "Monitor channels and send formatted posts, photos, documents, and media groups.",
-			Category:    "messaging",
-			Icon:        "telegram",
-			Triggers: []TriggerMetadata{
-				{Type: "telegram.message", Name: "New Channel Message", Description: "Fires when a new post arrives in a monitored channel or group."},
-				{Type: "telegram.media_group", Name: "New Media Group / Album", Description: "Fires when an album of photos/videos is published."},
-				{Type: "telegram.public_post", Name: "New Public Channel Post", Description: "Scraped from public Telegram channels without bot admin access."},
-			},
-			Actions: []ActionMetadata{
-				{Type: "send_message", Name: "Send Message", Description: "Send a formatted text message to a channel or user."},
-				{Type: "copy_message", Name: "Copy Message", Description: "Verbatim copy of a message or album preserving original format without forwarded banner."},
-			},
-			Credentials: []CredentialProperty{
-				{Key: "bot_token", Label: "Bot Token", Type: "password", Required: true, Description: "Telegram Bot API token from @BotFather"},
-			},
-		},
-		{
-			ID:          "discord",
-			Name:        "Discord",
-			Description: "Publish automated notifications and rich embeds to Discord servers and channels.",
-			Category:    "messaging",
-			Icon:        "discord",
-			Triggers: []TriggerMetadata{
-				{Type: "discord.webhook", Name: "Incoming Discord Webhook", Description: "Receives events from Discord interactions."},
-			},
-			Actions: []ActionMetadata{
-				{Type: "send_message", Name: "Send Message", Description: "Send a plain or markdown text message to a Discord channel."},
-				{Type: "send_embed", Name: "Send Rich Embed", Description: "Publish an embed card with title, description, color, fields, and timestamp."},
-			},
-			Credentials: []CredentialProperty{
-				{Key: "webhook_url", Label: "Discord Webhook URL", Type: "password", Required: false, Description: "Channel webhook URL"},
-				{Key: "bot_token", Label: "Bot Token", Type: "password", Required: false, Description: "Discord Bot Token for API access"},
-			},
-		},
-		{
-			ID:          "rss",
-			Name:        "RSS / Atom Feeds",
-			Description: "Poll external RSS or Atom feeds for new articles and items.",
-			Category:    "feeds",
-			Icon:        "rss",
-			Triggers: []TriggerMetadata{
-				{Type: "rss.item", Name: "New RSS Item", Description: "Fires whenever a new article or item is published in the feed."},
-			},
-			Actions:     []ActionMetadata{},
-			Credentials: []CredentialProperty{},
-		},
-		{
-			ID:          "github",
-			Name:        "GitHub",
-			Description: "Receive repository webhooks and automate GitHub issue and comment tracking.",
-			Category:    "developer",
-			Icon:        "github",
-			Triggers: []TriggerMetadata{
-				{Type: "github.issue.opened", Name: "Issue Opened", Description: "Fires when an issue is opened in the repository."},
-				{Type: "github.push", Name: "Git Push", Description: "Fires on branch or tag push."},
-				{Type: "github.pull_request", Name: "Pull Request Event", Description: "Fires on PR open, close, or review."},
-			},
-			Actions: []ActionMetadata{
-				{Type: "create_issue", Name: "Create Issue", Description: "Open a new issue in a GitHub repository."},
-			},
-			Credentials: []CredentialProperty{
-				{Key: "personal_access_token", Label: "GitHub Token", Type: "password", Required: false, Description: "Personal Access Token (classic or fine-grained)"},
-				{Key: "webhook_secret", Label: "Webhook Secret", Type: "password", Required: false, Description: "Secret configured in GitHub repository webhook settings"},
-			},
-		},
-		{
-			ID:          "webhook",
-			Name:        "Inbound Webhooks",
-			Description: "Secure inbound HTTP endpoints to ingest events from any external system.",
-			Category:    "network",
-			Icon:        "webhook",
-			Triggers: []TriggerMetadata{
-				{Type: "webhook.received", Name: "Inbound Webhook Received", Description: "Fires when an authenticated HTTP POST arrives at /api/v1/webhooks/:id"},
-			},
-			Actions:     []ActionMetadata{},
-			Credentials: []CredentialProperty{},
-		},
-		{
-			ID:          "http",
-			Name:        "Generic HTTP API",
-			Description: "Execute authenticated HTTP requests (GET, POST, PUT, DELETE) with SSRF defense.",
-			Category:    "network",
-			Icon:        "globe",
-			Triggers:    []TriggerMetadata{},
-			Actions: []ActionMetadata{
-				{Type: "http_request", Name: "HTTP Request", Description: "Call any external REST API with customizable headers, body, and timeout."},
-			},
-			Credentials: []CredentialProperty{
-				{Key: "api_key", Label: "API Key / Bearer Token", Type: "password", Required: false, Description: "Optional authorization token"},
-			},
-		},
+// NewRegistry creates a new, empty integration registry.
+func NewRegistry() *Registry {
+	return &Registry{
+		integrations: make(map[string]Integration),
+		order:        make([]string, 0),
 	}
+}
+
+// Register adds an integration to the registry.
+func (r *Registry) Register(i Integration) {
+	if i == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	manifest := i.Manifest()
+	if _, exists := r.integrations[manifest.ID]; !exists {
+		r.order = append(r.order, manifest.ID)
+	}
+	r.integrations[manifest.ID] = i
+}
+
+// Get returns an integration by its unique ID.
+func (r *Registry) Get(id string) (Integration, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	i, ok := r.integrations[id]
+	return i, ok
+}
+
+// GetManifest returns the declarative manifest of an integration.
+func (r *Registry) GetManifest(id string) (Manifest, bool) {
+	i, ok := r.Get(id)
+	if !ok {
+		return Manifest{}, false
+	}
+	return i.Manifest(), true
+}
+
+// List returns all registered integration manifests in order.
+func (r *Registry) List() []Manifest {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make([]Manifest, 0, len(r.order))
+	for _, id := range r.order {
+		if i, ok := r.integrations[id]; ok {
+			result = append(result, i.Manifest())
+		}
+	}
+	return result
+}
+
+// GetSchema returns the JSON Schema for an integration, optionally selecting
+// a specific action or trigger schema if operationType is provided.
+func (r *Registry) GetSchema(id string, operationType string) (map[string]any, bool) {
+	m, ok := r.GetManifest(id)
+	if !ok {
+		return nil, false
+	}
+
+	if operationType != "" && m.Schemas != nil {
+		if schema, found := m.Schemas[operationType]; found {
+			return schema, true
+		}
+	}
+
+	if m.ConfigSchema != nil {
+		return m.ConfigSchema, true
+	}
+
+	return map[string]any{"type": "object"}, true
+}
+
+// defaultRegistry is the singleton registry populated with all builtin integrations.
+var defaultRegistry *Registry
+
+func init() {
+	defaultRegistry = NewRegistry()
+	for _, item := range BuiltinIntegrations() {
+		defaultRegistry.Register(item)
+	}
+}
+
+// Default returns the global integration registry singleton.
+func Default() *Registry {
+	return defaultRegistry
+}
+
+// Register registers an integration into the global registry.
+func Register(i Integration) {
+	defaultRegistry.Register(i)
+}
+
+// Get looks up an integration in the global registry.
+func Get(id string) (Integration, bool) {
+	return defaultRegistry.Get(id)
+}
+
+// GetManifest returns the manifest for an integration in the global registry.
+func GetManifest(id string) (Manifest, bool) {
+	return defaultRegistry.GetManifest(id)
+}
+
+// Catalog returns all available integrations in the Kerob platform (backward-compatible).
+func Catalog() []IntegrationMetadata {
+	return defaultRegistry.List()
+}
+
+// GetSchema returns the JSON schema for an integration in the global registry.
+func GetSchema(id string, operationType string) (map[string]any, bool) {
+	return defaultRegistry.GetSchema(id, operationType)
 }

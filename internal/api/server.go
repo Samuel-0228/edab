@@ -57,6 +57,7 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	// Integrations Catalog
 	mux.HandleFunc("GET /api/v1/integrations", handlers.ListIntegrations)
 	mux.HandleFunc("GET /api/v1/integrations/{id}", handlers.GetIntegration)
+	mux.HandleFunc("GET /api/v1/integrations/{id}/schema", handlers.GetIntegrationSchema)
 
 	// Credentials API (AES-256 encrypted at rest, never exposes raw secrets)
 	mux.HandleFunc("GET /api/v1/credentials", handlers.ListCredentials)

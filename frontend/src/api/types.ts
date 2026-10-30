@@ -170,10 +170,40 @@ export interface IntegrationCredentialField {
   required: boolean;
 }
 
+export interface IntegrationSchemaProperty {
+  type: string;
+  title?: string;
+  description?: string;
+  enum?: string[];
+  default?: unknown;
+  items?: unknown;
+}
+
+export interface IntegrationJSONSchema {
+  type: string;
+  required?: string[];
+  properties?: Record<string, IntegrationSchemaProperty>;
+}
+
+export interface IntegrationSchemaResponse {
+  id: string;
+  name: string;
+  kind: string;
+  capabilities: string[];
+  required_credential_type?: string;
+  config_schema: IntegrationJSONSchema;
+  schemas?: Record<string, IntegrationJSONSchema>;
+}
+
 export interface IntegrationMetadata {
   id: string;
   name: string;
   description: string;
+  kind?: string;
+  capabilities?: string[];
+  required_credential_type?: string;
+  config_schema?: IntegrationJSONSchema;
+  schemas?: Record<string, IntegrationJSONSchema>;
   triggers: IntegrationCapability[];
   actions: IntegrationCapability[];
   credentials: IntegrationCredentialField[];

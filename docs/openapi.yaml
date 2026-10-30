@@ -110,6 +110,45 @@ paths:
         '200':
           description: Catalog of supported integrations
 
+  /api/v1/integrations/{id}:
+    get:
+      summary: Get integration manifest
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Integration manifest details
+        '404':
+          description: Integration not found
+
+  /api/v1/integrations/{id}/schema:
+    get:
+      summary: Get JSON Schema for an integration action or trigger
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: action_type
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Integration JSON Schema definition
+        '404':
+          description: Integration not found
+
   /api/v1/credentials:
     get:
       summary: List stored credentials (masked)

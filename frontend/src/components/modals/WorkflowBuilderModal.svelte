@@ -1,20 +1,31 @@
 <script lang="ts">
-  import {
-    workflowBuilderModal,
-    closeWorkflowBuilder,
-    triggerRefresh,
-    notifySuccess,
-    notifyError
-  } from '../../api/stores';
-  import { api } from '../../api/client';
-  import type { Credential, WorkflowCreateInput } from '../../api/types';
   import Dialog from '../common/Dialog.svelte';
-  import Button from '../common/Button.svelte';
   import Input from '../common/Input.svelte';
   import Select from '../common/Select.svelte';
-  import JsonEditor from '../common/JsonEditor.svelte';
+  import Button from '../common/Button.svelte';
   import Badge from '../common/Badge.svelte';
+  import WorkflowTriggerStage from '../workflow/WorkflowTriggerStage.svelte';
+  import WorkflowConditionStage from '../workflow/WorkflowConditionStage.svelte';
+  import WorkflowTransformStage from '../workflow/WorkflowTransformStage.svelte';
+  import WorkflowActionStage from '../workflow/WorkflowActionStage.svelte';
+  import {
+    fallbackTriggers,
+    fallbackActions,
+    conditionOperators,
+    transformOptions
+  } from '../workflow/workflowConstants';
+  import { workflowBuilderModal, closeWorkflowBuilder } from '../../api/stores';
+  import { api } from '../../api/client';
+  import { notifySuccess, notifyError } from '../../api/stores';
+  import { triggerRefresh } from '../../api/stores';
+  import type {
+    Credential,
+    IntegrationMetadata,
+    IntegrationJSONSchema,
+    WorkflowCreateInput
+  } from '../../api/types';
 
+  // Form State
   let name = $state('');
   let description = $state('');
   let enabled = $state('true');
@@ -26,7 +37,7 @@
   let scheduleInterval = $state('5m');
   let scheduleCron = $state('');
 
-  // Condition
+  // Conditions
   let conditionField = $state('');
   let conditionOp = $state('');
   let conditionVal = $state('');
@@ -39,49 +50,38 @@
   let actionIntegration = $state('discord');
   let actionType = $state('send_message');
   let actionCredentialId = $state('');
-  let actionConfigRaw = $state('');
+  let actionConfigRaw = $state('{}');
+  let actionSchema = $state<IntegrationJSONSchema | null>(null);
 
   let credentialsList = $state<Credential[]>([]);
+  let integrationsCatalog = $state<IntegrationMetadata[]>([]);
   let loading = $state(false);
 
-  const triggerOptions = [
-    { value: 'telegram', label: 'Telegram (Bot Messages & Channel Posts)' },
-    { value: 'github', label: 'GitHub (Issues, Pull Requests, Push)' },
-    { value: 'webhook', label: 'Inbound Webhook' },
-    { value: 'rss', label: 'RSS / Atom Feed Poller' },
-    { value: 'discord', label: 'Discord Interactions' },
-    { value: 'schedule', label: 'Schedule (Periodic Cron / Interval)' },
-    { value: 'all', label: 'Any Ingested Event' }
-  ];
+  let triggerOptions = $derived.by(() => {
+    if (integrationsCatalog.length === 0) return fallbackTriggers;
+    const items = integrationsCatalog
+      .filter((i) => i.triggers && i.triggers.length > 0)
+      .map((i) => ({ value: i.id, label: `${i.name} (${i.description})` }));
+    items.push({ value: 'all', label: 'Any Ingested Event' });
+    return items;
+  });
 
-  const conditionOperators = [
-    { value: '', label: '(No Condition — Passthrough Always True)' },
-    { value: 'contains', label: 'contains' },
-    { value: 'equals', label: 'equals' },
-    { value: 'not_equals', label: 'not equals' },
-    { value: 'not_contains', label: 'not contains' },
-    { value: 'starts_with', label: 'starts with' },
-    { value: 'ends_with', label: 'ends with' },
-    { value: 'matches', label: 'regex matches' },
-    { value: 'exists', label: 'field exists' },
-    { value: 'greater_than', label: '> greater than' },
-    { value: 'less_than', label: '< less than' }
-  ];
-
-  const transformOptions = [
-    { value: 'passthrough', label: 'Passthrough (Preserve Raw Event)' },
-    { value: 'template', label: 'Template String' },
-    { value: 'mapping', label: 'Field Map Dictionary' }
-  ];
-
-  const actionIntegrations = [
-    { value: 'discord', label: 'Discord (Channel Webhook / Embed)' },
-    { value: 'telegram', label: 'Telegram (Send / Copy Message)' },
-    { value: 'http', label: 'Generic REST HTTP API (SSRF Safe)' },
-    { value: 'github', label: 'GitHub API (Create Issue / Comment)' }
-  ];
+  let actionIntegrations = $derived.by(() => {
+    if (integrationsCatalog.length === 0) return fallbackActions;
+    const items = integrationsCatalog
+      .filter((i) => (i.actions && i.actions.length > 0) || i.kind === 'action')
+      .map((i) => ({ value: i.id, label: `${i.name} — ${i.description}` }));
+    return items.length > 0 ? items : fallbackActions;
+  });
 
   let actionTypeOptions = $derived.by(() => {
+    const found = integrationsCatalog.find((i) => i.id === actionIntegration);
+    if (found && found.actions && found.actions.length > 0) {
+      return found.actions.map((act) => ({
+        value: act.type,
+        label: `${act.name} (${act.type})`
+      }));
+    }
     if (actionIntegration === 'discord') {
       return [
         { value: 'send_message', label: 'send_message' },
@@ -100,17 +100,24 @@
     return [{ value: 'send_message', label: 'send_message' }];
   });
 
+  async function loadIntegrationSchema(integId: string, opType: string) {
+    try {
+      const resp = await api.getIntegrationSchema(integId, opType);
+      actionSchema = resp.config_schema || null;
+    } catch {
+      actionSchema = null;
+    }
+  }
+
   $effect(() => {
     if ($workflowBuilderModal.open) {
-      loadCredentials();
+      loadCatalogAndCredentials();
       const wf = $workflowBuilderModal.workflow;
       if (wf) {
-        // Edit mode
         name = wf.name || '';
         description = wf.description || '';
         enabled = wf.enabled ? 'true' : 'false';
         maxRetries = wf.max_retries || 3;
-
         triggerType = wf.trigger.type || 'telegram';
         triggerEventType =
           wf.trigger.event_types && wf.trigger.event_types.length > 0
@@ -148,10 +155,9 @@
           actionCredentialId = act.credential_id || '';
           actionConfigRaw = JSON.stringify(act.config || {}, null, 2);
         } else {
-          setDefaultActionConfig();
+          onActionIntegrationChange();
         }
       } else {
-        // Create mode
         name = '';
         description = '';
         enabled = 'true';
@@ -187,16 +193,18 @@
           actionIntegration = 'discord';
         }
         updateTriggerDefaults();
-        setDefaultActionConfig();
+        onActionIntegrationChange();
       }
     }
   });
 
-  async function loadCredentials() {
+  async function loadCatalogAndCredentials() {
     try {
-      credentialsList = await api.listCredentials();
+      const [cats, creds] = await Promise.all([api.listIntegrations(), api.listCredentials()]);
+      integrationsCatalog = cats;
+      credentialsList = creds;
     } catch {
-      credentialsList = [];
+      // Keep fallbacks
     }
   }
 
@@ -209,16 +217,24 @@
     else triggerEventType = '*';
   }
 
-  function setDefaultActionConfig() {
-    actionType = actionTypeOptions[0]?.value || 'send_message';
-    if (actionIntegration === 'discord') {
-      actionConfigRaw = `{\n  "webhook_url": "https://discord.com/api/webhooks/...",\n  "content": "{{payload.text}}"\n}`;
-    } else if (actionIntegration === 'telegram') {
-      actionConfigRaw = `{\n  "chat_id": "-100123456789",\n  "text": "{{payload.text}}"\n}`;
-    } else if (actionIntegration === 'http') {
-      actionConfigRaw = `{\n  "url": "https://api.external.com/v1/notify",\n  "method": "POST",\n  "headers": {\n    "Content-Type": "application/json"\n  },\n  "body": "{\\"event\\": \\"{{event.id}}\\"}"\n}`;
-    } else if (actionIntegration === 'github') {
-      actionConfigRaw = `{\n  "owner": "organization",\n  "repo": "repository",\n  "title": "{{payload.title}}",\n  "body": "{{payload.text}}"\n}`;
+  function onActionIntegrationChange() {
+    const opts = actionTypeOptions;
+    actionType = opts[0]?.value || 'send_message';
+    onActionTypeChange();
+  }
+
+  function onActionTypeChange() {
+    loadIntegrationSchema(actionIntegration, actionType);
+    if (!actionConfigRaw || actionConfigRaw === '{}') {
+      if (actionIntegration === 'discord') {
+        actionConfigRaw = `{\n  "webhook_url": "https://discord.com/api/webhooks/...",\n  "content": "{{payload.text}}"\n}`;
+      } else if (actionIntegration === 'telegram') {
+        actionConfigRaw = `{\n  "chat_id": "-100123456789",\n  "text": "{{payload.text}}"\n}`;
+      } else if (actionIntegration === 'http') {
+        actionConfigRaw = `{\n  "url": "https://api.external.com/v1/notify",\n  "method": "POST",\n  "headers": {\n    "Content-Type": "application/json"\n  },\n  "body": "{\\"event\\": \\"{{event.id}}\\"}"\n}`;
+      } else if (actionIntegration === 'github') {
+        actionConfigRaw = `{\n  "owner": "organization",\n  "repo": "repository",\n  "title": "{{payload.title}}",\n  "body": "{{payload.text}}"\n}`;
+      }
     }
   }
 
@@ -233,7 +249,7 @@
       try {
         parsedConfig = JSON.parse(actionConfigRaw);
       } catch {
-        notifyError('Action Configuration JSON is invalid');
+        notifyError('Action Configuration is invalid JSON');
         return;
       }
     }
@@ -320,7 +336,6 @@
   onclose={closeWorkflowBuilder}
 >
   <div class="builder-container">
-    <!-- Lifecycle Stage Indicator Bar -->
     <div class="lifecycle-bar">
       <div class="stage-step">
         <Badge variant="stage-when">WHEN</Badge>
@@ -343,7 +358,6 @@
       </div>
     </div>
 
-    <!-- General Settings -->
     <div class="general-grid">
       <Input
         label="Automation Name"
@@ -368,143 +382,41 @@
       bind:value={description}
     />
 
-    <!-- STAGE 1: WHEN TRIGGER -->
-    <div class="stage-card">
-      <div class="stage-header">
-        <Badge variant="stage-when">WHEN</Badge>
-        <span class="stage-title">Trigger Event Ingestion</span>
-      </div>
+    <WorkflowTriggerStage
+      bind:triggerType
+      bind:triggerEventType
+      bind:scheduleInterval
+      bind:scheduleCron
+      options={triggerOptions}
+      onchange={updateTriggerDefaults}
+    />
 
-      <div class="stage-fields-grid">
-        <Select
-          label="Service Adapter"
-          options={triggerOptions}
-          bind:value={triggerType}
-          onchange={updateTriggerDefaults}
-        />
+    <WorkflowConditionStage
+      bind:conditionField
+      bind:conditionOp
+      bind:conditionVal
+      operators={conditionOperators}
+    />
 
-        <Input
-          label="Event Type Pattern"
-          placeholder="e.g. * or telegram.message"
-          bind:value={triggerEventType}
-          mono
-          hint="Use * to match all events from this trigger adapter."
-        />
-      </div>
+    <WorkflowTransformStage
+      bind:transformType
+      bind:transformTemplate
+      options={transformOptions}
+    />
 
-      {#if triggerType === 'schedule'}
-        <div class="schedule-config-box">
-          <Input
-            label="Tick Interval (e.g. 1m, 5m, 1h, 24h)"
-            placeholder="5m"
-            bind:value={scheduleInterval}
-            mono
-          />
-          <Input
-            label="Or Standard Cron Expression (optional)"
-            placeholder="*/5 * * * *"
-            bind:value={scheduleCron}
-            mono
-            hint="5-field cron expression evaluated by the engine background scheduler."
-          />
-        </div>
-      {/if}
-    </div>
-
-    <!-- STAGE 2: IF CONDITIONS -->
-    <div class="stage-card">
-      <div class="stage-header">
-        <Badge variant="stage-if">IF</Badge>
-        <span class="stage-title">Evaluation Conditions (Optional)</span>
-      </div>
-
-      <div class="condition-fields-grid">
-        <Input
-          label="Payload Field Path"
-          placeholder="e.g. payload.text or payload.title"
-          bind:value={conditionField}
-          mono
-        />
-
-        <Select label="Operator" options={conditionOperators} bind:value={conditionOp} />
-
-        <Input
-          label="Target Value"
-          placeholder="e.g. urgent or true"
-          bind:value={conditionVal}
-          mono
-        />
-      </div>
-    </div>
-
-    <!-- STAGE 3: TRANSFORM -->
-    <div class="stage-card">
-      <div class="stage-header">
-        <Badge variant="stage-transform">TRANSFORM</Badge>
-        <span class="stage-title">Deterministic Data Formatting (Optional)</span>
-      </div>
-
-      <div class="transform-fields-grid">
-        <Select label="Transform Mode" options={transformOptions} bind:value={transformType} />
-
-        <Input
-          label="Template Expression / Field Map"
-          placeholder="[event.source_id] payload.title — payload.author"
-          bind:value={transformTemplate}
-          mono
-          hint="Interpolate fields into the output payload before dispatching."
-        />
-      </div>
-    </div>
-
-    <!-- STAGE 4: THEN ACTION -->
-    <div class="stage-card">
-      <div class="stage-header">
-        <Badge variant="stage-then">THEN</Badge>
-        <span class="stage-title">Action Execution</span>
-      </div>
-
-      <div class="stage-fields-grid">
-        <Select
-          label="Integration Adapter"
-          options={actionIntegrations}
-          bind:value={actionIntegration}
-          onchange={setDefaultActionConfig}
-        />
-
-        <Select label="Action Operation" options={actionTypeOptions} bind:value={actionType} />
-      </div>
-
-      <JsonEditor
-        label="Action Configuration (JSON Parameters)"
-        bind:value={actionConfigRaw}
-        minHeight="110px"
-        hint="Template placeholders like &#123;&#123;payload.text&#125;&#125; are resolved during workflow execution."
-        required
-      />
-
-      <div class="stage-fields-grid" style="margin-top: 4px;">
-        <Select
-          label="Encrypted Credential (Optional)"
-          bind:value={actionCredentialId}
-          options={[
-            { value: '', label: '(None / Inline Credentials)' },
-            ...credentialsList.map((c) => ({
-              value: c.id,
-              label: `${c.name} (${c.integration})`
-            }))
-          ]}
-        />
-
-        <Input
-          type="number"
-          label="Max Retries"
-          bind:value={maxRetries}
-          mono
-          hint="Exponential backoff retries before execution lands in Dead-Letter Queue."
-        />
-      </div>
-    </div>
+    <WorkflowActionStage
+      bind:actionIntegration
+      bind:actionType
+      bind:actionCredentialId
+      bind:actionConfigRaw
+      actionSchema={actionSchema}
+      bind:maxRetries
+      integrations={actionIntegrations}
+      actionTypes={actionTypeOptions}
+      credentials={credentialsList}
+      onIntegrationChange={onActionIntegrationChange}
+      onTypeChange={onActionTypeChange}
+    />
   </div>
 
   {#snippet footer()}
@@ -522,88 +434,39 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+    padding: 4px 0;
   }
 
   .lifecycle-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 14px;
-    background: var(--bg-surface-elevated);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
+    background: var(--card-bg-subtle, rgba(255, 255, 255, 0.02));
+    border: 1px solid var(--border-color, #27272a);
+    border-radius: 8px;
+    padding: 8px 16px;
   }
 
   .stage-step {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
   }
 
   .stage-label {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
-    color: var(--text-secondary);
+    color: var(--text-secondary, #a1a1aa);
   }
 
   .stage-arrow {
-    color: var(--text-faint);
-    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--text-tertiary, #52525b);
   }
 
   .general-grid {
     display: grid;
     grid-template-columns: 2fr 1fr;
     gap: 12px;
-  }
-
-  .stage-card {
-    background: var(--bg-surface-elevated);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .stage-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .stage-title {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .stage-fields-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-  }
-
-  .schedule-config-box {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    background: var(--bg-canvas);
-    padding: 10px;
-    border-radius: var(--radius-sm);
-    border: 1px dashed var(--border-strong);
-  }
-
-  .condition-fields-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 10px;
-  }
-
-  .transform-fields-grid {
-    display: grid;
-    grid-template-columns: 1fr 2fr;
-    gap: 10px;
   }
 </style>

@@ -7,6 +7,7 @@ import type {
   Execution,
   HealthResponse,
   IntegrationMetadata,
+  IntegrationSchemaResponse,
   OverviewResponse,
   ReadyResponse,
   Webhook,
@@ -223,6 +224,16 @@ export class KerobApiClient {
 
   public async getIntegration(id: string): Promise<IntegrationMetadata> {
     return this.request<IntegrationMetadata>(`/api/v1/integrations/${encodeURIComponent(id)}`);
+  }
+
+  public async getIntegrationSchema(
+    id: string,
+    actionType?: string
+  ): Promise<IntegrationSchemaResponse> {
+    const query = actionType ? `?action_type=${encodeURIComponent(actionType)}` : '';
+    return this.request<IntegrationSchemaResponse>(
+      `/api/v1/integrations/${encodeURIComponent(id)}/schema${query}`
+    );
   }
 
   // --- Credentials ---
