@@ -228,101 +228,32 @@ func (e *Engine) ExecuteWorkflow(
 	transStep.Output = transformedPayload
 	e.recordStep(ctx, transStep)
 
-	// Step 4: Execute Actions Sequentially
-	for _, act := range wf.Actions {
-		if err := ctx.Err(); err != nil {
-			return e.handleExecutionFailure(ctx, exec, wf, ev, act.ID, err.Error(), start)
-		}
-		actStart := time.Now().UTC()
-		actionStep := &ExecutionStep{
-			ExecutionID: exec.ID,
-			StepType:    "action",
-			Name:        fmt.Sprintf("Action: %s (%s)", act.Integration, act.ActionType),
-			StartedAt:   actStart,
+	// Step 4: Execute Actions Sequentially with data flow & idempotency
+	stepStates := e.loadStepStates(ctx, exec.ID)
+
+	for i, act := range wf.Actions {
+		if act.ID == "" {
+			act.ID = fmt.Sprintf("step_%d", i+1)
 		}
 
-		// Interpolate action configuration with event data
-		renderedConfig, err := transformations.RenderJSONConfig(act.Config, ev)
-		if err != nil {
-			errStr := fmt.Sprintf("failed to render action config: %v", err)
-			actionStep.Status = "failed"
-			actionStep.Error = &errStr
-			actionStep.CompletedAt = time.Now().UTC()
-			actionStep.DurationMs = time.Since(actStart).Milliseconds()
-			e.recordStep(ctx, actionStep)
-
-			return e.handleExecutionFailure(ctx, exec, wf, ev, act.ID, errStr, start)
+		// Idempotent resumption: if this step already succeeded or was skipped in a prior attempt, reuse it
+		if prev, ok := stepStates[act.ID]; ok && (prev.Status == "success" || prev.Status == "skipped") {
+			slog.Info("skipping already completed action step",
+				slog.String("workflow_id", wf.ID),
+				slog.String("execution_id", exec.ID),
+				slog.String("step_id", act.ID),
+				slog.String("status", prev.Status),
+			)
+			continue
 		}
 
-		// Resolve credentials if needed
-		var decryptedCreds map[string]string
-		if act.CredentialID != "" && e.creds != nil {
-			creds, err := e.creds.GetDecrypted(ctx, act.CredentialID)
-			if err != nil {
-				errStr := fmt.Sprintf("failed to decrypt action credentials: %v", err)
-				actionStep.Status = "failed"
-				actionStep.Error = &errStr
-				actionStep.CompletedAt = time.Now().UTC()
-				actionStep.DurationMs = time.Since(actStart).Milliseconds()
-				e.recordStep(ctx, actionStep)
-
-				return e.handleExecutionFailure(ctx, exec, wf, ev, act.ID, errStr, start)
-			}
-			decryptedCreds = creds
+		outcome, err := e.executeActionStep(ctx, wf, ev, exec, transformedPayload, act, stepStates, start)
+		if outcome == outcomeFailed {
+			return exec, err
 		}
-
-		// Lookup action executor
-		executor, err := e.actions.Get(act.Integration)
-		if err != nil {
-			errStr := err.Error()
-			actionStep.Status = "failed"
-			actionStep.Error = &errStr
-			actionStep.CompletedAt = time.Now().UTC()
-			actionStep.DurationMs = time.Since(actStart).Milliseconds()
-			e.recordStep(ctx, actionStep)
-
-			return e.handleExecutionFailure(ctx, exec, wf, ev, act.ID, errStr, start)
+		if outcome == outcomeSkipRest {
+			break
 		}
-
-		// Enforce action timeout
-		timeout := time.Duration(act.TimeoutSec) * time.Second
-		if timeout <= 0 {
-			timeout = time.Duration(wf.TimeoutSeconds) * time.Second
-		}
-		if timeout <= 0 {
-			timeout = 30 * time.Second
-		}
-		actCtx, cancel := context.WithTimeout(ctx, timeout)
-
-		result, err := executor.Execute(actCtx, ActionRequest{
-			WorkflowID:  wf.ID,
-			ActionID:    act.ID,
-			Event:       ev,
-			Config:      renderedConfig,
-			Payload:     transformedPayload,
-			Credentials: decryptedCreds,
-		})
-		cancel()
-
-		actionStep.CompletedAt = time.Now().UTC()
-		actionStep.DurationMs = time.Since(actStart).Milliseconds()
-
-		if err != nil || !result.Success {
-			errStr := "action execution failed"
-			if err != nil {
-				errStr = err.Error()
-			}
-			actionStep.Status = "failed"
-			actionStep.Error = &errStr
-			e.recordStep(ctx, actionStep)
-			observability.RecordActionFailure()
-
-			return e.handleExecutionFailure(ctx, exec, wf, ev, act.ID, errStr, start)
-		}
-
-		actionStep.Status = "success"
-		actionStep.Output = result.Output
-		e.recordStep(ctx, actionStep)
 	}
 
 	// All steps succeeded

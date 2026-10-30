@@ -259,9 +259,15 @@ components:
             type: object
             required: [integration, action_type]
             properties:
+              id: { type: string, description: "Unique step identifier for pipeline referencing (e.g. step_1)" }
+              name: { type: string, description: "Descriptive step label" }
               integration: { type: string }
               action_type: { type: string }
               credential_id: { type: string }
+              on_error: { type: string, enum: [fail, continue, skip_rest], default: fail }
+              max_retries: { type: integer, default: 0 }
+              backoff_seconds: { type: integer, default: 0 }
+              timeout_seconds: { type: integer, default: 30 }
               config: { type: object }
         max_retries: { type: integer, default: 3 }
         timeout_seconds: { type: integer, default: 30 }

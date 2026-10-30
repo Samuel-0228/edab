@@ -46,14 +46,24 @@ func (tc *TriggerConfig) Matches(ev *event.Event) bool {
 	return true
 }
 
+const (
+	OnErrorFail     = "fail"
+	OnErrorContinue = "continue"
+	OnErrorSkipRest = "skip_rest"
+)
+
 // ActionStep represents an individual action task to run within a workflow.
 type ActionStep struct {
 	ID           string          `json:"id"`
+	Name         string          `json:"name,omitempty"`
 	Integration  string          `json:"integration"`             // "telegram", "discord", "github", "http"
 	ActionType   string          `json:"action_type"`             // e.g. "send_message", "create_issue", "http_request"
 	CredentialID string          `json:"credential_id,omitempty"` // encrypted credentials to inject
 	Config       json.RawMessage `json:"config"`                  // action config (with template variables)
 	TimeoutSec   int             `json:"timeout_seconds,omitempty"`
+	OnError      string          `json:"on_error,omitempty"`    // "fail" (default), "continue", "skip_rest"
+	MaxRetries   *int            `json:"max_retries,omitempty"` // per-step retry override
+	BackoffSec   int             `json:"backoff_seconds,omitempty"`
 }
 
 // Workflow represents a declarative, event-driven automation pipeline.

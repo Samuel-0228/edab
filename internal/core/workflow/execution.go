@@ -31,6 +31,7 @@ const (
 type ExecutionStep struct {
 	ID          string    `json:"id"`
 	ExecutionID string    `json:"execution_id"`
+	StepID      string    `json:"step_id,omitempty"`
 	StepType    string    `json:"step_type"` // "trigger", "condition", "transformation", "action"
 	Name        string    `json:"name"`
 	Status      string    `json:"status"` // "success", "skipped", "failed"
@@ -48,6 +49,7 @@ type Execution struct {
 	WorkflowID    string          `json:"workflow_id"`
 	EventID       string          `json:"event_id"`
 	Status        ExecutionStatus `json:"status"`
+	CurrentStepID string          `json:"current_step_id,omitempty"`
 	Attempts      int             `json:"attempts"`
 	MaxAttempts   int             `json:"max_attempts"`
 	NextAttemptAt time.Time       `json:"next_attempt_at"`

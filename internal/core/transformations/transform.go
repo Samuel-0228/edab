@@ -101,6 +101,11 @@ func Transform(t *Transformation, ev *event.Event) (map[string]any, error) {
 
 // RenderJSONConfig recursively navigates arbitrary JSON data and renders any template strings within it.
 func RenderJSONConfig(raw json.RawMessage, ev *event.Event) (json.RawMessage, error) {
+	return RenderJSONConfigWithContext(raw, RenderContext{Event: ev})
+}
+
+// RenderJSONConfigWithContext recursively renders templates in JSON data with the provided RenderContext.
+func RenderJSONConfigWithContext(raw json.RawMessage, ctx RenderContext) (json.RawMessage, error) {
 	if len(raw) == 0 || string(raw) == "{}" || string(raw) == "[]" {
 		return raw, nil
 	}
@@ -110,27 +115,27 @@ func RenderJSONConfig(raw json.RawMessage, ev *event.Event) (json.RawMessage, er
 		return raw, err
 	}
 
-	rendered := renderRecursive(data, ev)
+	rendered := renderRecursiveWithContext(data, ctx)
 	return json.Marshal(rendered)
 }
 
-func renderRecursive(v any, ev *event.Event) any {
+func renderRecursiveWithContext(v any, ctx RenderContext) any {
 	switch val := v.(type) {
 	case string:
 		if strings.Contains(val, "{{") {
-			return RenderTemplate(val, ev)
+			return RenderTemplateWithContext(val, ctx)
 		}
 		return val
 	case map[string]any:
 		res := make(map[string]any, len(val))
 		for k, item := range val {
-			res[k] = renderRecursive(item, ev)
+			res[k] = renderRecursiveWithContext(item, ctx)
 		}
 		return res
 	case []any:
 		res := make([]any, len(val))
 		for i, item := range val {
-			res[i] = renderRecursive(item, ev)
+			res[i] = renderRecursiveWithContext(item, ctx)
 		}
 		return res
 	default:

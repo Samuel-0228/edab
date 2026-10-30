@@ -66,4 +66,16 @@ func TestEmbeddedMigrations(t *testing.T) {
 			t.Errorf("expected 000002_workflows_and_integrations.up.sql to contain table '%s'", tbl)
 		}
 	}
+
+	// Verify 000003 defines engine v2 enhancements
+	v2Up, ok := upMigrations["000003_workflow_engine_v2.up.sql"]
+	if !ok {
+		t.Fatal("000003_workflow_engine_v2.up.sql is required")
+	}
+	v2Required := []string{"workflow_versions", "current_step_id", "step_states", "priority", "rate_limit_per_minute"}
+	for _, kw := range v2Required {
+		if !strings.Contains(v2Up, kw) {
+			t.Errorf("expected 000003_workflow_engine_v2.up.sql to contain '%s'", kw)
+		}
+	}
 }

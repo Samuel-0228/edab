@@ -96,6 +96,18 @@ func ValidateWorkflowInput(wf *workflow.Workflow, isPatch bool) []FieldError {
 					errs = append(errs, FieldError{Field: fmt.Sprintf("actions[%d].action_type", i), Message: "action_type cannot exceed 64 characters"})
 				}
 
+				if act.OnError != "" && act.OnError != workflow.OnErrorFail && act.OnError != workflow.OnErrorContinue && act.OnError != workflow.OnErrorSkipRest {
+					errs = append(errs, FieldError{Field: fmt.Sprintf("actions[%d].on_error", i), Message: fmt.Sprintf("invalid on_error %q; must be one of: %s, %s, %s", act.OnError, workflow.OnErrorFail, workflow.OnErrorContinue, workflow.OnErrorSkipRest)})
+				}
+
+				if act.MaxRetries != nil && (*act.MaxRetries < 0 || *act.MaxRetries > 20) {
+					errs = append(errs, FieldError{Field: fmt.Sprintf("actions[%d].max_retries", i), Message: "max_retries must be between 0 and 20"})
+				}
+
+				if act.BackoffSec < 0 || act.BackoffSec > 3600 {
+					errs = append(errs, FieldError{Field: fmt.Sprintf("actions[%d].backoff_seconds", i), Message: "backoff_seconds must be between 0 and 3600"})
+				}
+
 				if act.TimeoutSec < 0 || act.TimeoutSec > 3600 {
 					errs = append(errs, FieldError{Field: fmt.Sprintf("actions[%d].timeout_seconds", i), Message: "timeout_seconds must be between 0 and 3600"})
 				}

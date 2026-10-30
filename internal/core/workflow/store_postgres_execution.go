@@ -263,13 +263,14 @@ func (s *PostgresExecutionStore) RecordStep(ctx context.Context, step *Execution
 	inJSON, outJSON := marshalStepIO(step.Input, step.Output)
 
 	query := `
-		INSERT INTO execution_steps (id, execution_id, step_type, name, status, input, output, error, duration_ms, started_at, completed_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO execution_steps (id, execution_id, step_type, step_id, name, status, input, output, error, duration_ms, started_at, completed_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`
 	_, err := s.db.ExecContext(ctx, query,
 		step.ID,
 		step.ExecutionID,
 		step.StepType,
+		step.StepID,
 		step.Name,
 		step.Status,
 		inJSON,
@@ -316,7 +317,7 @@ func (s *PostgresExecutionStore) ResetForRetry(ctx context.Context, id string) (
 
 func (s *PostgresExecutionStore) getExecutionSteps(ctx context.Context, executionID string) ([]ExecutionStep, error) {
 	query := `
-		SELECT id, execution_id, step_type, name, status, input, output, error, duration_ms, started_at, completed_at
+		SELECT id, execution_id, step_type, COALESCE(step_id, ''), name, status, input, output, error, duration_ms, started_at, completed_at
 		FROM execution_steps
 		WHERE execution_id = $1
 		ORDER BY started_at ASC
@@ -335,6 +336,7 @@ func (s *PostgresExecutionStore) getExecutionSteps(ctx context.Context, executio
 			&step.ID,
 			&step.ExecutionID,
 			&step.StepType,
+			&step.StepID,
 			&step.Name,
 			&step.Status,
 			&inJSON,

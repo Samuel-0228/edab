@@ -13,11 +13,32 @@ import (
 
 var templateVarRegex = regexp.MustCompile(`\{\{\s*([^{}]+?)\s*\}\}`)
 
+// StepOutput represents the recorded state of an executed step available to downstream steps.
+type StepOutput struct {
+	Status     string `json:"status"`
+	Output     any    `json:"output,omitempty"`
+	Error      string `json:"error,omitempty"`
+	DurationMs int64  `json:"duration_ms,omitempty"`
+}
+
+// RenderContext provides contextual scope for template rendering including events, step outputs, and secrets.
+type RenderContext struct {
+	Event   *event.Event
+	Steps   map[string]StepOutput
+	Secrets map[string]string
+}
+
 // RenderTemplate evaluates a template string containing placeholders such as
 // {{event.payload.title}} or {{event.payload.title | default: "Untitled"}}
 // against the provided normalized event.
 func RenderTemplate(tmpl string, ev *event.Event) string {
-	if tmpl == "" || ev == nil {
+	return RenderTemplateWithContext(tmpl, RenderContext{Event: ev})
+}
+
+// RenderTemplateWithContext evaluates a template string against a full RenderContext
+// including earlier step outputs ({{steps.<id>.output.<path>}}) and vault secrets ({{secrets.<name>}}).
+func RenderTemplateWithContext(tmpl string, ctx RenderContext) string {
+	if tmpl == "" {
 		return tmpl
 	}
 
@@ -47,7 +68,7 @@ func RenderTemplate(tmpl string, ev *event.Event) string {
 			path = expr
 		}
 
-		val, exists := resolveEventPath(path, ev)
+		val, exists := resolvePath(path, ctx)
 		if !exists || val == nil {
 			if hasDefault {
 				return defaultVal
@@ -83,14 +104,74 @@ func cleanDefault(s string) string {
 	return s
 }
 
+func splitPath(path string) []string {
+	// Normalize bracket indexing: items[0].name -> items.0.name
+	path = strings.ReplaceAll(path, "[", ".")
+	path = strings.ReplaceAll(path, "]", "")
+	rawParts := strings.Split(path, ".")
+	var parts []string
+	for _, p := range rawParts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return parts
+}
+
+// resolvePath resolves dot-notation paths against the Event, Step outputs, or Secrets.
+func resolvePath(path string, ctx RenderContext) (any, bool) {
+	if strings.HasPrefix(path, "steps.") {
+		trimmed := strings.TrimPrefix(path, "steps.")
+		parts := splitPath(trimmed)
+		if len(parts) == 0 || ctx.Steps == nil {
+			return nil, false
+		}
+		stepID := parts[0]
+		step, ok := ctx.Steps[stepID]
+		if !ok {
+			return nil, false
+		}
+		if len(parts) == 1 {
+			return step, true
+		}
+		switch parts[1] {
+		case "status":
+			return step.Status, true
+		case "error":
+			return step.Error, true
+		case "duration_ms":
+			return step.DurationMs, true
+		case "output":
+			if len(parts) == 2 {
+				return step.Output, true
+			}
+			return lookupPath(step.Output, parts[2:])
+		default:
+			return lookupPath(step.Output, parts[1:])
+		}
+	}
+
+	if strings.HasPrefix(path, "secrets.") {
+		secretKey := strings.TrimPrefix(path, "secrets.")
+		if ctx.Secrets != nil {
+			if val, ok := ctx.Secrets[secretKey]; ok {
+				return val, true
+			}
+		}
+		return nil, false
+	}
+
+	return resolveEventPath(path, ctx.Event)
+}
+
 // resolveEventPath resolves dot-notation paths against the Event.
-// Supported prefixes:
-// - "event.payload.x", "payload.x"
-// - "event.metadata.x", "metadata.x"
-// - "event.id", "event.event_type", "event.source_id", "event.external_event_id", "event.created_at"
 func resolveEventPath(path string, ev *event.Event) (any, bool) {
+	if ev == nil {
+		return nil, false
+	}
 	path = strings.TrimPrefix(path, "event.")
-	parts := strings.Split(path, ".")
+	parts := splitPath(path)
 	if len(parts) == 0 {
 		return nil, false
 	}
@@ -149,6 +230,21 @@ func lookupPath(data any, parts []string) (any, bool) {
 		if curr == nil {
 			return nil, false
 		}
+		switch val := curr.(type) {
+		case json.RawMessage:
+			var m any
+			if err := json.Unmarshal(val, &m); err != nil {
+				return nil, false
+			}
+			curr = m
+		case []byte:
+			var m any
+			if err := json.Unmarshal(val, &m); err != nil {
+				return nil, false
+			}
+			curr = m
+		}
+
 		switch val := curr.(type) {
 		case map[string]any:
 			v, ok := val[part]
