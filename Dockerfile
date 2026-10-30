@@ -1,5 +1,5 @@
 # Stage 1: Build Svelte frontend
-FROM node:22-alpine AS frontend-builder
+FROM node:25-alpine AS frontend-builder
 WORKDIR /app
 
 COPY frontend/package*.json ./frontend/
