@@ -8,8 +8,13 @@ const target = process.env.VITE_BACKEND_URL || 'http://localhost:8080';
 const proxyConfig = {
   target,
   changeOrigin: true,
-  configure: (proxy: any) => {
-    proxy.on('error', (err: any, req: IncomingMessage, res: ServerResponse) => {
+  configure: (proxy: {
+    on: (
+      event: string,
+      handler: (err: NodeJS.ErrnoException, req: IncomingMessage, res: ServerResponse) => void
+    ) => void;
+  }) => {
+    proxy.on('error', (err: NodeJS.ErrnoException, req: IncomingMessage, res: ServerResponse) => {
       // Gracefully handle backend offline / connection refused without dumping noisy stack traces
       if (res && 'writeHead' in res && !res.headersSent) {
         try {

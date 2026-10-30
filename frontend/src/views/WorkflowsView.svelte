@@ -42,6 +42,13 @@
     }
   }
 
+  function getScheduleCadence(config?: Record<string, unknown>): string {
+    if (!config) return 'cadence';
+    if (typeof config.cron === 'string' && config.cron) return config.cron;
+    if (typeof config.interval === 'string' && config.interval) return config.interval;
+    return 'cadence';
+  }
+
   $effect(() => {
     void $refreshTick;
     loadWorkflows();
@@ -185,9 +192,7 @@
                   {/if}
                   {#if wf.trigger?.type === 'schedule' && wf.trigger?.config}
                     <div class="schedule-cadence mono">
-                      {(wf.trigger.config as any).cron ||
-                        (wf.trigger.config as any).interval ||
-                        'cadence'}
+                      {getScheduleCadence(wf.trigger.config)}
                     </div>
                   {/if}
                 </td>

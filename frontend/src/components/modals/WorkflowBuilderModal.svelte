@@ -118,9 +118,9 @@
             : '*';
 
         if (wf.trigger.type === 'schedule' && wf.trigger.config) {
-          const cfg = wf.trigger.config as any;
-          scheduleInterval = cfg.interval || '5m';
-          scheduleCron = cfg.cron || '';
+          const cfg = wf.trigger.config;
+          scheduleInterval = typeof cfg.interval === 'string' ? cfg.interval : '5m';
+          scheduleCron = typeof cfg.cron === 'string' ? cfg.cron : '';
         }
 
         if (wf.conditions) {

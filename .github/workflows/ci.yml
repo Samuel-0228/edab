@@ -110,6 +110,13 @@ jobs:
       - name: Install frontend dependencies (npm ci)
         run: cd frontend && npm ci
 
+      # 0. Linter verification
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+
+      - name: Run golangci-lint
+        run: golangci-lint run --config=.golangci.yml --timeout=5m
+
       # 1. Go tests
       - name: Go unit & integration tests
         run: go test -v $(go list ./... | grep -v node_modules)

@@ -40,10 +40,10 @@
   });
 
   function getCadence(wf: Workflow): string {
-    const cfg = wf.trigger?.config as any;
+    const cfg = wf.trigger?.config;
     if (!cfg) return 'Every 5m (default)';
-    if (cfg.cron) return `Cron: ${cfg.cron}`;
-    if (cfg.interval) return `Every ${cfg.interval}`;
+    if (typeof cfg.cron === 'string' && cfg.cron) return `Cron: ${cfg.cron}`;
+    if (typeof cfg.interval === 'string' && cfg.interval) return `Every ${cfg.interval}`;
     return 'Periodic Evaluation';
   }
 

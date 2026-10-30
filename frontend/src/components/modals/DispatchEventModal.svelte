@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { WorkflowTestResponse, EventRecord } from '../../api/types';
   import {
     dispatchModal,
     closeDispatchModal,
@@ -20,7 +21,19 @@
     `{\n  "text": "Urgent technical alert: deployment status update",\n  "title": "System Diagnostic Event",\n  "author": "ops_engineer"\n}`
   );
   let loading = $state(false);
-  let executionResult = $state<unknown | null>(null);
+  let executionResult = $state<WorkflowTestResponse | EventRecord | { error: string } | null>(null);
+
+  const resultStatus = $derived.by(() => {
+    if (!executionResult) return null;
+    if ('status' in executionResult && executionResult.status === 'success') return 'success';
+    if (
+      ('error' in executionResult && Boolean(executionResult.error)) ||
+      ('status' in executionResult && executionResult.status === 'error')
+    ) {
+      return 'error';
+    }
+    return 'ingested';
+  });
 
   $effect(() => {
     if ($dispatchModal.open) {
@@ -118,9 +131,9 @@
       <div class="result-section">
         <div class="result-header">
           <span class="result-title">EXECUTION AUDIT RESULT</span>
-          {#if (executionResult as any)?.status === 'success'}
+          {#if resultStatus === 'success'}
             <Badge variant="success">TEST SUCCESS</Badge>
-          {:else if (executionResult as any)?.error}
+          {:else if resultStatus === 'error'}
             <Badge variant="failed">ERROR</Badge>
           {:else}
             <Badge variant="neutral">INGESTED</Badge>
