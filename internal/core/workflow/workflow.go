@@ -112,6 +112,10 @@ type Workflow struct {
 	Actions         []ActionStep                    `json:"actions"`
 	MaxRetries      int                             `json:"max_retries"`
 	TimeoutSeconds  int                             `json:"timeout_seconds"`
+	RateLimit       int                             `json:"rate_limit,omitempty"`      // Max executions per minute
+	MaxConcurrency  int                             `json:"max_concurrency,omitempty"` // Max parallel executions
+	ConcurrencyKey  string                          `json:"concurrency_key,omitempty"` // Field path to serialize runs
+	Priority        int                             `json:"priority,omitempty"`        // Default execution priority (0=normal)
 	CreatedAt       time.Time                       `json:"created_at"`
 	UpdatedAt       time.Time                       `json:"updated_at"`
 }

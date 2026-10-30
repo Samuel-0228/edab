@@ -200,7 +200,7 @@ func (s *PostgresExecutionStore) ClaimPending(ctx context.Context) (*Execution, 
 			SELECT id FROM executions
 			WHERE (status = 'pending' OR status = 'retrying' OR status = 'waiting')
 			  AND next_attempt_at <= NOW()
-			ORDER BY next_attempt_at ASC
+			ORDER BY priority DESC, next_attempt_at ASC
 			FOR UPDATE SKIP LOCKED
 			LIMIT 1
 		)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,18 +27,30 @@ type EngineConfig struct {
 
 // Engine coordinates event ingestion, condition evaluation, transformation, and action execution.
 type Engine struct {
-	workflows  Store
-	executions ExecutionStore
-	deadLetter DeadLetterStore
-	creds      credentials.Store
-	actions    *ActionRegistry
-	cfg        EngineConfig
-	errTracker errtracker.Provider
+	workflows       Store
+	executions      ExecutionStore
+	deadLetter      DeadLetterStore
+	creds           credentials.Store
+	actions         *ActionRegistry
+	cfg             EngineConfig
+	errTracker      errtracker.Provider
+	traffic         *TrafficController
+	circuitBreakers *CircuitBreakerRegistry
 }
 
 // SetErrorTracker sets the error tracker provider for the workflow engine.
 func (e *Engine) SetErrorTracker(tracker errtracker.Provider) {
 	e.errTracker = tracker
+}
+
+// TrafficController returns the engine's traffic controller.
+func (e *Engine) TrafficController() *TrafficController {
+	return e.traffic
+}
+
+// CircuitBreakers returns the engine's circuit breaker registry.
+func (e *Engine) CircuitBreakers() *CircuitBreakerRegistry {
+	return e.circuitBreakers
 }
 
 func NewEngine(
@@ -57,12 +70,14 @@ func NewEngine(
 	}
 
 	return &Engine{
-		workflows:  wfStore,
-		executions: execStore,
-		deadLetter: dlStore,
-		creds:      credStore,
-		actions:    actions,
-		cfg:        config,
+		workflows:       wfStore,
+		executions:      execStore,
+		deadLetter:      dlStore,
+		creds:           credStore,
+		actions:         actions,
+		cfg:             config,
+		traffic:         NewTrafficController(),
+		circuitBreakers: NewCircuitBreakerRegistry(CircuitBreakerConfig{}),
 	}
 }
 
@@ -125,13 +140,20 @@ func (e *Engine) ProcessEvent(ctx context.Context, ev *event.Event) ([]*Executio
 			slog.String("event_type", ev.EventType),
 		)
 
+		concurrencyKey := ""
+		if wf.ConcurrencyKey != "" {
+			concurrencyKey = extractConcurrencyKey(wf.ConcurrencyKey, ev.Payload)
+		}
+
 		// Create execution run (idempotent: returns existing execution if duplicate)
 		exec, err := e.executions.Create(ctx, &Execution{
-			WorkflowID:  wf.ID,
-			EventID:     ev.ID,
-			Status:      ExecutionPending,
-			Attempts:    0,
-			MaxAttempts: wf.MaxRetries,
+			WorkflowID:     wf.ID,
+			EventID:        ev.ID,
+			Status:         ExecutionPending,
+			Priority:       wf.Priority,
+			ConcurrencyKey: concurrencyKey,
+			Attempts:       0,
+			MaxAttempts:    wf.MaxRetries,
 		})
 		if err != nil {
 			slog.Error("failed to create execution record",
@@ -179,6 +201,20 @@ func (e *Engine) ExecuteWorkflow(
 	if err := ctx.Err(); err != nil {
 		return exec, fmt.Errorf("workflow execution cancelled: %w", err)
 	}
+
+	if e.traffic != nil {
+		release, err := e.traffic.TryAcquire(ctx, wf, exec.ConcurrencyKey)
+		if err != nil {
+			slog.Warn("workflow execution throttled by traffic controller",
+				slog.String("workflow_id", wf.ID),
+				slog.String("execution_id", exec.ID),
+				slog.String("error", err.Error()),
+			)
+			return exec, err
+		}
+		defer release()
+	}
+
 	exec.Attempts++
 	if err := e.executions.UpdateStatus(ctx, exec.ID, ExecutionRunning, nil, 0); err != nil {
 		return exec, fmt.Errorf("failed to mark execution running: %w", err)
@@ -426,4 +462,19 @@ func (e *Engine) updateStatus(ctx context.Context, id string, status ExecutionSt
 			slog.String("error", err.Error()),
 		)
 	}
+}
+
+func extractConcurrencyKey(keyPath string, payloadRaw json.RawMessage) string {
+	if keyPath == "" || len(payloadRaw) == 0 {
+		return ""
+	}
+	var m map[string]any
+	if err := json.Unmarshal(payloadRaw, &m); err != nil {
+		return ""
+	}
+	clean := strings.TrimPrefix(keyPath, "payload.")
+	if val, ok := m[clean]; ok && val != nil {
+		return fmt.Sprintf("%v", val)
+	}
+	return ""
 }

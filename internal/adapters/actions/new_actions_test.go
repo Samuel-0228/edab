@@ -253,3 +253,40 @@ func TestCallWorkflowActionExecutor(t *testing.T) {
 		t.Fatalf("expected max depth reached error, got: %v", errDepth)
 	}
 }
+
+func TestHTTPActionOutboundSigning(t *testing.T) {
+	var capturedSig string
+	var capturedTS string
+
+	client := mockHTTPClient(func(req *http.Request) (*http.Response, error) {
+		capturedSig = req.Header.Get("X-Custom-Sig")
+		capturedTS = req.Header.Get("X-Kerob-Timestamp")
+		return jsonResponse(http.StatusOK, map[string]any{"ok": true}), nil
+	})
+
+	executor := NewHTTPActionExecutorWithClient(client)
+
+	cfg, _ := json.Marshal(HTTPActionConfig{
+		Method:        "POST",
+		URL:           "https://8.8.8.8/webhook/target",
+		Body:          `{"event":"dispatch"}`,
+		SigningSecret: "webhook-secret-999",
+		SigningHeader: "X-Custom-Sig",
+	})
+
+	res, err := executor.Execute(context.Background(), workflow.ActionRequest{
+		Config: cfg,
+	})
+	if err != nil {
+		t.Fatalf("failed to execute http action: %v", err)
+	}
+	if !res.Success {
+		t.Errorf("expected success")
+	}
+	if !strings.HasPrefix(capturedSig, "sha256=") {
+		t.Errorf("expected signature header with sha256= prefix, got %s", capturedSig)
+	}
+	if capturedTS == "" {
+		t.Errorf("expected timestamp header")
+	}
+}

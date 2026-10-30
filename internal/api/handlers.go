@@ -147,9 +147,22 @@ func (h *Handlers) SetWorkflowServices(
 
 // Health handlers
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
-	respondJSON(w, http.StatusOK, map[string]string{
-		"status":  "healthy",
-		"version": version.Version,
+	circuitBreakers := map[string]string{}
+	status := "healthy"
+	if h.workflowEngine != nil && h.workflowEngine.CircuitBreakers() != nil {
+		circuitBreakers = h.workflowEngine.CircuitBreakers().Status()
+		for _, state := range circuitBreakers {
+			if state == "open" {
+				status = "degraded"
+				break
+			}
+		}
+	}
+
+	respondJSON(w, http.StatusOK, map[string]any{
+		"status":           status,
+		"version":          version.Version,
+		"circuit_breakers": circuitBreakers,
 	})
 }
 
@@ -167,12 +180,18 @@ func (h *Handlers) Ready(w http.ResponseWriter, r *http.Request) {
 		registeredActions = h.actionReg.RegisteredTypes()
 	}
 
+	circuitBreakers := map[string]string{}
+	if h.workflowEngine != nil && h.workflowEngine.CircuitBreakers() != nil {
+		circuitBreakers = h.workflowEngine.CircuitBreakers().Status()
+	}
+
 	respondJSON(w, http.StatusOK, map[string]any{
 		"status":                  "ready",
 		"version":                 version.Version,
 		"registered_sources":      registeredSources,
 		"registered_destinations": registeredDestinations,
 		"registered_actions":      registeredActions,
+		"circuit_breakers":        circuitBreakers,
 	})
 }
 

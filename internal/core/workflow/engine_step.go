@@ -171,6 +171,20 @@ func (e *Engine) executeActionStep(
 	actCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	// 5. Circuit Breaker check
+	if e.circuitBreakers != nil {
+		if cbErr := e.circuitBreakers.Allow(act.Integration); cbErr != nil {
+			errStr := cbErr.Error()
+			actionStep.Status = "failed"
+			actionStep.Error = &errStr
+			actionStep.CompletedAt = time.Now().UTC()
+			actionStep.DurationMs = time.Since(actStart).Milliseconds()
+			e.recordStep(ctx, actionStep)
+
+			return e.applyOnError(ctx, exec, wf, ev, act, errStr, start)
+		}
+	}
+
 	result, err := executor.Execute(actCtx, ActionRequest{
 		WorkflowID:  wf.ID,
 		ActionID:    act.ID,
@@ -179,6 +193,14 @@ func (e *Engine) executeActionStep(
 		Payload:     transformedPayload,
 		Credentials: decryptedCreds,
 	})
+
+	if e.circuitBreakers != nil {
+		if err != nil || !result.Success {
+			e.circuitBreakers.RecordFailure(act.Integration)
+		} else {
+			e.circuitBreakers.RecordSuccess(act.Integration)
+		}
+	}
 
 	actionStep.CompletedAt = time.Now().UTC()
 	actionStep.DurationMs = time.Since(actStart).Milliseconds()

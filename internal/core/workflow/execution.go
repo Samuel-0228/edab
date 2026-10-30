@@ -46,21 +46,23 @@ type ExecutionStep struct {
 
 // Execution represents an end-to-end execution of a workflow against an event.
 type Execution struct {
-	ID            string          `json:"id"`
-	WorkflowID    string          `json:"workflow_id"`
-	EventID       string          `json:"event_id"`
-	Status        ExecutionStatus `json:"status"`
-	CurrentStepID string          `json:"current_step_id,omitempty"`
-	Attempts      int             `json:"attempts"`
-	MaxAttempts   int             `json:"max_attempts"`
-	NextAttemptAt time.Time       `json:"next_attempt_at"`
-	StartedAt     time.Time       `json:"started_at"`
-	CompletedAt   *time.Time      `json:"completed_at,omitempty"`
-	DurationMs    int64           `json:"duration_ms"`
-	Error         *string         `json:"error,omitempty"`
-	Steps         []ExecutionStep `json:"steps,omitempty"`
-	CreatedAt     time.Time       `json:"created_at"`
-	UpdatedAt     time.Time       `json:"updated_at"`
+	ID             string          `json:"id"`
+	WorkflowID     string          `json:"workflow_id"`
+	EventID        string          `json:"event_id"`
+	Status         ExecutionStatus `json:"status"`
+	CurrentStepID  string          `json:"current_step_id,omitempty"`
+	Priority       int             `json:"priority,omitempty"`
+	ConcurrencyKey string          `json:"concurrency_key,omitempty"`
+	Attempts       int             `json:"attempts"`
+	MaxAttempts    int             `json:"max_attempts"`
+	NextAttemptAt  time.Time       `json:"next_attempt_at"`
+	StartedAt      time.Time       `json:"started_at"`
+	CompletedAt    *time.Time      `json:"completed_at,omitempty"`
+	DurationMs     int64           `json:"duration_ms"`
+	Error          *string         `json:"error,omitempty"`
+	Steps          []ExecutionStep `json:"steps,omitempty"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
 // ExecutionFilter specifies query options for executions.
@@ -191,13 +193,19 @@ func (s *MemoryExecutionStore) ClaimPending(ctx context.Context) (*Execution, er
 	defer s.mu.Unlock()
 
 	now := time.Now().UTC()
+	var best *Execution
 	for _, exec := range s.executions {
 		if (exec.Status == ExecutionPending || exec.Status == ExecutionRetrying || exec.Status == ExecutionWaiting) && (exec.NextAttemptAt.Before(now) || exec.NextAttemptAt.Equal(now)) {
-			exec.Status = ExecutionRunning
-			exec.Attempts++
-			exec.UpdatedAt = now
-			return exec, nil
+			if best == nil || exec.Priority > best.Priority || (exec.Priority == best.Priority && exec.CreatedAt.Before(best.CreatedAt)) {
+				best = exec
+			}
 		}
+	}
+	if best != nil {
+		best.Status = ExecutionRunning
+		best.Attempts++
+		best.UpdatedAt = now
+		return best, nil
 	}
 	return nil, nil
 }

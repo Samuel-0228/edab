@@ -3,6 +3,9 @@ package actions
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,12 +20,14 @@ import (
 
 // HTTPActionConfig holds configuration for calling an external HTTP API.
 type HTTPActionConfig struct {
-	Method      string            `json:"method"`                 // GET, POST, PUT, PATCH, DELETE
-	URL         string            `json:"url"`                    // Target URL
-	Headers     map[string]string `json:"headers,omitempty"`      // Custom headers
-	QueryParams map[string]string `json:"query_params,omitempty"` // Query parameters
-	Body        string            `json:"body,omitempty"`         // Request body (JSON or text)
-	TimeoutSec  int               `json:"timeout_seconds,omitempty"`
+	Method        string            `json:"method"`                 // GET, POST, PUT, PATCH, DELETE
+	URL           string            `json:"url"`                    // Target URL
+	Headers       map[string]string `json:"headers,omitempty"`      // Custom headers
+	QueryParams   map[string]string `json:"query_params,omitempty"` // Query parameters
+	Body          string            `json:"body,omitempty"`         // Request body (JSON or text)
+	TimeoutSec    int               `json:"timeout_seconds,omitempty"`
+	SigningSecret string            `json:"signing_secret,omitempty"` // HMAC-SHA256 secret for request signing
+	SigningHeader string            `json:"signing_header,omitempty"` // Header name, default: X-Kerob-Signature-256
 }
 
 type HTTPActionExecutor struct {
@@ -125,6 +130,32 @@ func (h *HTTPActionExecutor) Execute(ctx context.Context, req workflow.ActionReq
 		} else {
 			httpReq.Header.Set("Authorization", apiKey)
 		}
+	}
+
+	// Outbound request signing if configured
+	signingSecret := cfg.SigningSecret
+	if signingSecret == "" && req.Credentials != nil {
+		signingSecret = req.Credentials["signing_secret"]
+	}
+	if signingSecret != "" {
+		signingHeader := cfg.SigningHeader
+		if signingHeader == "" {
+			signingHeader = "X-Kerob-Signature-256"
+		}
+		var bodyBytes []byte
+		if cfg.Body != "" {
+			bodyBytes = []byte(cfg.Body)
+		} else if len(req.Payload) > 0 {
+			bodyBytes, _ = json.Marshal(req.Payload)
+		}
+		ts := fmt.Sprintf("%d", time.Now().Unix())
+		payloadToSign := append([]byte(ts+"."), bodyBytes...)
+		mac := hmac.New(sha256.New, []byte(signingSecret))
+		mac.Write(payloadToSign)
+		sig := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+
+		httpReq.Header.Set(signingHeader, sig)
+		httpReq.Header.Set("X-Kerob-Timestamp", ts)
 	}
 
 	// 4. Send request with SSRF-safe client (or injected client)
