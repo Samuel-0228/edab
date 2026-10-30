@@ -163,8 +163,9 @@ jobs:
 
       - name: Extract Release Notes from CHANGELOG.md
         id: notes
+        env:
+          TAG: ${{ steps.release_tag.outputs.tag }}
         run: |
-          TAG="${{ steps.release_tag.outputs.tag }}"
           node -e '
             const fs = require("fs");
             const tag = process.env.TAG;
