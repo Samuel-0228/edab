@@ -250,7 +250,7 @@ components:
               type: array
               items: { type: string }
         conditions:
-          type: object
+          $ref: '#/components/schemas/Condition'
         transformations:
           type: object
         actions:
@@ -289,6 +289,25 @@ components:
               config: { type: object }
         max_retries: { type: integer, default: 3 }
         timeout_seconds: { type: integer, default: 30 }
+
+    Condition:
+      type: object
+      properties:
+        field: { type: string }
+        operator:
+          type: string
+          enum: [equals, not_equals, contains, not_contains, starts_with, ends_with, matches, regex, exists, not_exists, greater_than, less_than, greater_or_equal, less_or_equal, between, in, not_in, is_empty, is_not_empty, time_window]
+        value: {}
+        quantifier:
+          type: string
+          enum: [any, all]
+        logical:
+          type: string
+          enum: [and, or, not]
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Condition'
 
     APIError:
       type: object

@@ -22,14 +22,19 @@ func ValidateCondition(c *conditions.Condition, path string) []FieldError {
 		conditions.OpStartsWith:     true,
 		conditions.OpEndsWith:       true,
 		conditions.OpMatches:        true,
+		conditions.OpRegex:          true,
 		conditions.OpExists:         true,
 		conditions.OpNotExists:      true,
 		conditions.OpGreaterThan:    true,
 		conditions.OpLessThan:       true,
 		conditions.OpGreaterOrEqual: true,
 		conditions.OpLessOrEqual:    true,
+		conditions.OpBetween:        true,
 		conditions.OpIn:             true,
 		conditions.OpNotIn:          true,
+		conditions.OpIsEmpty:        true,
+		conditions.OpIsNotEmpty:     true,
+		conditions.OpTimeWindow:     true,
 	}
 
 	validLogicals := map[conditions.LogicalOp]bool{
@@ -46,6 +51,13 @@ func ValidateCondition(c *conditions.Condition, path string) []FieldError {
 		})
 	}
 
+	if c.Quantifier != "" && c.Quantifier != conditions.QuantifierAny && c.Quantifier != conditions.QuantifierAll {
+		errs = append(errs, FieldError{
+			Field:   path + ".quantifier",
+			Message: fmt.Sprintf("unsupported array quantifier %q; must be 'any' or 'all'", c.Quantifier),
+		})
+	}
+
 	if c.Operator != "" {
 		if !validOperators[c.Operator] {
 			errs = append(errs, FieldError{
@@ -53,12 +65,17 @@ func ValidateCondition(c *conditions.Condition, path string) []FieldError {
 				Message: fmt.Sprintf("unsupported condition operator %q", c.Operator),
 			})
 		}
-		if c.Operator == conditions.OpMatches {
+		if c.Operator == conditions.OpMatches || c.Operator == conditions.OpRegex {
 			pattern, ok := c.Value.(string)
 			if !ok || pattern == "" {
 				errs = append(errs, FieldError{
 					Field:   path + ".value",
-					Message: "matches operator requires non-empty regex pattern string in 'value'",
+					Message: fmt.Sprintf("%s operator requires non-empty regex pattern string in 'value'", c.Operator),
+				})
+			} else if len(pattern) > 256 {
+				errs = append(errs, FieldError{
+					Field:   path + ".value",
+					Message: "regex pattern exceeds max length of 256 characters",
 				})
 			} else if _, err := regexp.Compile(pattern); err != nil {
 				errs = append(errs, FieldError{
