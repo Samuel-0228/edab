@@ -147,7 +147,8 @@ func TestControlFlowForEach(t *testing.T) {
 		var cfg map[string]any
 		_ = json.Unmarshal(req.Config, &cfg)
 		mu.Lock()
-		processedUsers = append(processedUsers, cfg["to"].(string))
+		toVal, _ := cfg["to"].(string)
+		processedUsers = append(processedUsers, toVal)
 		mu.Unlock()
 		return ActionResult{Success: true}, nil
 	}
