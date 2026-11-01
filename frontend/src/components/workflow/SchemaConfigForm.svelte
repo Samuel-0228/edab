@@ -169,7 +169,7 @@
       bind:value
       minHeight="120px"
       hint="Valid JSON payload parameters. Supports &#123;&#123;...&#125;&#125; template tags."
-      required={required}
+      {required}
     />
   {/if}
 </div>

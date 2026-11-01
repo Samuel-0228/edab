@@ -30,12 +30,7 @@
   </div>
 
   <div class="stage-fields-grid">
-    <Select
-      label="Service Adapter"
-      {options}
-      bind:value={triggerType}
-      {onchange}
-    />
+    <Select label="Service Adapter" {options} bind:value={triggerType} {onchange} />
 
     <Input
       label="Event Type Pattern"

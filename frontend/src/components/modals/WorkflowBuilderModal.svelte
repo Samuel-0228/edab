@@ -398,18 +398,14 @@
       operators={conditionOperators}
     />
 
-    <WorkflowTransformStage
-      bind:transformType
-      bind:transformTemplate
-      options={transformOptions}
-    />
+    <WorkflowTransformStage bind:transformType bind:transformTemplate options={transformOptions} />
 
     <WorkflowActionStage
       bind:actionIntegration
       bind:actionType
       bind:actionCredentialId
       bind:actionConfigRaw
-      actionSchema={actionSchema}
+      {actionSchema}
       bind:maxRetries
       integrations={actionIntegrations}
       actionTypes={actionTypeOptions}

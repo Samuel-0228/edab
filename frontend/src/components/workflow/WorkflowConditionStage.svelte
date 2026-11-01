@@ -35,12 +35,7 @@
 
     <Select label="Operator" options={operators} bind:value={conditionOp} />
 
-    <Input
-      label="Target Value"
-      placeholder="e.g. urgent or true"
-      bind:value={conditionVal}
-      mono
-    />
+    <Input label="Target Value" placeholder="e.g. urgent or true" bind:value={conditionVal} mono />
   </div>
 </div>
 

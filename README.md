@@ -2,7 +2,7 @@
 
 [![CI Pipeline](https://github.com/Samuel-0228/edab/actions/workflows/ci.yml/badge.svg)](https://github.com/Samuel-0228/edab/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Samuel-0228/edab?include_prereleases&style=flat-square)](https://github.com/Samuel-0228/edab/releases)
-[![Go Version](https://img.shields.io/badge/go-1.23.2-00ADD8?style=flat-square&logo=go)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/go-1.26.10-00ADD8?style=flat-square&logo=go)](https://go.dev/)
 [![Svelte](https://img.shields.io/badge/svelte-5.x-FF3E00?style=flat-square&logo=svelte)](https://svelte.dev/)
 [![Coverage](https://img.shields.io/badge/coverage-66.5%25-brightgreen?style=flat-square)](Makefile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
