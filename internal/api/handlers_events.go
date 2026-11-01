@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"kerob/internal/core/event"
+	"kerob/internal/observability"
 )
 
 func (h *Handlers) ListEvents(w http.ResponseWriter, r *http.Request) {
@@ -101,8 +102,14 @@ func (h *Handlers) IngestEvent(w http.ResponseWriter, r *http.Request) {
 
 	RecordEventProcessed()
 
+	ctx, span := observability.StartSpan(r.Context(), "event.ingestion")
+	defer span.End()
+	span.SetAttribute("event.id", ev.ID)
+	span.SetAttribute("event.source", ev.SourceID)
+	span.SetAttribute("event.type", ev.EventType)
+
 	if h.workflowEngine != nil {
-		execs, err := h.workflowEngine.ProcessEvent(r.Context(), ev)
+		execs, err := h.workflowEngine.ProcessEvent(ctx, ev)
 		if err != nil {
 			respondError(w, http.StatusInternalServerError, err.Error())
 			return

@@ -10,18 +10,19 @@ import (
 
 // Config holds all engine configuration loaded from environment variables.
 type Config struct {
-	DatabaseURL        string
-	ServerPort         string
-	WorkerPollInterval time.Duration
-	WorkerConcurrency  int
-	MaxRetries         int
-	InitialBackoff     time.Duration
-	MaxBackoff         time.Duration
-	LogLevel           string
-	Environment        string
-	APIToken           string
-	EncryptionKey      string
-	SchedulerInterval  time.Duration
+	DatabaseURL          string
+	ServerPort           string
+	WorkerPollInterval   time.Duration
+	WorkerConcurrency    int
+	MaxRetries           int
+	InitialBackoff       time.Duration
+	MaxBackoff           time.Duration
+	LogLevel             string
+	Environment          string
+	APIToken             string
+	EncryptionKey        string
+	SchedulerInterval    time.Duration
+	OtelExporterEndpoint string
 
 	TelegramBotToken           string
 	TelegramEnabled            bool
@@ -49,6 +50,7 @@ func Load() *Config {
 		APIToken:                   getEnv("API_TOKEN", ""),
 		EncryptionKey:              getEnv("KEROB_ENCRYPTION_KEY", getEnv("ENCRYPTION_KEY", "kerob-default-local-encryption-key-32bytes!!")),
 		SchedulerInterval:          getEnvDuration("SCHEDULER_INTERVAL", 10*time.Second),
+		OtelExporterEndpoint:       getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
 		TelegramBotToken:           botToken,
 		TelegramEnabled:            getEnvBool("TELEGRAM_ENABLED", botToken != ""),
 		TelegramAPIBaseURL:         getEnv("TELEGRAM_API_BASE_URL", ""),

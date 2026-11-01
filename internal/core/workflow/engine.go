@@ -197,6 +197,18 @@ func (e *Engine) ExecuteWorkflow(
 	ev *event.Event,
 	exec *Execution,
 ) (*Execution, error) {
+	ctx, span := observability.StartSpan(ctx, "workflow.execution")
+	defer func() {
+		if exec != nil {
+			span.SetAttribute("execution.status", string(exec.Status))
+			observability.DefaultWorkflowMetrics.RecordWorkflowExecution(wf.ID, string(exec.Status))
+		}
+		span.End()
+	}()
+	span.SetAttribute("workflow.id", wf.ID)
+	span.SetAttribute("workflow.name", wf.Name)
+	span.SetAttribute("execution.id", exec.ID)
+
 	start := time.Now().UTC()
 	if err := ctx.Err(); err != nil {
 		return exec, fmt.Errorf("workflow execution cancelled: %w", err)

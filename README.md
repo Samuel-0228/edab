@@ -308,6 +308,29 @@ Kerob features an embedded single-page control plane built with Svelte 5 and Typ
 
 ---
 
+## Observability
+
+Kerob provides enterprise-grade telemetry, tracing, and metric exposition built directly into the engine:
+
+### 1. Prometheus Metrics (`/metrics`)
+Standard Prometheus metrics exposed at `/metrics`:
+- **Global Counters**: `kerob_workflow_executions_total`, `kerob_workflow_successes_total`, `kerob_workflow_failures_total`, `kerob_events_processed_total`, `kerob_workflow_retries_total`.
+- **Per-Workflow Metrics**: `kerob_workflow_execution_total{workflow_id="...",status="..."}` tracking execution volume and outcomes per workflow.
+- **Step Latency Histograms**: `kerob_step_latency_seconds_bucket{workflow_id="...",step_id="...",le="..."}`, `_sum`, and `_count` capturing granular action step execution durations across standard latency buckets.
+- **Circuit Breakers**: `kerob_circuit_breaker_open_total` tracking open breaker states across integrations.
+
+### 2. Distributed Tracing (OpenTelemetry)
+Configure `OTEL_EXPORTER_OTLP_ENDPOINT` (e.g. `http://localhost:4318`) to export traces via standard OTLP/HTTP. When unset, tracing runs with a zero-allocation no-op provider.
+Spans trace complete lifecycle cascades:
+- `event.ingestion`: Captures event arrival, source ID, and event type.
+- `workflow.execution`: Child span tracking matched workflow lifecycle, execution ID, and outcome.
+- `step.execution`: Grandchild span measuring individual step execution duration, type, integration, and error state.
+
+### 3. Error Tracking (Sentry)
+Configure `SENTRY_DSN` to stream unhandled 5xx API errors and Dead-Letter Queue failure events to Sentry. All secrets, auth tokens, and vault credentials are automatically scrubbed and masked prior to dispatch.
+
+---
+
 ## Supported Integrations
 
 | Integration | Type | Capabilities & Notes |
@@ -345,6 +368,9 @@ All settings are configured via environment variables or a `.env` file:
 | `TELEGRAM_RATE_GLOBAL` | `25` | No | Global message send rate limit per second. |
 | `TELEGRAM_RATE_PER_CHAT` | `1` | No | Per-chat message send rate limit per second. |
 | `TELEGRAM_PUBLIC_POLL_INTERVAL` | `15s` | No | Frequency for scraping public Telegram channels. |
+| `POLICY_FILE` | *(empty)* | No | Path to JSON/YAML outbound SSRF CIDR and domain policy rules. |
+| `SENTRY_DSN` | *(empty)* | No | Sentry DSN for unhandled error tracking with secret masking. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | *(empty)* | No | OTLP/HTTP tracing collector endpoint (e.g. `http://localhost:4318`). |
 
 ---
 

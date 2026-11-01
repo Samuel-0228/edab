@@ -42,6 +42,9 @@ func main() {
 	}
 	setupLogger(cfg.LogLevel)
 
+	shutdownTracing := observability.InitTracing(cfg.OtelExporterEndpoint, nil)
+	defer shutdownTracing()
+
 	slog.Info("starting kerob automation engine",
 		slog.String("version", version.Version),
 		slog.String("environment", cfg.Environment),

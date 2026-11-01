@@ -66,6 +66,40 @@ func (e *Engine) executeStep(
 	renderVars map[string]any,
 	start time.Time,
 ) (stepExecutionOutcome, error) {
+	stepStart := time.Now()
+	ctx, span := observability.StartSpan(ctx, "step.execution")
+	defer func() {
+		dur := time.Since(stepStart)
+		span.SetAttribute("step.duration_ms", dur.Milliseconds())
+		observability.DefaultWorkflowMetrics.RecordStepLatency(wf.ID, act.ID, dur)
+		span.End()
+	}()
+	span.SetAttribute("workflow.id", wf.ID)
+	span.SetAttribute("step.id", act.ID)
+	span.SetAttribute("step.type", string(act.Type))
+	span.SetAttribute("step.integration", act.Integration)
+
+	outcome, err := e.dispatchStep(ctx, wf, ev, exec, transformedPayload, act, stepStates, renderVars, start)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(observability.StatusError, err.Error())
+	} else {
+		span.SetStatus(observability.StatusOK, "complete")
+	}
+	return outcome, err
+}
+
+func (e *Engine) dispatchStep(
+	ctx context.Context,
+	wf *Workflow,
+	ev *event.Event,
+	exec *Execution,
+	transformedPayload map[string]any,
+	act ActionStep,
+	stepStates map[string]transformations.StepOutput,
+	renderVars map[string]any,
+	start time.Time,
+) (stepExecutionOutcome, error) {
 	switch act.Type {
 	case StepTypeBranch:
 		return e.executeBranchStep(ctx, wf, ev, exec, transformedPayload, act, stepStates, renderVars, start)

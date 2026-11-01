@@ -8,12 +8,14 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"kerob/internal/adapters/destinations"
 	"kerob/internal/adapters/sources"
 	"kerob/internal/core/credentials"
 	"kerob/internal/core/webhooks"
 	"kerob/internal/core/workflow"
+	"kerob/internal/observability"
 )
 
 func TestHealthReadyAndMetricsEndpoints(t *testing.T) {
@@ -42,6 +44,9 @@ func TestHealthReadyAndMetricsEndpoints(t *testing.T) {
 		t.Errorf("expected /ready status 200, got %d", wReady.Code)
 	}
 
+	observability.DefaultWorkflowMetrics.RecordWorkflowExecution("wf-test-1", "success")
+	observability.DefaultWorkflowMetrics.RecordStepLatency("wf-test-1", "step-1", 12*time.Millisecond)
+
 	// 3. Metrics endpoint
 	reqMetrics := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	wMetrics := httptest.NewRecorder()
@@ -55,6 +60,12 @@ func TestHealthReadyAndMetricsEndpoints(t *testing.T) {
 	}
 	if !strings.Contains(wMetrics.Body.String(), "kerob_circuit_breaker_open_total") {
 		t.Errorf("expected circuit breaker metric in prometheus output, got: %s", wMetrics.Body.String())
+	}
+	if !strings.Contains(wMetrics.Body.String(), `kerob_workflow_execution_total{workflow_id="wf-test-1",status="success"} 1`) {
+		t.Errorf("expected per-workflow execution metric in prometheus output, got: %s", wMetrics.Body.String())
+	}
+	if !strings.Contains(wMetrics.Body.String(), `kerob_step_latency_seconds_count{workflow_id="wf-test-1",step_id="step-1"} 1`) {
+		t.Errorf("expected step latency metric in prometheus output, got: %s", wMetrics.Body.String())
 	}
 }
 

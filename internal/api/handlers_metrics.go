@@ -87,7 +87,9 @@ func (h *Handlers) Metrics(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	fmt.Fprintf(&b, "kerob_circuit_breaker_open_total %d\n", openCBs)
+	fmt.Fprintf(&b, "kerob_circuit_breaker_open_total %d\n\n", openCBs)
+
+	observability.DefaultWorkflowMetrics.ExportPrometheus(&b)
 
 	_, _ = w.Write([]byte(b.String()))
 }
