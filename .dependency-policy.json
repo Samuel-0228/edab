@@ -34,6 +34,9 @@
         "reason": "Vitest 5 is the unit and component test runner aligned with Vite 6."
       }
     },
-    "allowOutdated": []
+    "allowOutdated": [
+      "globals",
+      "svelte-check"
+    ]
   }
 }
