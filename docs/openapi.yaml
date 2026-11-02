@@ -451,6 +451,77 @@ paths:
         '200':
           description: Execution run with granular steps
 
+  /api/v1/executions/{id}/retry:
+    post:
+      summary: Retry a failed execution
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Execution re-queued or executed
+
+  /api/v1/executions/{id}/pause:
+    post:
+      summary: Pause an in-flight or waiting execution
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Execution marked paused
+
+  /api/v1/executions/{id}/resume:
+    post:
+      summary: Resume a paused execution from its last recorded step
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Execution resumed
+
+  /api/v1/executions/{id}/cancel:
+    post:
+      summary: Cancel an active or paused execution
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Execution cancelled and active context terminated
+
+  /api/v1/operations/stream:
+    get:
+      summary: Server-Sent Events stream for real-time operational execution updates
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: token
+          in: query
+          required: false
+          description: Optional API token for standard EventSource clients lacking Authorization headers
+          schema: { type: string }
+      responses:
+        '200':
+          description: Real-time event stream (text/event-stream)
+
   /api/v1/failures:
     get:
       summary: List dead-letter failures

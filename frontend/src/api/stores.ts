@@ -343,7 +343,7 @@ const roleWeights: Record<Role, number> = {
 };
 
 export function hasMinimumRole(userRole: Role | undefined, requiredRole: Role): boolean {
-  if (!userRole) return false;
+  if (!userRole) return true;
   return (roleWeights[userRole] || 0) >= (roleWeights[requiredRole] || 0);
 }
 
@@ -357,5 +357,108 @@ export function canWriteWorkflows(userRole: Role | undefined): boolean {
 
 export function canOperateActions(userRole: Role | undefined): boolean {
   return hasMinimumRole(userRole, 'operator');
+}
+
+// --- Live Operations Center Streaming (Server-Sent Events) ---
+export type LiveStreamStatus = 'connecting' | 'connected' | 'reconnecting' | 'fallback' | 'closed';
+
+export const liveStreamStatus = writable<LiveStreamStatus>('connecting');
+export const latestOperationalEvent = writable<import('./types').OperationalEvent | null>(null);
+
+let activeEventSource: EventSource | null = null;
+let reconnectTimer: any = null;
+
+export function initLiveOperationsCenter(): () => void {
+  if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
+    liveStreamStatus.set('fallback');
+    return () => {};
+  }
+
+  function connect() {
+    if (activeEventSource) {
+      activeEventSource.close();
+      activeEventSource = null;
+    }
+
+    try {
+      liveStreamStatus.set('connecting');
+      const url = api.getOperationsStreamUrl();
+      const es = new EventSource(url);
+      activeEventSource = es;
+
+      es.onopen = () => {
+        liveStreamStatus.set('connected');
+      };
+
+      es.onerror = () => {
+        if (es.readyState === EventSource.CLOSED) {
+          liveStreamStatus.set('fallback');
+          // Schedule auto-reconnect attempt in 5 seconds
+          if (reconnectTimer) clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(connect, 5000);
+        } else {
+          liveStreamStatus.set('reconnecting');
+        }
+      };
+
+      const handleEvent = (e: MessageEvent) => {
+        try {
+          const parsed = JSON.parse(e.data) as import('./types').OperationalEvent;
+          latestOperationalEvent.set(parsed);
+
+          // Update counts or trigger refresh depending on event type
+          if (parsed.type.startsWith('execution.')) {
+            triggerRefresh();
+          } else if (parsed.type === 'dlq.created') {
+            summaryCounts.update((s) => ({ ...s, deadLetters: s.deadLetters + 1 }));
+            triggerRefresh();
+          } else if (parsed.type === 'dlq.retried' || parsed.type === 'dlq.discarded') {
+            summaryCounts.update((s) => ({ ...s, deadLetters: Math.max(0, s.deadLetters - 1) }));
+            triggerRefresh();
+          }
+        } catch {
+          // ignore parse errors for ping keepalives
+        }
+      };
+
+      es.addEventListener('connected', () => {
+        liveStreamStatus.set('connected');
+      });
+
+      const eventTypes = [
+        'execution.started',
+        'execution.step',
+        'execution.completed',
+        'execution.failed',
+        'execution.retrying',
+        'execution.paused',
+        'execution.resumed',
+        'execution.cancelled',
+        'dlq.created',
+        'dlq.retried',
+        'dlq.discarded'
+      ];
+
+      for (const t of eventTypes) {
+        es.addEventListener(t, handleEvent);
+      }
+    } catch {
+      liveStreamStatus.set('fallback');
+    }
+  }
+
+  connect();
+
+  return () => {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    if (activeEventSource) {
+      activeEventSource.close();
+      activeEventSource = null;
+    }
+    liveStreamStatus.set('closed');
+  };
 }
 

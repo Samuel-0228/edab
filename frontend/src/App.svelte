@@ -1,7 +1,25 @@
 <script lang="ts">
-  import { currentRoute, engineConnection, triggerRefresh } from './api/stores';
+  import { onMount, onDestroy } from 'svelte';
+  import {
+    currentRoute,
+    engineConnection,
+    triggerRefresh,
+    initLiveOperationsCenter
+  } from './api/stores';
   import { api } from './api/client';
   import './styles/theme.css';
+
+  let cleanupLiveStream: (() => void) | null = null;
+
+  onMount(() => {
+    cleanupLiveStream = initLiveOperationsCenter();
+  });
+
+  onDestroy(() => {
+    if (cleanupLiveStream) {
+      cleanupLiveStream();
+    }
+  });
 
   import Sidebar from './components/layout/Sidebar.svelte';
   import Header from './components/layout/Header.svelte';

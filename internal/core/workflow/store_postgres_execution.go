@@ -282,7 +282,7 @@ func (s *PostgresExecutionStore) UpdateStatus(ctx context.Context, id string, st
 			WHERE id = $6
 		`
 		args = []any{status, errStr, durationMs, now, now, id}
-	} else if status == ExecutionWaiting || status == ExecutionRetrying {
+	} else if status == ExecutionWaiting || status == ExecutionRetrying || status == ExecutionPaused {
 		query = `
 			UPDATE executions
 			SET status = $1, error = $2, duration_ms = $3, locked_by = NULL, lease_expires_at = NULL, updated_at = $4
@@ -343,6 +343,98 @@ func (s *PostgresExecutionStore) ResetForRetry(ctx context.Context, id string) (
 	if err != nil {
 		return nil, err
 	}
+	steps, _ := s.getExecutionSteps(ctx, exec.ID)
+	exec.Steps = steps
+	return exec, nil
+}
+
+func (s *PostgresExecutionStore) PauseExecution(ctx context.Context, id string) (*Execution, error) {
+	existing, err := s.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existing.Status == ExecutionPaused {
+		return existing, nil
+	}
+	if existing.Status == ExecutionSuccess || existing.Status == ExecutionFailed || existing.Status == ExecutionCancelled {
+		return nil, fmt.Errorf("%w: cannot pause execution in %s state", ErrExecutionInvalidState, existing.Status)
+	}
+
+	query := `
+		UPDATE executions
+		SET status = 'paused', locked_by = NULL, lease_expires_at = NULL, updated_at = NOW()
+		WHERE id = $1
+		RETURNING ` + execColumns + `;
+	`
+	exec, err := scanExecution(s.db.QueryRowContext(ctx, query, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrExecutionNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	steps, _ := s.getExecutionSteps(ctx, exec.ID)
+	exec.Steps = steps
+	return exec, nil
+}
+
+func (s *PostgresExecutionStore) ResumeExecution(ctx context.Context, id string) (*Execution, error) {
+	existing, err := s.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existing.Status == ExecutionPending || existing.Status == ExecutionRunning {
+		return existing, nil
+	}
+	if existing.Status != ExecutionPaused && existing.Status != ExecutionWaiting {
+		return nil, fmt.Errorf("%w: cannot resume execution in %s state", ErrExecutionInvalidState, existing.Status)
+	}
+
+	query := `
+		UPDATE executions
+		SET status = 'pending', next_attempt_at = NOW(), locked_by = NULL, lease_expires_at = NULL, updated_at = NOW()
+		WHERE id = $1
+		RETURNING ` + execColumns + `;
+	`
+	exec, err := scanExecution(s.db.QueryRowContext(ctx, query, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrExecutionNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	steps, _ := s.getExecutionSteps(ctx, exec.ID)
+	exec.Steps = steps
+	return exec, nil
+}
+
+func (s *PostgresExecutionStore) CancelExecution(ctx context.Context, id string) (*Execution, error) {
+	existing, err := s.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existing.Status == ExecutionCancelled {
+		return existing, nil
+	}
+	if existing.Status == ExecutionSuccess || existing.Status == ExecutionFailed {
+		return nil, fmt.Errorf("%w: cannot cancel execution in %s state", ErrExecutionInvalidState, existing.Status)
+	}
+
+	query := `
+		UPDATE executions
+		SET status = 'cancelled', completed_at = NOW(), locked_by = NULL, lease_expires_at = NULL, updated_at = NOW()
+		WHERE id = $1
+		RETURNING ` + execColumns + `;
+	`
+	exec, err := scanExecution(s.db.QueryRowContext(ctx, query, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrExecutionNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	steps, _ := s.getExecutionSteps(ctx, exec.ID)
+	exec.Steps = steps
 	return exec, nil
 }
 

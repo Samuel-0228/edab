@@ -132,6 +132,10 @@ func (h *Handlers) DiscardFailure(w http.ResponseWriter, r *http.Request) {
 		"workflow_id":  rec.WorkflowID,
 	})
 
+	if h.liveHub != nil {
+		h.liveHub.BroadcastDLQ("dlq.discarded", recTenant, rec)
+	}
+
 	respondJSON(w, http.StatusOK, map[string]string{"status": "discarded"})
 }
 
@@ -184,6 +188,10 @@ func (h *Handlers) RetryFailure(w http.ResponseWriter, r *http.Request) {
 		"execution_id": rec.ExecutionID,
 		"workflow_id":  rec.WorkflowID,
 	})
+
+	if h.liveHub != nil {
+		h.liveHub.BroadcastDLQ("dlq.retried", recTenant, rec)
+	}
 
 	// Trigger immediate retry execution if engine is active
 	if h.workflowEngine != nil && h.workflows != nil && h.events != nil {

@@ -11,7 +11,8 @@ import (
 )
 
 var (
-	ErrExecutionNotFound = errors.New("execution not found")
+	ErrExecutionNotFound     = errors.New("execution not found")
+	ErrExecutionInvalidState = errors.New("execution is not in a valid state for this action")
 )
 
 // ExecutionStatus defines the lifecycle status of a workflow execution run.
@@ -24,6 +25,7 @@ const (
 	ExecutionFailed    ExecutionStatus = "failed"
 	ExecutionRetrying  ExecutionStatus = "retrying"
 	ExecutionWaiting   ExecutionStatus = "waiting"
+	ExecutionPaused    ExecutionStatus = "paused"
 	ExecutionCancelled ExecutionStatus = "cancelled"
 )
 
@@ -89,6 +91,9 @@ type ExecutionStore interface {
 	UpdateStatus(ctx context.Context, id string, status ExecutionStatus, errStr *string, durationMs int64) error
 	RecordStep(ctx context.Context, step *ExecutionStep) error
 	ResetForRetry(ctx context.Context, id string) (*Execution, error)
+	PauseExecution(ctx context.Context, id string) (*Execution, error)
+	ResumeExecution(ctx context.Context, id string) (*Execution, error)
+	CancelExecution(ctx context.Context, id string) (*Execution, error)
 	GetByWorkflowAndEvent(ctx context.Context, workflowID, eventID string) (*Execution, error)
 }
 
@@ -132,9 +137,11 @@ func (s *MemoryExecutionStore) Create(ctx context.Context, exec *Execution) (*Ex
 		exec.MaxAttempts = 3
 	}
 
-	s.executions[exec.ID] = exec
+	stored := *exec
+	s.executions[exec.ID] = &stored
 	s.lookupKey[key] = exec.ID
-	return exec, nil
+	ret := stored
+	return &ret, nil
 }
 
 func (s *MemoryExecutionStore) GetByID(ctx context.Context, id string) (*Execution, error) {
@@ -317,7 +324,7 @@ func (s *MemoryExecutionStore) UpdateStatus(ctx context.Context, id string, stat
 		exec.CompletedAt = &now
 		exec.LockedBy = nil
 		exec.LeaseExpiresAt = nil
-	} else if status == ExecutionWaiting || status == ExecutionRetrying {
+	} else if status == ExecutionWaiting || status == ExecutionRetrying || status == ExecutionPaused {
 		exec.LockedBy = nil
 		exec.LeaseExpiresAt = nil
 	}
@@ -349,6 +356,116 @@ func (s *MemoryExecutionStore) ResetForRetry(ctx context.Context, id string) (*E
 	exec.Status = ExecutionPending
 	exec.NextAttemptAt = now
 	exec.Error = nil
+	exec.LockedBy = nil
+	exec.LeaseExpiresAt = nil
+	exec.UpdatedAt = now
+
+	execCopy := *exec
+	if steps, hasSteps := s.steps[id]; hasSteps {
+		execCopy.Steps = make([]ExecutionStep, len(steps))
+		copy(execCopy.Steps, steps)
+	}
+	return &execCopy, nil
+}
+
+func (s *MemoryExecutionStore) PauseExecution(ctx context.Context, id string) (*Execution, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	exec, ok := s.executions[id]
+	if !ok {
+		return nil, ErrExecutionNotFound
+	}
+
+	if exec.Status == ExecutionPaused {
+		execCopy := *exec
+		if steps, hasSteps := s.steps[id]; hasSteps {
+			execCopy.Steps = make([]ExecutionStep, len(steps))
+			copy(execCopy.Steps, steps)
+		}
+		return &execCopy, nil
+	}
+
+	if exec.Status == ExecutionSuccess || exec.Status == ExecutionFailed || exec.Status == ExecutionCancelled {
+		return nil, fmt.Errorf("%w: cannot pause execution in %s state", ErrExecutionInvalidState, exec.Status)
+	}
+
+	now := time.Now().UTC()
+	exec.Status = ExecutionPaused
+	exec.LockedBy = nil
+	exec.LeaseExpiresAt = nil
+	exec.UpdatedAt = now
+
+	execCopy := *exec
+	if steps, hasSteps := s.steps[id]; hasSteps {
+		execCopy.Steps = make([]ExecutionStep, len(steps))
+		copy(execCopy.Steps, steps)
+	}
+	return &execCopy, nil
+}
+
+func (s *MemoryExecutionStore) ResumeExecution(ctx context.Context, id string) (*Execution, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	exec, ok := s.executions[id]
+	if !ok {
+		return nil, ErrExecutionNotFound
+	}
+
+	if exec.Status == ExecutionPending || exec.Status == ExecutionRunning {
+		execCopy := *exec
+		if steps, hasSteps := s.steps[id]; hasSteps {
+			execCopy.Steps = make([]ExecutionStep, len(steps))
+			copy(execCopy.Steps, steps)
+		}
+		return &execCopy, nil
+	}
+
+	if exec.Status != ExecutionPaused && exec.Status != ExecutionWaiting {
+		return nil, fmt.Errorf("%w: cannot resume execution in %s state", ErrExecutionInvalidState, exec.Status)
+	}
+
+	now := time.Now().UTC()
+	exec.Status = ExecutionPending
+	exec.NextAttemptAt = now
+	exec.LockedBy = nil
+	exec.LeaseExpiresAt = nil
+	exec.UpdatedAt = now
+
+	execCopy := *exec
+	if steps, hasSteps := s.steps[id]; hasSteps {
+		execCopy.Steps = make([]ExecutionStep, len(steps))
+		copy(execCopy.Steps, steps)
+	}
+	return &execCopy, nil
+}
+
+func (s *MemoryExecutionStore) CancelExecution(ctx context.Context, id string) (*Execution, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	exec, ok := s.executions[id]
+	if !ok {
+		return nil, ErrExecutionNotFound
+	}
+
+	if exec.Status == ExecutionCancelled {
+		execCopy := *exec
+		if steps, hasSteps := s.steps[id]; hasSteps {
+			execCopy.Steps = make([]ExecutionStep, len(steps))
+			copy(execCopy.Steps, steps)
+		}
+		return &execCopy, nil
+	}
+
+	if exec.Status == ExecutionSuccess || exec.Status == ExecutionFailed {
+		return nil, fmt.Errorf("%w: cannot cancel execution in %s state", ErrExecutionInvalidState, exec.Status)
+	}
+
+	now := time.Now().UTC()
+	exec.Status = ExecutionCancelled
+	exec.CompletedAt = &now
 	exec.LockedBy = nil
 	exec.LeaseExpiresAt = nil
 	exec.UpdatedAt = now

@@ -1,5 +1,18 @@
 export type ExecutionStatus =
-  'pending' | 'running' | 'success' | 'failed' | 'retrying' | 'cancelled';
+  'pending' | 'running' | 'success' | 'failed' | 'retrying' | 'waiting' | 'paused' | 'cancelled';
+
+export interface OperationalEvent {
+  type: string;
+  tenant_id?: string;
+  execution_id?: string;
+  workflow_id?: string;
+  step?: ExecutionStep;
+  status?: ExecutionStatus;
+  error?: string;
+  payload?: unknown;
+  timestamp: string;
+  sequence_id: number;
+}
 
 export interface ExecutionStep {
   id: string;

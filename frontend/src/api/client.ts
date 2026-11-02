@@ -283,10 +283,37 @@ export class KerobApiClient {
     return this.request<Execution>(`/api/v1/executions/${encodeURIComponent(id)}`);
   }
 
-  public async retryExecution(id: string): Promise<void> {
-    await this.request<void>(`/api/v1/executions/${encodeURIComponent(id)}/retry`, {
+  public async retryExecution(id: string): Promise<Execution> {
+    return this.request<Execution>(`/api/v1/executions/${encodeURIComponent(id)}/retry`, {
       method: 'POST'
     });
+  }
+
+  public async cancelExecution(id: string): Promise<Execution> {
+    return this.request<Execution>(`/api/v1/executions/${encodeURIComponent(id)}/cancel`, {
+      method: 'POST'
+    });
+  }
+
+  public async pauseExecution(id: string): Promise<Execution> {
+    return this.request<Execution>(`/api/v1/executions/${encodeURIComponent(id)}/pause`, {
+      method: 'POST'
+    });
+  }
+
+  public async resumeExecution(id: string): Promise<Execution> {
+    return this.request<Execution>(`/api/v1/executions/${encodeURIComponent(id)}/resume`, {
+      method: 'POST'
+    });
+  }
+
+  public getOperationsStreamUrl(): string {
+    const base = this.baseUrl || (typeof window !== 'undefined' ? window.location.origin : '');
+    const url = new URL('/api/v1/operations/stream', base || 'http://localhost:8080');
+    if (this.token) {
+      url.searchParams.set('token', this.token);
+    }
+    return url.toString();
   }
 
   // --- Dead-Letter Failures ---

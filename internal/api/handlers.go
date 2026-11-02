@@ -43,6 +43,7 @@ type Handlers struct {
 	errorTracker errtracker.Provider
 	authStore    auth.Store
 	multiTenancy bool
+	liveHub      *LiveHub
 }
 
 // Config bundles all dependencies for NewHandlers.
@@ -57,6 +58,7 @@ type Config struct {
 	VersionStore   workflow.VersionStore
 	AuthStore      auth.Store
 	MultiTenancy   bool
+	LiveHub        *LiveHub
 
 	Sources      sources.Store
 	Destinations destinations.Store
@@ -74,6 +76,13 @@ func NewHandlersFromConfig(cfg Config) *Handlers {
 	vStore := cfg.VersionStore
 	if vStore == nil {
 		vStore = workflow.NewMemoryVersionStore()
+	}
+	hub := cfg.LiveHub
+	if hub == nil {
+		hub = NewLiveHub()
+	}
+	if cfg.WorkflowEngine != nil {
+		cfg.WorkflowEngine.SetEventListener(hub)
 	}
 	return &Handlers{
 		workflows:      cfg.Workflows,
@@ -97,7 +106,16 @@ func NewHandlersFromConfig(cfg Config) *Handlers {
 		errorTracker: cfg.ErrorTracker,
 		authStore:    cfg.AuthStore,
 		multiTenancy: cfg.MultiTenancy,
+		liveHub:      hub,
 	}
+}
+
+// LiveHub returns the operational event broadcast hub.
+func (h *Handlers) LiveHub() *LiveHub {
+	if h.liveHub == nil {
+		h.liveHub = NewLiveHub()
+	}
+	return h.liveHub
 }
 
 // SetErrorTracker sets the error tracker provider.

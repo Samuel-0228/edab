@@ -36,6 +36,8 @@ type Engine struct {
 	errTracker      errtracker.Provider
 	traffic         *TrafficController
 	circuitBreakers *CircuitBreakerRegistry
+	activeRegistry  *ActiveExecutionRegistry
+	listener        ExecutionEventListener
 }
 
 // SetErrorTracker sets the error tracker provider for the workflow engine.
@@ -51,6 +53,66 @@ func (e *Engine) TrafficController() *TrafficController {
 // CircuitBreakers returns the engine's circuit breaker registry.
 func (e *Engine) CircuitBreakers() *CircuitBreakerRegistry {
 	return e.circuitBreakers
+}
+
+// SetEventListener attaches a lifecycle event listener for real-time streaming.
+func (e *Engine) SetEventListener(l ExecutionEventListener) {
+	e.listener = l
+}
+
+// ActiveRegistry returns the in-memory registry of running executions.
+func (e *Engine) ActiveRegistry() *ActiveExecutionRegistry {
+	return e.activeRegistry
+}
+
+// Actions returns the engine's action registry.
+func (e *Engine) Actions() *ActionRegistry {
+	return e.actions
+}
+
+// CancelExecution cancels an execution immediately if running and marks it cancelled in persistence.
+func (e *Engine) CancelExecution(ctx context.Context, id string) (*Execution, error) {
+	if e.activeRegistry != nil {
+		e.activeRegistry.Cancel(id)
+	}
+	exec, err := e.executions.CancelExecution(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	observability.RecordExecutionCancelled()
+	if e.listener != nil {
+		e.listener.OnExecutionCancelled(exec)
+	}
+	return exec, nil
+}
+
+// PauseExecution pauses an execution, cancels active in-flight execution steps, and sets state to paused.
+func (e *Engine) PauseExecution(ctx context.Context, id string) (*Execution, error) {
+	if e.activeRegistry != nil {
+		e.activeRegistry.Pause(id)
+	}
+	exec, err := e.executions.PauseExecution(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	observability.RecordExecutionPaused()
+	if e.listener != nil {
+		e.listener.OnExecutionPaused(exec)
+	}
+	return exec, nil
+}
+
+// ResumeExecution transitions a paused execution back to pending for worker pick-up.
+func (e *Engine) ResumeExecution(ctx context.Context, id string) (*Execution, error) {
+	exec, err := e.executions.ResumeExecution(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	observability.RecordExecutionResumed()
+	if e.listener != nil {
+		e.listener.OnExecutionResumed(exec)
+	}
+	return exec, nil
 }
 
 func NewEngine(
@@ -78,6 +140,7 @@ func NewEngine(
 		cfg:             config,
 		traffic:         NewTrafficController(),
 		circuitBreakers: NewCircuitBreakerRegistry(CircuitBreakerConfig{}),
+		activeRegistry:  NewActiveExecutionRegistry(),
 	}
 }
 
@@ -235,6 +298,17 @@ func (e *Engine) ExecuteWorkflow(
 		}
 	}
 	observability.RecordExecutionStarted()
+	if e.listener != nil {
+		e.listener.OnExecutionStarted(exec)
+	}
+
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	if e.activeRegistry != nil {
+		e.activeRegistry.Register(exec.ID, cancel)
+		defer e.activeRegistry.Unregister(exec.ID)
+	}
 
 	// Step 1: Trigger Received
 	triggerStep := &ExecutionStep{
@@ -268,8 +342,13 @@ func (e *Engine) ExecuteWorkflow(
 		e.recordStep(ctx, condStep)
 
 		totalDuration := time.Since(start).Milliseconds()
+		exec.Status = ExecutionFailed
+		exec.Error = &errStr
 		e.updateStatus(ctx, exec.ID, ExecutionFailed, &errStr, totalDuration)
 		e.recordDeadLetter(ctx, exec, wf, ev, "", errStr)
+		if e.listener != nil {
+			e.listener.OnExecutionFailed(exec, errStr)
+		}
 		return exec, err
 	}
 
@@ -279,9 +358,13 @@ func (e *Engine) ExecuteWorkflow(
 		e.recordStep(ctx, condStep)
 
 		totalDuration := time.Since(start).Milliseconds()
+		exec.Status = ExecutionSuccess
 		e.updateStatus(ctx, exec.ID, ExecutionSuccess, nil, totalDuration)
 		observability.RecordExecutionSucceeded()
 		observability.RecordExecutionDuration(time.Since(start))
+		if e.listener != nil {
+			e.listener.OnExecutionCompleted(exec)
+		}
 		slog.Info("workflow conditions not met, skipped cleanly",
 			slog.String("workflow_id", wf.ID),
 			slog.String("execution_id", exec.ID),
@@ -311,8 +394,13 @@ func (e *Engine) ExecuteWorkflow(
 		e.recordStep(ctx, transStep)
 
 		totalDuration := time.Since(start).Milliseconds()
+		exec.Status = ExecutionFailed
+		exec.Error = &errStr
 		e.updateStatus(ctx, exec.ID, ExecutionFailed, &errStr, totalDuration)
 		e.recordDeadLetter(ctx, exec, wf, ev, "", errStr)
+		if e.listener != nil {
+			e.listener.OnExecutionFailed(exec, errStr)
+		}
 		return exec, err
 	}
 
@@ -339,8 +427,29 @@ func (e *Engine) ExecuteWorkflow(
 			continue
 		}
 
-		outcome, err := e.executeStep(ctx, wf, ev, exec, transformedPayload, act, stepStates, nil, start)
+		if runCtx.Err() != nil {
+			if e.activeRegistry != nil && e.activeRegistry.IsPaused(exec.ID) {
+				return exec, nil
+			}
+			if curr, _ := e.executions.GetByID(context.Background(), exec.ID); curr != nil {
+				if curr.Status == ExecutionPaused || curr.Status == ExecutionCancelled {
+					return curr, nil
+				}
+			}
+			errStr := "workflow execution cancelled"
+			return e.handleExecutionFailure(runCtx, exec, wf, ev, act.ID, errStr, start)
+		}
+
+		outcome, err := e.executeStep(runCtx, wf, ev, exec, transformedPayload, act, stepStates, nil, start)
 		if outcome == outcomeFailed {
+			if e.activeRegistry != nil && e.activeRegistry.IsPaused(exec.ID) {
+				return exec, nil
+			}
+			if curr, _ := e.executions.GetByID(context.Background(), exec.ID); curr != nil {
+				if curr.Status == ExecutionPaused || curr.Status == ExecutionCancelled {
+					return curr, nil
+				}
+			}
 			return exec, err
 		}
 		if outcome == outcomeSkipRest {
@@ -362,6 +471,9 @@ func (e *Engine) ExecuteWorkflow(
 	e.updateStatus(ctx, exec.ID, ExecutionSuccess, nil, totalDuration)
 	observability.RecordExecutionSucceeded()
 	observability.RecordExecutionDuration(time.Since(start))
+	if e.listener != nil {
+		e.listener.OnExecutionCompleted(exec)
+	}
 	slog.Info("workflow execution completed successfully",
 		slog.String("execution_id", exec.ID),
 		slog.String("workflow_id", wf.ID),
@@ -380,6 +492,15 @@ func (e *Engine) handleExecutionFailure(
 	errStr string,
 	start time.Time,
 ) (*Execution, error) {
+	if e.activeRegistry != nil && e.activeRegistry.IsPaused(exec.ID) {
+		return exec, nil
+	}
+	if curr, err := e.executions.GetByID(context.Background(), exec.ID); err == nil && curr != nil {
+		if curr.Status == ExecutionCancelled || curr.Status == ExecutionPaused {
+			return curr, nil
+		}
+	}
+
 	totalDuration := time.Since(start).Milliseconds()
 
 	if exec.Attempts < exec.MaxAttempts {
@@ -389,6 +510,9 @@ func (e *Engine) handleExecutionFailure(
 		exec.Status = ExecutionRetrying
 		e.updateStatus(ctx, exec.ID, ExecutionRetrying, &errStr, totalDuration)
 		observability.RecordRetry()
+		if e.listener != nil {
+			e.listener.OnExecutionRetrying(exec, exec.NextAttemptAt)
+		}
 		slog.Warn("action execution failed, scheduled retry",
 			slog.String("execution_id", exec.ID),
 			slog.Int("attempt", exec.Attempts),
@@ -405,6 +529,9 @@ func (e *Engine) handleExecutionFailure(
 	observability.RecordExecutionFailed()
 	observability.RecordExecutionDuration(time.Since(start))
 	observability.RecordActionFailure()
+	if e.listener != nil {
+		e.listener.OnExecutionFailed(exec, errStr)
+	}
 	e.recordDeadLetter(ctx, exec, wf, ev, actionID, errStr)
 	if e.errTracker != nil {
 		e.errTracker.CaptureError(ctx, fmt.Errorf("%s", errStr), errtracker.Scope{
@@ -469,6 +596,10 @@ func (e *Engine) recordStep(ctx context.Context, step *ExecutionStep) {
 			slog.String("step_type", step.StepType),
 			slog.String("error", err.Error()),
 		)
+	}
+	if e.listener != nil {
+		exec, _ := e.executions.GetByID(ctx, step.ExecutionID)
+		e.listener.OnExecutionStep(exec, step)
 	}
 }
 

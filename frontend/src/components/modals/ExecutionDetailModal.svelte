@@ -4,7 +4,10 @@
     closeExecutionDetail,
     triggerRefresh,
     notifySuccess,
-    notifyError
+    notifyError,
+    currentIdentity,
+    canOperateActions,
+    latestOperationalEvent
   } from '../../api/stores';
   import { api } from '../../api/client';
   import type { Execution } from '../../api/types';
@@ -16,12 +19,20 @@
   let execution = $state<Execution | null>(null);
   let loading = $state(false);
   let retrying = $state(false);
+  let operating = $state(false);
 
   $effect(() => {
     if ($executionDetailModal.open && $executionDetailModal.executionId) {
       loadExecution($executionDetailModal.executionId);
     } else {
       execution = null;
+    }
+  });
+
+  $effect(() => {
+    const ev = $latestOperationalEvent;
+    if (ev && execution && ev.execution_id === execution.id) {
+      loadExecution(execution.id);
     }
   });
 
@@ -50,6 +61,54 @@
       notifyError(msg);
     } finally {
       retrying = false;
+    }
+  }
+
+  async function handlePause() {
+    if (!execution) return;
+    operating = true;
+    try {
+      await api.pauseExecution(execution.id);
+      notifySuccess('Execution paused');
+      triggerRefresh();
+      await loadExecution(execution.id);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Pause failed';
+      notifyError(msg);
+    } finally {
+      operating = false;
+    }
+  }
+
+  async function handleResume() {
+    if (!execution) return;
+    operating = true;
+    try {
+      await api.resumeExecution(execution.id);
+      notifySuccess('Execution resumed');
+      triggerRefresh();
+      await loadExecution(execution.id);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Resume failed';
+      notifyError(msg);
+    } finally {
+      operating = false;
+    }
+  }
+
+  async function handleCancel() {
+    if (!execution) return;
+    operating = true;
+    try {
+      await api.cancelExecution(execution.id);
+      notifySuccess('Execution cancelled');
+      triggerRefresh();
+      await loadExecution(execution.id);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Cancel failed';
+      notifyError(msg);
+    } finally {
+      operating = false;
     }
   }
 </script>
@@ -86,6 +145,10 @@
               <Badge variant="failed">FAILED</Badge>
             {:else if execution.status === 'running'}
               <Badge variant="running">RUNNING</Badge>
+            {:else if execution.status === 'paused'}
+              <Badge variant="warning">PAUSED</Badge>
+            {:else if execution.status === 'cancelled'}
+              <Badge variant="neutral">CANCELLED</Badge>
             {:else}
               <Badge variant="warning">{execution.status}</Badge>
             {/if}
@@ -169,10 +232,26 @@
 
   {#snippet footer()}
     <Button variant="ghost" size="sm" onclick={closeExecutionDetail}>Close</Button>
-    {#if execution && execution.status === 'failed'}
-      <Button variant="primary" size="sm" icon="refresh" loading={retrying} onclick={handleRetry}>
-        Retry Execution
-      </Button>
+    {#if execution && canOperateActions($currentIdentity?.role)}
+      {#if execution.status === 'failed'}
+        <Button variant="primary" size="sm" icon="refresh" loading={retrying} onclick={handleRetry}>
+          Retry Execution
+        </Button>
+      {:else if execution.status === 'running' || execution.status === 'pending' || execution.status === 'retrying'}
+        <Button variant="secondary" size="sm" loading={operating} onclick={handlePause}>
+          Pause Execution
+        </Button>
+        <Button variant="ghost" size="sm" loading={operating} onclick={handleCancel}>
+          Cancel Execution
+        </Button>
+      {:else if execution.status === 'paused'}
+        <Button variant="primary" size="sm" loading={operating} onclick={handleResume}>
+          Resume Execution
+        </Button>
+        <Button variant="ghost" size="sm" loading={operating} onclick={handleCancel}>
+          Cancel Execution
+        </Button>
+      {/if}
     {/if}
   {/snippet}
 </Dialog>

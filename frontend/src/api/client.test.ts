@@ -139,4 +139,48 @@ describe('KerobApiClient', () => {
 
     await expect(client.listWorkflows()).rejects.toThrow();
   });
+
+  it('supports pause, resume, and cancel execution endpoints', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ id: 'exec-1', status: 'paused' })
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const paused = await client.pauseExecution('exec-1');
+    expect(paused.status).toBe('paused');
+    expect(mockFetch.mock.calls[0][0]).toContain('/api/v1/executions/exec-1/pause');
+    expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ id: 'exec-1', status: 'running' })
+    });
+    const resumed = await client.resumeExecution('exec-1');
+    expect(resumed.status).toBe('running');
+    expect(mockFetch.mock.calls[1][0]).toContain('/api/v1/executions/exec-1/resume');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ id: 'exec-1', status: 'cancelled' })
+    });
+    const cancelled = await client.cancelExecution('exec-1');
+    expect(cancelled.status).toBe('cancelled');
+    expect(mockFetch.mock.calls[2][0]).toContain('/api/v1/executions/exec-1/cancel');
+  });
+
+  it('constructs correct operations SSE streaming URL with token', () => {
+    client.setBaseUrl('http://localhost:8080');
+    client.setToken('auth-xyz');
+    expect(client.getOperationsStreamUrl()).toBe('http://localhost:8080/api/v1/operations/stream?token=auth-xyz');
+
+    client.setToken('');
+    expect(client.getOperationsStreamUrl()).toBe('http://localhost:8080/api/v1/operations/stream');
+  });
 });

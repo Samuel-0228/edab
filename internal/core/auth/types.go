@@ -42,8 +42,10 @@ const (
 	PermEventsReplay Permission = "events:replay"
 
 	// Executions & Logs
-	PermExecutionsRead  Permission = "executions:read"
-	PermExecutionsRetry Permission = "executions:retry"
+	PermExecutionsRead   Permission = "executions:read"
+	PermExecutionsRetry  Permission = "executions:retry"
+	PermExecutionsCancel Permission = "executions:cancel"
+	PermExecutionsPause  Permission = "executions:pause"
 
 	// Dead-Letter Failures
 	PermDLQRead  Permission = "dlq:read"
@@ -121,7 +123,7 @@ func (r Role) HasPermission(p Permission) bool {
 		case PermWorkflowsRead, PermIntegrationsRead, PermCredentialsRead,
 			PermEventsRead, PermExecutionsRead, PermDLQRead, PermWebhooksRead,
 			PermAuditRead, PermWorkflowsExecute, PermEventsWrite,
-			PermEventsReplay, PermExecutionsRetry, PermDLQRetry:
+			PermEventsReplay, PermExecutionsRetry, PermExecutionsCancel, PermExecutionsPause, PermDLQRetry:
 			return true
 		default:
 			return false

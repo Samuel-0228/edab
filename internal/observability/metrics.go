@@ -8,18 +8,22 @@ import (
 // Metrics contains process-local counters and duration totals. Exporters can
 // expose these values without coupling the engine to a metrics vendor.
 type Metrics struct {
-	ExecutionsStarted   atomic.Uint64
-	ExecutionsSucceeded atomic.Uint64
-	ExecutionsFailed    atomic.Uint64
-	Retries             atomic.Uint64
-	EventsProcessed     atomic.Uint64
-	ActionFailures      atomic.Uint64
-	ExecutionDurationMs atomic.Uint64
-	LeasesAcquired      atomic.Uint64
-	LeasesRenewed       atomic.Uint64
-	LeasesTakenOver     atomic.Uint64
-	LeasesReleased      atomic.Uint64
-	LeaseLosses         atomic.Uint64
+	ExecutionsStarted      atomic.Uint64
+	ExecutionsSucceeded    atomic.Uint64
+	ExecutionsFailed       atomic.Uint64
+	Retries                atomic.Uint64
+	EventsProcessed        atomic.Uint64
+	ActionFailures         atomic.Uint64
+	ExecutionDurationMs    atomic.Uint64
+	LeasesAcquired         atomic.Uint64
+	LeasesRenewed          atomic.Uint64
+	LeasesTakenOver        atomic.Uint64
+	LeasesReleased         atomic.Uint64
+	LeaseLosses            atomic.Uint64
+	LiveSubscribersActive  atomic.Int64
+	ExecutionCancellations atomic.Uint64
+	ExecutionPauses        atomic.Uint64
+	ExecutionResumes       atomic.Uint64
 }
 
 var DefaultMetrics Metrics
@@ -33,8 +37,13 @@ func RecordActionFailure()      { DefaultMetrics.ActionFailures.Add(1) }
 func RecordExecutionDuration(d time.Duration) {
 	DefaultMetrics.ExecutionDurationMs.Add(uint64(d.Milliseconds()))
 }
-func RecordLeaseAcquired()  { DefaultMetrics.LeasesAcquired.Add(1) }
-func RecordLeaseRenewed()   { DefaultMetrics.LeasesRenewed.Add(1) }
-func RecordLeaseTakenOver() { DefaultMetrics.LeasesTakenOver.Add(1) }
-func RecordLeaseReleased()  { DefaultMetrics.LeasesReleased.Add(1) }
-func RecordLeaseLoss()      { DefaultMetrics.LeaseLosses.Add(1) }
+func RecordLeaseAcquired()              { DefaultMetrics.LeasesAcquired.Add(1) }
+func RecordLeaseRenewed()               { DefaultMetrics.LeasesRenewed.Add(1) }
+func RecordLeaseTakenOver()             { DefaultMetrics.LeasesTakenOver.Add(1) }
+func RecordLeaseReleased()              { DefaultMetrics.LeasesReleased.Add(1) }
+func RecordLeaseLoss()                  { DefaultMetrics.LeaseLosses.Add(1) }
+func RecordLiveSubscriberConnected()    { DefaultMetrics.LiveSubscribersActive.Add(1) }
+func RecordLiveSubscriberDisconnected() { DefaultMetrics.LiveSubscribersActive.Add(-1) }
+func RecordExecutionCancelled()         { DefaultMetrics.ExecutionCancellations.Add(1) }
+func RecordExecutionPaused()            { DefaultMetrics.ExecutionPauses.Add(1) }
+func RecordExecutionResumed()           { DefaultMetrics.ExecutionResumes.Add(1) }

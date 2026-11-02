@@ -104,6 +104,12 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("GET /api/v1/executions", handlers.ListExecutions)
 	mux.HandleFunc("GET /api/v1/executions/{id}", handlers.GetExecution)
 	mux.HandleFunc("POST /api/v1/executions/{id}/retry", handlers.RetryExecution)
+	mux.HandleFunc("POST /api/v1/executions/{id}/cancel", handlers.CancelExecution)
+	mux.HandleFunc("POST /api/v1/executions/{id}/pause", handlers.PauseExecution)
+	mux.HandleFunc("POST /api/v1/executions/{id}/resume", handlers.ResumeExecution)
+
+	// Real-time Operations Streaming
+	mux.HandleFunc("GET /api/v1/operations/stream", handlers.OperationsStream)
 
 	// Failures / Dead-Letter Queue
 	mux.HandleFunc("GET /api/v1/failures", handlers.ListFailures)
@@ -228,6 +234,9 @@ func authMiddleware(next http.Handler, options ServerOptions) http.Handler {
 		}
 
 		provided := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		if provided == "" {
+			provided = strings.TrimSpace(r.URL.Query().Get("token"))
+		}
 		requestedTenant := strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
 		if requestedTenant == "" {
 			requestedTenant = options.DefaultTenantID
@@ -371,6 +380,16 @@ type statusRecorder struct {
 func (rec *statusRecorder) WriteHeader(code int) {
 	rec.statusCode = code
 	rec.ResponseWriter.WriteHeader(code)
+}
+
+func (rec *statusRecorder) Flush() {
+	if f, ok := rec.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (rec *statusRecorder) Unwrap() http.ResponseWriter {
+	return rec.ResponseWriter
 }
 
 func requestIDMiddleware(next http.Handler) http.Handler {

@@ -5,7 +5,8 @@
     openCreateWorkflow,
     openDispatchModal,
     currentIdentity,
-    fetchCurrentIdentity
+    fetchCurrentIdentity,
+    liveStreamStatus
   } from '../../api/stores';
   import { onMount } from 'svelte';
   import type { AppRoute } from '../../api/types';
@@ -86,6 +87,23 @@
   </div>
 
   <div class="header-actions">
+    <div class="stream-status {$liveStreamStatus}" title={`Live Operations Center: ${$liveStreamStatus}`}>
+      <span class="status-indicator-dot"></span>
+      <span class="status-indicator-label">
+        {#if $liveStreamStatus === 'connected'}
+          LIVE
+        {:else if $liveStreamStatus === 'connecting'}
+          CONNECTING
+        {:else if $liveStreamStatus === 'reconnecting'}
+          RECONNECTING
+        {:else if $liveStreamStatus === 'fallback'}
+          POLLING
+        {:else}
+          OFFLINE
+        {/if}
+      </span>
+    </div>
+
     {#if $currentIdentity}
       <div class="tenant-badge mono">
         <span class="tenant-name">{$currentIdentity.tenant_name || $currentIdentity.tenant_id}</span>
@@ -151,6 +169,58 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+  }
+
+  .stream-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-surface-elevated, #181b20);
+    border: 1px solid var(--border-default, #272a30);
+    padding: 3px 8px;
+    border-radius: var(--radius-sm, 4px);
+    font-family: var(--font-mono, monospace);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .status-indicator-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  .stream-status.connected .status-indicator-dot {
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  }
+  .stream-status.connected .status-indicator-label {
+    color: #34d399;
+  }
+
+  .stream-status.connecting .status-indicator-dot,
+  .stream-status.reconnecting .status-indicator-dot {
+    background: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+  }
+  .stream-status.connecting .status-indicator-label,
+  .stream-status.reconnecting .status-indicator-label {
+    color: #fbbf24;
+  }
+
+  .stream-status.fallback .status-indicator-dot {
+    background: #6b7280;
+  }
+  .stream-status.fallback .status-indicator-label {
+    color: #9ca3af;
+  }
+
+  .stream-status.closed .status-indicator-dot {
+    background: #ef4444;
+  }
+  .stream-status.closed .status-indicator-label {
+    color: #f87171;
   }
 
   .tenant-badge {

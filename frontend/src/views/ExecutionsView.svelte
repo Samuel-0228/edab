@@ -1,6 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { refreshTick, openExecutionDetail, notifySuccess, notifyError } from '../api/stores';
+  import {
+    refreshTick,
+    openExecutionDetail,
+    notifySuccess,
+    notifyError,
+    currentIdentity,
+    canOperateActions
+  } from '../api/stores';
   import { api } from '../api/client';
   import type { Execution } from '../api/types';
   import Card from '../components/common/Card.svelte';
@@ -53,6 +60,39 @@
       notifyError(msg);
     }
   }
+
+  async function handlePause(id: string) {
+    try {
+      await api.pauseExecution(id);
+      notifySuccess('Execution paused');
+      await loadExecutions();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Pause failed';
+      notifyError(msg);
+    }
+  }
+
+  async function handleResume(id: string) {
+    try {
+      await api.resumeExecution(id);
+      notifySuccess('Execution resumed');
+      await loadExecutions();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Resume failed';
+      notifyError(msg);
+    }
+  }
+
+  async function handleCancel(id: string) {
+    try {
+      await api.cancelExecution(id);
+      notifySuccess('Execution cancelled');
+      await loadExecutions();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Cancel failed';
+      notifyError(msg);
+    }
+  }
 </script>
 
 <div class="executions-view">
@@ -69,6 +109,8 @@
             { value: 'failed', label: 'Failed Only' },
             { value: 'running', label: 'Running Only' },
             { value: 'retrying', label: 'Retrying Only' },
+            { value: 'paused', label: 'Paused Only' },
+            { value: 'cancelled', label: 'Cancelled Only' },
             { value: 'pending', label: 'Pending Only' }
           ]}
           class="status-select"
@@ -133,6 +175,10 @@
                     <Badge variant="failed">FAILED</Badge>
                   {:else if exec.status === 'running'}
                     <Badge variant="running">RUNNING</Badge>
+                  {:else if exec.status === 'paused'}
+                    <Badge variant="warning">PAUSED</Badge>
+                  {:else if exec.status === 'cancelled'}
+                    <Badge variant="neutral">CANCELLED</Badge>
                   {:else}
                     <Badge variant="warning">{exec.status}</Badge>
                   {/if}
@@ -145,10 +191,26 @@
                     <Button variant="ghost" size="sm" onclick={() => openExecutionDetail(exec.id)}>
                       Timeline
                     </Button>
-                    {#if exec.status === 'failed'}
-                      <Button variant="primary" size="sm" onclick={() => retryRun(exec.id)}>
-                        Retry
-                      </Button>
+                    {#if canOperateActions($currentIdentity?.role)}
+                      {#if exec.status === 'failed'}
+                        <Button variant="primary" size="sm" onclick={() => retryRun(exec.id)}>
+                          Retry
+                        </Button>
+                      {:else if exec.status === 'running' || exec.status === 'pending' || exec.status === 'retrying'}
+                        <Button variant="secondary" size="sm" onclick={() => handlePause(exec.id)}>
+                          Pause
+                        </Button>
+                        <Button variant="ghost" size="sm" onclick={() => handleCancel(exec.id)}>
+                          Cancel
+                        </Button>
+                      {:else if exec.status === 'paused'}
+                        <Button variant="primary" size="sm" onclick={() => handleResume(exec.id)}>
+                          Resume
+                        </Button>
+                        <Button variant="ghost" size="sm" onclick={() => handleCancel(exec.id)}>
+                          Cancel
+                        </Button>
+                      {/if}
                     {/if}
                   </div>
                 </td>

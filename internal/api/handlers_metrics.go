@@ -109,6 +109,26 @@ func (h *Handlers) Metrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(&b, "# TYPE kerob_lease_losses_total counter\n")
 	fmt.Fprintf(&b, "kerob_lease_losses_total %d\n\n", observability.DefaultMetrics.LeaseLosses.Load())
 
+	activeLiveSubscribers := observability.DefaultMetrics.LiveSubscribersActive.Load()
+	if activeLiveSubscribers < 0 {
+		activeLiveSubscribers = 0
+	}
+	fmt.Fprintf(&b, "# HELP kerob_live_subscribers_active Current active Server-Sent Events subscribers\n")
+	fmt.Fprintf(&b, "# TYPE kerob_live_subscribers_active gauge\n")
+	fmt.Fprintf(&b, "kerob_live_subscribers_active %d\n\n", activeLiveSubscribers)
+
+	fmt.Fprintf(&b, "# HELP kerob_execution_cancellations_total Total executions cancelled\n")
+	fmt.Fprintf(&b, "# TYPE kerob_execution_cancellations_total counter\n")
+	fmt.Fprintf(&b, "kerob_execution_cancellations_total %d\n\n", observability.DefaultMetrics.ExecutionCancellations.Load())
+
+	fmt.Fprintf(&b, "# HELP kerob_execution_pauses_total Total executions paused\n")
+	fmt.Fprintf(&b, "# TYPE kerob_execution_pauses_total counter\n")
+	fmt.Fprintf(&b, "kerob_execution_pauses_total %d\n\n", observability.DefaultMetrics.ExecutionPauses.Load())
+
+	fmt.Fprintf(&b, "# HELP kerob_execution_resumes_total Total executions resumed\n")
+	fmt.Fprintf(&b, "# TYPE kerob_execution_resumes_total counter\n")
+	fmt.Fprintf(&b, "kerob_execution_resumes_total %d\n\n", observability.DefaultMetrics.ExecutionResumes.Load())
+
 	observability.DefaultWorkflowMetrics.ExportPrometheus(&b)
 
 	_, _ = w.Write([]byte(b.String()))

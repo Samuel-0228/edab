@@ -160,34 +160,266 @@ func (h *Handlers) RetryExecution(w http.ResponseWriter, r *http.Request) {
 
 	// If engine is present, immediately execute retry asynchronously or synchronously
 	if h.workflowEngine != nil && h.workflows != nil && h.events != nil {
+		execClone := *exec
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
-			wf, err := h.workflows.GetByID(ctx, exec.WorkflowID)
+			wf, err := h.workflows.GetByID(ctx, execClone.WorkflowID)
 			if err != nil {
 				slog.ErrorContext(ctx, "retry failed to load workflow",
-					slog.String("execution_id", exec.ID),
-					slog.String("workflow_id", exec.WorkflowID),
+					slog.String("execution_id", execClone.ID),
+					slog.String("workflow_id", execClone.WorkflowID),
 					slog.String("error", err.Error()),
 				)
 				return
 			}
-			ev, err := h.events.GetByID(ctx, exec.EventID)
+			ev, err := h.events.GetByID(ctx, execClone.EventID)
 			if err != nil {
 				slog.ErrorContext(ctx, "retry failed to load event",
-					slog.String("execution_id", exec.ID),
-					slog.String("event_id", exec.EventID),
+					slog.String("execution_id", execClone.ID),
+					slog.String("event_id", execClone.EventID),
 					slog.String("error", err.Error()),
 				)
 				return
 			}
-			if _, err := h.workflowEngine.ExecuteWorkflow(ctx, wf, ev, exec); err != nil {
+			if _, err := h.workflowEngine.ExecuteWorkflow(ctx, wf, ev, &execClone); err != nil {
 				slog.ErrorContext(ctx, "retry execution failed",
-					slog.String("execution_id", exec.ID),
-					slog.String("workflow_id", exec.WorkflowID),
+					slog.String("execution_id", execClone.ID),
+					slog.String("workflow_id", execClone.WorkflowID),
 					slog.String("error", err.Error()),
 				)
 			}
+		}()
+	}
+
+	respondJSON(w, http.StatusOK, exec)
+}
+
+func (h *Handlers) CancelExecution(w http.ResponseWriter, r *http.Request) {
+	if h.executions == nil {
+		respondError(w, http.StatusInternalServerError, "execution store not initialized")
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
+	if !identity.HasPermission(auth.PermExecutionsCancel) && !identity.HasPermission(auth.PermExecutionsRetry) && !identity.HasPermission(auth.PermWorkflowsExecute) {
+		h.recordAudit(r, "authorization.denied", "execution", r.PathValue("id"), map[string]any{
+			"required_permission": auth.PermExecutionsCancel,
+		})
+		respondErrorWithCode(w, http.StatusForbidden, "FORBIDDEN", "permission denied: executions:cancel required", nil)
+		return
+	}
+
+	id := r.PathValue("id")
+	existing, err := h.executions.GetByID(r.Context(), id)
+	if errors.Is(err, workflow.ErrExecutionNotFound) {
+		respondError(w, http.StatusNotFound, "execution not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	execTenant := existing.TenantID
+	if execTenant == "" && h.workflows != nil {
+		if wf, err := h.workflows.GetByID(r.Context(), existing.WorkflowID); err == nil && wf != nil {
+			execTenant = wf.TenantID
+		}
+	}
+
+	if h.multiTenancy && execTenant != "" && execTenant != identity.TenantID {
+		h.recordAudit(r, "authorization.cross_tenant_denied", "execution", id, map[string]any{
+			"target_tenant": execTenant,
+		})
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot cancel execution belonging to another tenant", nil)
+		return
+	}
+
+	var exec *workflow.Execution
+	if h.workflowEngine != nil {
+		exec, err = h.workflowEngine.CancelExecution(r.Context(), id)
+	} else {
+		exec, err = h.executions.CancelExecution(r.Context(), id)
+	}
+	if errors.Is(err, workflow.ErrExecutionNotFound) {
+		respondError(w, http.StatusNotFound, "execution not found")
+		return
+	}
+	if errors.Is(err, workflow.ErrExecutionInvalidState) {
+		respondErrorWithCode(w, http.StatusConflict, "INVALID_STATE", err.Error(), nil)
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if h.liveHub != nil {
+		h.liveHub.OnExecutionCancelled(exec)
+	}
+
+	h.recordAudit(r, "execution.cancelled", "execution", exec.ID, map[string]any{
+		"workflow_id": exec.WorkflowID,
+		"event_id":    exec.EventID,
+	})
+
+	respondJSON(w, http.StatusOK, exec)
+}
+
+func (h *Handlers) PauseExecution(w http.ResponseWriter, r *http.Request) {
+	if h.executions == nil {
+		respondError(w, http.StatusInternalServerError, "execution store not initialized")
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
+	if !identity.HasPermission(auth.PermExecutionsPause) && !identity.HasPermission(auth.PermExecutionsRetry) && !identity.HasPermission(auth.PermWorkflowsExecute) {
+		h.recordAudit(r, "authorization.denied", "execution", r.PathValue("id"), map[string]any{
+			"required_permission": auth.PermExecutionsPause,
+		})
+		respondErrorWithCode(w, http.StatusForbidden, "FORBIDDEN", "permission denied: executions:pause required", nil)
+		return
+	}
+
+	id := r.PathValue("id")
+	existing, err := h.executions.GetByID(r.Context(), id)
+	if errors.Is(err, workflow.ErrExecutionNotFound) {
+		respondError(w, http.StatusNotFound, "execution not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	execTenant := existing.TenantID
+	if execTenant == "" && h.workflows != nil {
+		if wf, err := h.workflows.GetByID(r.Context(), existing.WorkflowID); err == nil && wf != nil {
+			execTenant = wf.TenantID
+		}
+	}
+
+	if h.multiTenancy && execTenant != "" && execTenant != identity.TenantID {
+		h.recordAudit(r, "authorization.cross_tenant_denied", "execution", id, map[string]any{
+			"target_tenant": execTenant,
+		})
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot pause execution belonging to another tenant", nil)
+		return
+	}
+
+	var exec *workflow.Execution
+	if h.workflowEngine != nil {
+		exec, err = h.workflowEngine.PauseExecution(r.Context(), id)
+	} else {
+		exec, err = h.executions.PauseExecution(r.Context(), id)
+	}
+	if errors.Is(err, workflow.ErrExecutionNotFound) {
+		respondError(w, http.StatusNotFound, "execution not found")
+		return
+	}
+	if errors.Is(err, workflow.ErrExecutionInvalidState) {
+		respondErrorWithCode(w, http.StatusConflict, "INVALID_STATE", err.Error(), nil)
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if h.liveHub != nil {
+		h.liveHub.OnExecutionPaused(exec)
+	}
+
+	h.recordAudit(r, "execution.paused", "execution", exec.ID, map[string]any{
+		"workflow_id": exec.WorkflowID,
+		"event_id":    exec.EventID,
+	})
+
+	respondJSON(w, http.StatusOK, exec)
+}
+
+func (h *Handlers) ResumeExecution(w http.ResponseWriter, r *http.Request) {
+	if h.executions == nil {
+		respondError(w, http.StatusInternalServerError, "execution store not initialized")
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
+	if !identity.HasPermission(auth.PermExecutionsRetry) && !identity.HasPermission(auth.PermExecutionsPause) && !identity.HasPermission(auth.PermWorkflowsExecute) {
+		h.recordAudit(r, "authorization.denied", "execution", r.PathValue("id"), map[string]any{
+			"required_permission": auth.PermExecutionsRetry,
+		})
+		respondErrorWithCode(w, http.StatusForbidden, "FORBIDDEN", "permission denied: executions:retry required", nil)
+		return
+	}
+
+	id := r.PathValue("id")
+	existing, err := h.executions.GetByID(r.Context(), id)
+	if errors.Is(err, workflow.ErrExecutionNotFound) {
+		respondError(w, http.StatusNotFound, "execution not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	execTenant := existing.TenantID
+	if execTenant == "" && h.workflows != nil {
+		if wf, err := h.workflows.GetByID(r.Context(), existing.WorkflowID); err == nil && wf != nil {
+			execTenant = wf.TenantID
+		}
+	}
+
+	if h.multiTenancy && execTenant != "" && execTenant != identity.TenantID {
+		h.recordAudit(r, "authorization.cross_tenant_denied", "execution", id, map[string]any{
+			"target_tenant": execTenant,
+		})
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot resume execution belonging to another tenant", nil)
+		return
+	}
+
+	var exec *workflow.Execution
+	if h.workflowEngine != nil {
+		exec, err = h.workflowEngine.ResumeExecution(r.Context(), id)
+	} else {
+		exec, err = h.executions.ResumeExecution(r.Context(), id)
+	}
+	if errors.Is(err, workflow.ErrExecutionNotFound) {
+		respondError(w, http.StatusNotFound, "execution not found")
+		return
+	}
+	if errors.Is(err, workflow.ErrExecutionInvalidState) {
+		respondErrorWithCode(w, http.StatusConflict, "INVALID_STATE", err.Error(), nil)
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if h.liveHub != nil {
+		h.liveHub.OnExecutionResumed(exec)
+	}
+
+	h.recordAudit(r, "execution.resumed", "execution", exec.ID, map[string]any{
+		"workflow_id": exec.WorkflowID,
+		"event_id":    exec.EventID,
+	})
+
+	// If engine is present, immediately execute resume asynchronously
+	if h.workflowEngine != nil && h.workflows != nil && h.events != nil {
+		execClone := *exec
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			wf, err := h.workflows.GetByID(ctx, execClone.WorkflowID)
+			if err != nil {
+				return
+			}
+			ev, err := h.events.GetByID(ctx, execClone.EventID)
+			if err != nil {
+				return
+			}
+			_, _ = h.workflowEngine.ExecuteWorkflow(ctx, wf, ev, &execClone)
 		}()
 	}
 

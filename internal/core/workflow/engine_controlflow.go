@@ -372,7 +372,8 @@ func (e *Engine) executeDelayStep(
 	}
 
 	// If resuming and the delay period has already passed
-	if exec.CurrentStepID == act.ID && (time.Now().UTC().After(exec.NextAttemptAt) || time.Now().UTC().Equal(exec.NextAttemptAt)) {
+	isResuming := exec.CurrentStepID == act.ID || (stepStates[act.ID].Status == "waiting")
+	if isResuming && (time.Now().UTC().After(exec.NextAttemptAt) || time.Now().UTC().Equal(exec.NextAttemptAt)) {
 		delayStep := &ExecutionStep{
 			ExecutionID: exec.ID,
 			StepID:      act.ID,

@@ -67,7 +67,7 @@ describe('ExecutionDetailModal Component', () => {
     };
 
     const mockGet = vi.spyOn(api, 'getExecution').mockResolvedValue(mockExecution);
-    const mockRetry = vi.spyOn(api, 'retryExecution').mockResolvedValue(undefined);
+    const mockRetry = vi.spyOn(api, 'retryExecution').mockResolvedValue(mockExecution);
 
     instance = mount(ExecutionDetailModal, { target });
 
