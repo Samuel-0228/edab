@@ -292,6 +292,67 @@ export interface OAuthAuthorizeResponse {
   state: string;
 }
 
+export interface EventSchema {
+  id: string;
+  tenant_id?: string;
+  name: string;
+  version: number;
+  schema_type: 'json_schema' | 'protobuf';
+  definition: string;
+  compatibility: 'BACKWARD' | 'FORWARD' | 'FULL' | 'NONE';
+  description?: string;
+  created_at: string;
+}
+
+export interface StreamPublishInput {
+  topic?: string;
+  ordering_key?: string;
+  source_id?: string;
+  event_type: string;
+  payload: unknown;
+  metadata?: Record<string, unknown>;
+  headers?: Record<string, string>;
+}
+
+export interface StreamPublishResult {
+  id: string;
+  topic: string;
+  partition: number;
+  offset: number;
+  timestamp: string;
+}
+
+export interface StreamConsumerOffset {
+  group_id: string;
+  topic: string;
+  partition: number;
+  offset: number;
+  committed_at: string;
+}
+
+export interface StreamDeadLetterEvent {
+  id: string;
+  tenant_id?: string;
+  topic: string;
+  partition: number;
+  offset: number;
+  event_id: string;
+  ordering_key?: string;
+  event_type: string;
+  payload: unknown;
+  error_reason: string;
+  retry_count: number;
+  resolved: boolean;
+  created_at: string;
+}
+
+export interface StreamReplayResult {
+  total_matched: number;
+  replayed: number;
+  event_ids: string[];
+  execution_ids: string[];
+}
+
 export interface OverviewResponse {
   status: string;
   active_workflows: number;

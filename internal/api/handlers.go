@@ -13,6 +13,8 @@ import (
 	"kerob/internal/core/event"
 	"kerob/internal/core/oauth"
 	"kerob/internal/core/routing"
+	"kerob/internal/core/schema"
+	"kerob/internal/core/streaming"
 	"kerob/internal/core/webhooks"
 	"kerob/internal/core/workflow"
 	"kerob/internal/telegram"
@@ -48,6 +50,13 @@ type Handlers struct {
 	liveHub      *LiveHub
 	connectorReg *connector.Registry
 	oauthManager *oauth.Manager
+
+	// Event Streaming & Schema Registry
+	schemaReg      *schema.Registry
+	streamAdapter  streaming.StreamAdapter
+	streamOffsets  streaming.OffsetStore
+	streamDLQStore streaming.DeadLetterStore
+	streamReplay   *streaming.ReplayEngine
 }
 
 // Config bundles all dependencies for NewHandlers.
@@ -65,6 +74,12 @@ type Config struct {
 	LiveHub        *LiveHub
 	ConnectorReg   *connector.Registry
 	OAuthManager   *oauth.Manager
+
+	SchemaRegistry *schema.Registry
+	StreamAdapter  streaming.StreamAdapter
+	StreamOffsets  streaming.OffsetStore
+	StreamDLQStore streaming.DeadLetterStore
+	StreamReplay   *streaming.ReplayEngine
 
 	Sources      sources.Store
 	Destinations destinations.Store
@@ -99,6 +114,28 @@ func NewHandlersFromConfig(cfg Config) *Handlers {
 		oMgr = oauth.NewManager(cReg, cfg.Creds, nil)
 	}
 
+	scReg := cfg.SchemaRegistry
+	if scReg == nil {
+		scReg = schema.NewRegistry(schema.NewMemoryStore())
+	}
+	strAdapter := cfg.StreamAdapter
+	if strAdapter == nil {
+		strAdapter = streaming.NewMemoryStreamAdapter(4)
+	}
+	offStore := cfg.StreamOffsets
+	if offStore == nil {
+		offStore = streaming.NewMemoryOffsetStore()
+	}
+	dlqStore := cfg.StreamDLQStore
+	if dlqStore == nil {
+		dlqStore = streaming.NewMemoryDeadLetterStore()
+	}
+	repEngine := cfg.StreamReplay
+	if repEngine == nil {
+		producer, _ := strAdapter.Producer()
+		repEngine = streaming.NewReplayEngine(cfg.Events, cfg.WorkflowEngine, dlqStore, producer)
+	}
+
 	return &Handlers{
 		workflows:      cfg.Workflows,
 		executions:     cfg.Executions,
@@ -124,7 +161,54 @@ func NewHandlersFromConfig(cfg Config) *Handlers {
 		liveHub:      hub,
 		connectorReg: cReg,
 		oauthManager: oMgr,
+
+		schemaReg:      scReg,
+		streamAdapter:  strAdapter,
+		streamOffsets:  offStore,
+		streamDLQStore: dlqStore,
+		streamReplay:   repEngine,
 	}
+}
+
+// SchemaRegistry returns the active schema registry.
+func (h *Handlers) SchemaRegistry() *schema.Registry {
+	if h.schemaReg == nil {
+		h.schemaReg = schema.NewRegistry(schema.NewMemoryStore())
+	}
+	return h.schemaReg
+}
+
+// StreamAdapter returns the active stream adapter.
+func (h *Handlers) StreamAdapter() streaming.StreamAdapter {
+	if h.streamAdapter == nil {
+		h.streamAdapter = streaming.NewMemoryStreamAdapter(4)
+	}
+	return h.streamAdapter
+}
+
+// OffsetStore returns the active stream offset store.
+func (h *Handlers) OffsetStore() streaming.OffsetStore {
+	if h.streamOffsets == nil {
+		h.streamOffsets = streaming.NewMemoryOffsetStore()
+	}
+	return h.streamOffsets
+}
+
+// DeadLetterStore returns the active dead letter stream store.
+func (h *Handlers) DeadLetterStore() streaming.DeadLetterStore {
+	if h.streamDLQStore == nil {
+		h.streamDLQStore = streaming.NewMemoryDeadLetterStore()
+	}
+	return h.streamDLQStore
+}
+
+// StreamReplayEngine returns the active stream replay engine.
+func (h *Handlers) StreamReplayEngine() *streaming.ReplayEngine {
+	if h.streamReplay == nil {
+		producer, _ := h.StreamAdapter().Producer()
+		h.streamReplay = streaming.NewReplayEngine(h.events, h.workflowEngine, h.DeadLetterStore(), producer)
+	}
+	return h.streamReplay
 }
 
 // ConnectorRegistry returns the active connector registry.

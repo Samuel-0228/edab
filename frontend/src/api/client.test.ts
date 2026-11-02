@@ -238,4 +238,63 @@ describe('KerobApiClient', () => {
     expect(revoked.status).toBe('revoked');
     expect(mockFetch.mock.calls[4][0]).toContain('/api/v1/oauth/github/revoke');
   });
+
+  it('supports Schema Registry and Event Streaming operations', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => [{ id: 'sc-1', name: 'order.created', version: 1 }]
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const schemas = await client.listSchemas();
+    expect(schemas).toHaveLength(1);
+    expect(schemas[0].name).toBe('order.created');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ valid: true, errors: [] })
+    });
+    const valResp = await client.validatePayloadAgainstSchema('order.created', { order_id: 'ord_1' });
+    expect(valResp.valid).toBe(true);
+    expect(mockFetch.mock.calls[1][0]).toContain('/api/v1/schemas/order.created/validate');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 202,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ id: 'rec-1', topic: 'orders', partition: 0, offset: 42 })
+    });
+    const pubRes = await client.publishToStream({
+      topic: 'orders',
+      ordering_key: 'tenant-1',
+      event_type: 'order.created',
+      payload: { order_id: 'ord_1' }
+    });
+    expect(pubRes.offset).toBe(42);
+    expect(mockFetch.mock.calls[2][0]).toContain('/api/v1/streams/publish');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => [{ group_id: 'workers', topic: 'orders', partition: 0, offset: 42 }]
+    });
+    const offsets = await client.getStreamOffsets('workers');
+    expect(offsets[0].offset).toBe(42);
+    expect(mockFetch.mock.calls[3][0]).toContain('/api/v1/streams/offsets?group_id=workers');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => [{ id: 'dlq-1', topic: 'orders', error_reason: 'schema error' }]
+    });
+    const dlq = await client.listStreamDLQ({ topic: 'orders' });
+    expect(dlq).toHaveLength(1);
+    expect(mockFetch.mock.calls[4][0]).toContain('/api/v1/streams/dlq?topic=orders');
+  });
 });

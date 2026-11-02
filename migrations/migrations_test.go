@@ -102,4 +102,16 @@ func TestEmbeddedMigrations(t *testing.T) {
 			t.Errorf("expected 000005_multi_tenancy_and_rbac.up.sql to contain '%s'", kw)
 		}
 	}
+
+	// Verify 000006 defines event streaming, schemas, and dead-letter queue
+	v6Up, ok := upMigrations["000006_event_streaming_and_schemas.up.sql"]
+	if !ok {
+		t.Fatal("000006_event_streaming_and_schemas.up.sql is required")
+	}
+	v6Required := []string{"event_schemas", "stream_consumer_offsets", "dead_letter_events", "schema_type", "compatibility", "offset_val"}
+	for _, kw := range v6Required {
+		if !strings.Contains(v6Up, kw) {
+			t.Errorf("expected 000006_event_streaming_and_schemas.up.sql to contain '%s'", kw)
+		}
+	}
 }

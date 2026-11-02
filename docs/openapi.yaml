@@ -715,6 +715,240 @@ paths:
         '413':
           description: Payload exceeds 1MB limit
 
+  /api/v1/schemas:
+    get:
+      summary: List registered event schemas
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of event schemas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventSchema'
+    post:
+      summary: Register or evolve an event schema
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, definition]
+              properties:
+                name: { type: string }
+                schema_type: { type: string, enum: [json_schema, protobuf] }
+                definition: { type: string }
+                compatibility: { type: string, enum: [BACKWARD, FORWARD, FULL, NONE] }
+                description: { type: string }
+      responses:
+        '201':
+          description: Schema registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventSchema'
+        '400':
+          description: Invalid schema definition or compatibility violation
+
+  /api/v1/schemas/{name}:
+    get:
+      summary: Get latest version of a schema by name
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Latest schema version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventSchema'
+        '404':
+          description: Schema not found
+
+  /api/v1/schemas/{name}/versions:
+    get:
+      summary: List all versions of a schema by name
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Version history for schema
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventSchema'
+
+  /api/v1/schemas/{name}/validate:
+    post:
+      summary: Validate an event payload against schema
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payload]
+              properties:
+                payload: { type: object }
+      responses:
+        '200':
+          description: Payload is valid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid: { type: boolean }
+                  errors: { type: array, items: { type: object } }
+        '422':
+          description: Payload failed schema validation
+
+  /api/v1/streams/publish:
+    post:
+      summary: Publish a partitioned record to durable stream
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event_type, payload]
+              properties:
+                topic: { type: string }
+                ordering_key: { type: string }
+                source_id: { type: string }
+                event_type: { type: string }
+                payload: { type: object }
+                headers:
+                  type: object
+                  additionalProperties: { type: string }
+      responses:
+        '201':
+          description: Record committed to partition log
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreamPublishResult'
+
+  /api/v1/streams/offsets:
+    get:
+      summary: Get consumer partition offsets
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: group_id
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Consumer offsets list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StreamConsumerOffset'
+
+  /api/v1/streams/replay:
+    post:
+      summary: Historical stream replay
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topic: { type: string }
+                source_id: { type: string }
+                event_type: { type: string }
+                since: { type: string, format: date-time }
+                until: { type: string, format: date-time }
+                bypass_idempotency: { type: boolean }
+      responses:
+        '200':
+          description: Replay execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreamReplayResult'
+
+  /api/v1/streams/dlq:
+    get:
+      summary: List dead-letter stream records
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: topic
+          in: query
+          schema: { type: string }
+        - name: resolved
+          in: query
+          schema: { type: boolean }
+        - name: limit
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: DLQ stream events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StreamDeadLetterEvent'
+
+  /api/v1/streams/dlq/{id}/retry:
+    post:
+      summary: Retry and resolve a dead-letter event
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Retried and resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  event: { type: object }
+                  executions: { type: array, items: { type: object } }
+
 components:
   securitySchemes:
     BearerAuth:
@@ -848,3 +1082,69 @@ components:
       properties:
         field: { type: string }
         message: { type: string }
+
+    EventSchema:
+      type: object
+      required: [id, name, version, schema_type, definition, compatibility, created_at]
+      properties:
+        id: { type: string }
+        tenant_id: { type: string }
+        name: { type: string }
+        version: { type: integer }
+        schema_type: { type: string, enum: [json_schema, protobuf] }
+        definition: { type: string }
+        compatibility: { type: string, enum: [BACKWARD, FORWARD, FULL, NONE] }
+        description: { type: string }
+        created_at: { type: string, format: date-time }
+
+    StreamPublishResult:
+      type: object
+      required: [id, topic, partition, offset, timestamp]
+      properties:
+        id: { type: string }
+        topic: { type: string }
+        partition: { type: integer }
+        offset: { type: integer }
+        timestamp: { type: string, format: date-time }
+
+    StreamConsumerOffset:
+      type: object
+      required: [group_id, topic, partition, offset, committed_at]
+      properties:
+        group_id: { type: string }
+        topic: { type: string }
+        partition: { type: integer }
+        offset: { type: integer }
+        committed_at: { type: string, format: date-time }
+
+    StreamDeadLetterEvent:
+      type: object
+      required: [id, topic, partition, offset, event_id, event_type, error_reason, retry_count, resolved, created_at]
+      properties:
+        id: { type: string }
+        tenant_id: { type: string }
+        topic: { type: string }
+        partition: { type: integer }
+        offset: { type: integer }
+        event_id: { type: string }
+        ordering_key: { type: string }
+        event_type: { type: string }
+        payload: { type: object }
+        error_reason: { type: string }
+        retry_count: { type: integer }
+        resolved: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    StreamReplayResult:
+      type: object
+      required: [total_matched, replayed, event_ids, execution_ids]
+      properties:
+        total_matched: { type: integer }
+        replayed: { type: integer }
+        event_ids:
+          type: array
+          items: { type: string }
+        execution_ids:
+          type: array
+          items: { type: string }
+

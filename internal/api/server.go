@@ -123,6 +123,21 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	// Real-time Operations Streaming
 	mux.HandleFunc("GET /api/v1/operations/stream", handlers.OperationsStream)
 
+	// Schema Registry
+	mux.HandleFunc("POST /api/v1/schemas", handlers.RegisterSchema)
+	mux.HandleFunc("GET /api/v1/schemas", handlers.ListSchemas)
+	mux.HandleFunc("GET /api/v1/schemas/{name}", handlers.GetSchema)
+	mux.HandleFunc("GET /api/v1/schemas/{name}/versions", handlers.ListSchemaVersions)
+	mux.HandleFunc("GET /api/v1/schemas/{name}/versions/{version}", handlers.GetSchemaVersion)
+	mux.HandleFunc("POST /api/v1/schemas/{name}/validate", handlers.ValidatePayloadAgainstSchema)
+
+	// Partitioned Event Streaming & Replay
+	mux.HandleFunc("POST /api/v1/streams/publish", handlers.PublishStream)
+	mux.HandleFunc("GET /api/v1/streams/offsets", handlers.GetStreamOffsets)
+	mux.HandleFunc("POST /api/v1/streams/replay", handlers.ReplayStream)
+	mux.HandleFunc("GET /api/v1/streams/dlq", handlers.ListStreamDLQ)
+	mux.HandleFunc("POST /api/v1/streams/dlq/{id}/retry", handlers.RetryStreamDLQ)
+
 	// Failures / Dead-Letter Queue
 	mux.HandleFunc("GET /api/v1/failures", handlers.ListFailures)
 	mux.HandleFunc("GET /api/v1/failures/{id}", handlers.GetFailure)

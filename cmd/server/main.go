@@ -20,6 +20,8 @@ import (
 	"kerob/internal/core/errtracker"
 	"kerob/internal/core/event"
 	"kerob/internal/core/routing"
+	"kerob/internal/core/schema"
+	"kerob/internal/core/streaming"
 	"kerob/internal/core/webhooks"
 	"kerob/internal/core/workflow"
 	"kerob/internal/database"
@@ -117,6 +119,21 @@ func main() {
 		ClientSecret: cfg.GitHubClientSecret,
 	})
 	_ = connector.Register(ghConnector)
+
+	// 5c. Initialize Event Schemas & Streaming Subsystem
+	schemaStore := schema.NewPostgresStore(db)
+	schemaRegistry := schema.NewRegistry(schemaStore)
+	streamOffsetStore := streaming.NewPostgresOffsetStore(db)
+	streamDLQStore := streaming.NewPostgresDeadLetterStore(db)
+
+	streamAdapter, err := streaming.CreateAdapter(cfg.StreamAdapter, map[string]any{
+		"data_dir":   cfg.StreamDataDir,
+		"partitions": cfg.StreamPartitions,
+	})
+	if err != nil {
+		slog.Error("failed to create streaming adapter, falling back to memory adapter", slog.String("error", err.Error()))
+		streamAdapter = streaming.NewMemoryStreamAdapter(cfg.StreamPartitions)
+	}
 
 	var teleAPI telegram.API
 	if cfg.TelegramEnabled && cfg.TelegramBotToken != "" {
@@ -259,6 +276,31 @@ func main() {
 		slog.Info("telegram bot listener is inactive (TELEGRAM_BOT_TOKEN not provided or TELEGRAM_ENABLED=false)")
 	}
 
+	// Partitioned Stream Consumer Worker
+	if cfg.StreamingEnabled {
+		streamWorker := streaming.NewStreamWorker(
+			streamAdapter,
+			schemaRegistry,
+			wfEngine,
+			streamDLQStore,
+			eventStore,
+			streaming.WorkerConfig{
+				GroupID:     cfg.StreamGroupID,
+				Topics:      []string{"events"},
+				Concurrency: cfg.StreamPartitions,
+			},
+		)
+		if err := streamWorker.Start(rootCtx); err != nil {
+			slog.Error("failed to start stream consumer worker", slog.String("error", err.Error()))
+		} else {
+			slog.Info("partitioned stream consumer worker started",
+				slog.String("adapter", streamAdapter.Name()),
+				slog.String("group_id", cfg.StreamGroupID),
+				slog.Int("partitions", cfg.StreamPartitions),
+			)
+		}
+	}
+
 	// 8. Start REST API Server
 	handlers := api.NewHandlersFromConfig(api.Config{
 		Workflows:      wfStore,
@@ -281,6 +323,11 @@ func main() {
 		ErrorTracker: errTracker,
 		AuthStore:    authStore,
 		MultiTenancy: cfg.MultiTenancyEnabled,
+
+		SchemaRegistry: schemaRegistry,
+		StreamAdapter:  streamAdapter,
+		StreamOffsets:  streamOffsetStore,
+		StreamDLQStore: streamDLQStore,
 	})
 
 	server := api.NewServerWithOptions(cfg.ServerPort, handlers, api.ServerOptions{

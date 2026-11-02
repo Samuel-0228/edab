@@ -24,7 +24,13 @@ import type {
   Identity,
   ConnectorManifest,
   ConnectorHealthStatus,
-  OAuthAuthorizeResponse
+  OAuthAuthorizeResponse,
+  EventSchema,
+  StreamPublishInput,
+  StreamPublishResult,
+  StreamConsumerOffset,
+  StreamDeadLetterEvent,
+  StreamReplayResult
 } from './types';
 
 export class ApiError extends Error {
@@ -302,6 +308,78 @@ export class KerobApiClient {
     return this.request<{ status: string; message: string }>(`/api/v1/oauth/${encodeURIComponent(connectorId)}/revoke`, {
       method: 'POST',
       body: JSON.stringify({ credential_id: credentialId })
+    });
+  }
+
+  // --- Schema Registry & Event Streaming ---
+  public async registerSchema(input: {
+    name: string;
+    schema_type?: 'json_schema' | 'protobuf';
+    definition: string;
+    compatibility?: 'BACKWARD' | 'FORWARD' | 'FULL' | 'NONE';
+    description?: string;
+  }): Promise<EventSchema> {
+    return this.request<EventSchema>('/api/v1/schemas', {
+      method: 'POST',
+      body: JSON.stringify(input)
+    });
+  }
+
+  public async listSchemas(): Promise<EventSchema[]> {
+    const data = await this.request<EventSchema[]>('/api/v1/schemas');
+    return Array.isArray(data) ? data : [];
+  }
+
+  public async getSchema(name: string): Promise<EventSchema> {
+    return this.request<EventSchema>(`/api/v1/schemas/${encodeURIComponent(name)}`);
+  }
+
+  public async listSchemaVersions(name: string): Promise<EventSchema[]> {
+    const data = await this.request<EventSchema[]>(`/api/v1/schemas/${encodeURIComponent(name)}/versions`);
+    return Array.isArray(data) ? data : [];
+  }
+
+  public async validatePayloadAgainstSchema(name: string, payload: unknown): Promise<{ valid: boolean; errors: unknown[] }> {
+    return this.request<{ valid: boolean; errors: unknown[] }>(`/api/v1/schemas/${encodeURIComponent(name)}/validate`, {
+      method: 'POST',
+      body: JSON.stringify({ payload })
+    });
+  }
+
+  public async publishToStream(input: StreamPublishInput): Promise<StreamPublishResult> {
+    return this.request<StreamPublishResult>('/api/v1/streams/publish', {
+      method: 'POST',
+      body: JSON.stringify(input)
+    });
+  }
+
+  public async getStreamOffsets(groupId?: string): Promise<StreamConsumerOffset[]> {
+    const query = groupId ? `?group_id=${encodeURIComponent(groupId)}` : '';
+    const data = await this.request<StreamConsumerOffset[]>(`/api/v1/streams/offsets${query}`);
+    return Array.isArray(data) ? data : [];
+  }
+
+  public async replayStream(filter: Record<string, unknown>): Promise<StreamReplayResult> {
+    return this.request<StreamReplayResult>('/api/v1/streams/replay', {
+      method: 'POST',
+      body: JSON.stringify(filter)
+    });
+  }
+
+  public async listStreamDLQ(filter?: { topic?: string; resolved?: boolean; limit?: number; offset?: number }): Promise<StreamDeadLetterEvent[]> {
+    const params = new URLSearchParams();
+    if (filter?.topic) params.set('topic', filter.topic);
+    if (filter?.resolved !== undefined) params.set('resolved', String(filter.resolved));
+    if (filter?.limit) params.set('limit', String(filter.limit));
+    if (filter?.offset) params.set('offset', String(filter.offset));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const data = await this.request<StreamDeadLetterEvent[]>(`/api/v1/streams/dlq${query}`);
+    return Array.isArray(data) ? data : [];
+  }
+
+  public async retryStreamDLQ(id: string): Promise<{ event: unknown; executions: unknown[]; status: string }> {
+    return this.request<{ event: unknown; executions: unknown[]; status: string }>(`/api/v1/streams/dlq/${encodeURIComponent(id)}/retry`, {
+      method: 'POST'
     });
   }
 

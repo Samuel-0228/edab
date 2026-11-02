@@ -44,6 +44,12 @@ type Config struct {
 
 	GitHubClientID     string
 	GitHubClientSecret string
+
+	StreamingEnabled bool
+	StreamAdapter    string
+	StreamDataDir    string
+	StreamPartitions int
+	StreamGroupID    string
 }
 
 // Load loads configuration from environment variables with sensible defaults.
@@ -81,6 +87,11 @@ func Load() *Config {
 		TelegramPublicPollInterval: getEnvDuration("TELEGRAM_PUBLIC_POLL_INTERVAL", 15*time.Second),
 		GitHubClientID:             getEnv("GITHUB_CLIENT_ID", ""),
 		GitHubClientSecret:         getEnv("GITHUB_CLIENT_SECRET", ""),
+		StreamingEnabled:           getEnvBool("STREAMING_ENABLED", true),
+		StreamAdapter:              getEnv("STREAM_ADAPTER", "durable"),
+		StreamDataDir:              getEnv("STREAM_DATA_DIR", "./data/streams"),
+		StreamPartitions:           getEnvInt("STREAM_PARTITIONS", 4),
+		StreamGroupID:              getEnv("STREAM_GROUP_ID", "kerob-engine-workers"),
 	}
 }
 
