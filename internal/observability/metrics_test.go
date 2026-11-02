@@ -15,6 +15,11 @@ func TestRecordExecutionMetrics(t *testing.T) {
 	RecordActionFailure()
 	RecordExecutionDuration(25 * time.Millisecond)
 	RecordEvent()
+	RecordLeaseAcquired()
+	RecordLeaseRenewed()
+	RecordLeaseTakenOver()
+	RecordLeaseReleased()
+	RecordLeaseLoss()
 
 	if DefaultMetrics.ExecutionsStarted.Load() != 1 ||
 		DefaultMetrics.ExecutionsSucceeded.Load() != 1 ||
@@ -22,7 +27,12 @@ func TestRecordExecutionMetrics(t *testing.T) {
 		DefaultMetrics.Retries.Load() != 1 ||
 		DefaultMetrics.ActionFailures.Load() != 1 ||
 		DefaultMetrics.ExecutionDurationMs.Load() != 25 ||
-		DefaultMetrics.EventsProcessed.Load() != 1 {
+		DefaultMetrics.EventsProcessed.Load() != 1 ||
+		DefaultMetrics.LeasesAcquired.Load() != 1 ||
+		DefaultMetrics.LeasesRenewed.Load() != 1 ||
+		DefaultMetrics.LeasesTakenOver.Load() != 1 ||
+		DefaultMetrics.LeasesReleased.Load() != 1 ||
+		DefaultMetrics.LeaseLosses.Load() != 1 {
 		t.Fatalf("unexpected metrics snapshot: started=%d succeeded=%d failed=%d retries=%d action_failures=%d duration=%d events=%d",
 			DefaultMetrics.ExecutionsStarted.Load(),
 			DefaultMetrics.ExecutionsSucceeded.Load(),

@@ -45,6 +45,24 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Environment != "development" {
 		t.Errorf("expected default Environment development, got %s", cfg.Environment)
 	}
+	if cfg.WorkerLeaseDuration != 30*time.Second {
+		t.Errorf("expected default WorkerLeaseDuration 30s, got %v", cfg.WorkerLeaseDuration)
+	}
+	if cfg.WorkerHeartbeatInterval != 10*time.Second {
+		t.Errorf("expected default WorkerHeartbeatInterval 10s, got %v", cfg.WorkerHeartbeatInterval)
+	}
+	if cfg.MultiTenancyEnabled != false {
+		t.Errorf("expected default MultiTenancyEnabled false, got %v", cfg.MultiTenancyEnabled)
+	}
+	if cfg.DefaultTenantID != "default" {
+		t.Errorf("expected default DefaultTenantID 'default', got %s", cfg.DefaultTenantID)
+	}
+	if cfg.WorkflowWorkerConcurrency != 4 {
+		t.Errorf("expected default WorkflowWorkerConcurrency 4, got %d", cfg.WorkflowWorkerConcurrency)
+	}
+	if !cfg.WorkflowWorkerEnabled {
+		t.Errorf("expected default WorkflowWorkerEnabled true, got false")
+	}
 }
 
 func TestLoadEnvironmentOverrides(t *testing.T) {
@@ -56,6 +74,8 @@ func TestLoadEnvironmentOverrides(t *testing.T) {
 	t.Setenv("MAX_BACKOFF", "5s")
 	t.Setenv("LOG_LEVEL", "debug")
 	t.Setenv("ENVIRONMENT", "production")
+	t.Setenv("MULTI_TENANCY_ENABLED", "true")
+	t.Setenv("DEFAULT_TENANT_ID", "tenant-corp")
 
 	cfg := Load()
 
@@ -82,6 +102,12 @@ func TestLoadEnvironmentOverrides(t *testing.T) {
 	}
 	if cfg.Environment != "production" {
 		t.Errorf("expected Environment production, got %s", cfg.Environment)
+	}
+	if !cfg.MultiTenancyEnabled {
+		t.Errorf("expected MultiTenancyEnabled true, got %v", cfg.MultiTenancyEnabled)
+	}
+	if cfg.DefaultTenantID != "tenant-corp" {
+		t.Errorf("expected DefaultTenantID 'tenant-corp', got %s", cfg.DefaultTenantID)
 	}
 }
 
@@ -284,5 +310,12 @@ func TestValidate_CommonConstraints(t *testing.T) {
 	cfg.MaxRetries = 0
 	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "MAX_RETRIES") {
 		t.Errorf("expected MAX_RETRIES error, got: %v", err)
+	}
+
+	cfg.MaxRetries = 1
+	cfg.WorkerLeaseDuration = 10 * time.Second
+	cfg.WorkerHeartbeatInterval = 10 * time.Second
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "WORKER_HEARTBEAT_INTERVAL") {
+		t.Errorf("expected WORKER_HEARTBEAT_INTERVAL error, got: %v", err)
 	}
 }

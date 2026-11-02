@@ -228,8 +228,11 @@ func (e *Engine) ExecuteWorkflow(
 	}
 
 	exec.Attempts++
-	if err := e.executions.UpdateStatus(ctx, exec.ID, ExecutionRunning, nil, 0); err != nil {
-		return exec, fmt.Errorf("failed to mark execution running: %w", err)
+	if exec.Status != ExecutionRunning {
+		exec.Status = ExecutionRunning
+		if err := e.executions.UpdateStatus(ctx, exec.ID, ExecutionRunning, nil, 0); err != nil {
+			return exec, fmt.Errorf("failed to mark execution running: %w", err)
+		}
 	}
 	observability.RecordExecutionStarted()
 
@@ -355,6 +358,7 @@ func (e *Engine) ExecuteWorkflow(
 
 	// All steps succeeded
 	totalDuration := time.Since(start).Milliseconds()
+	exec.Status = ExecutionSuccess
 	e.updateStatus(ctx, exec.ID, ExecutionSuccess, nil, totalDuration)
 	observability.RecordExecutionSucceeded()
 	observability.RecordExecutionDuration(time.Since(start))
@@ -382,6 +386,7 @@ func (e *Engine) handleExecutionFailure(
 		// Schedule retry with exponential backoff
 		backoff := e.calculateBackoff(exec.Attempts)
 		exec.NextAttemptAt = time.Now().UTC().Add(backoff)
+		exec.Status = ExecutionRetrying
 		e.updateStatus(ctx, exec.ID, ExecutionRetrying, &errStr, totalDuration)
 		observability.RecordRetry()
 		slog.Warn("action execution failed, scheduled retry",
@@ -395,6 +400,7 @@ func (e *Engine) handleExecutionFailure(
 	}
 
 	// Retries exhausted: mark failed and record in dead-letter
+	exec.Status = ExecutionFailed
 	e.updateStatus(ctx, exec.ID, ExecutionFailed, &errStr, totalDuration)
 	observability.RecordExecutionFailed()
 	observability.RecordExecutionDuration(time.Since(start))

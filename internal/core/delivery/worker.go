@@ -6,19 +6,26 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"kerob/internal/adapters/destinations"
 	"kerob/internal/core/event"
+	"kerob/internal/observability"
 )
 
-// WorkerConfig defines parameters for background job execution and retries.
+// WorkerConfig defines parameters for background job execution, leases, and retries.
 type WorkerConfig struct {
-	PollInterval   time.Duration
-	Concurrency    int
-	InitialBackoff time.Duration
-	MaxBackoff     time.Duration
+	PollInterval      time.Duration
+	Concurrency       int
+	InitialBackoff    time.Duration
+	MaxBackoff        time.Duration
+	LeaseDuration     time.Duration
+	HeartbeatInterval time.Duration
+	WorkerID          string
 }
 
 // Worker polls and processes pending delivery jobs concurrently.
@@ -52,6 +59,19 @@ func NewWorker(
 	if cfg.MaxBackoff <= 0 {
 		cfg.MaxBackoff = 1 * time.Minute
 	}
+	if cfg.LeaseDuration <= 0 {
+		cfg.LeaseDuration = 30 * time.Second
+	}
+	if cfg.HeartbeatInterval <= 0 {
+		cfg.HeartbeatInterval = cfg.LeaseDuration / 3
+	}
+	if cfg.WorkerID == "" {
+		hostname, _ := os.Hostname()
+		if hostname == "" {
+			hostname = "worker"
+		}
+		cfg.WorkerID = fmt.Sprintf("%s-%s", hostname, uuid.NewString()[:8])
+	}
 
 	return &Worker{
 		jobStore:     jobStore,
@@ -66,8 +86,11 @@ func NewWorker(
 // Start launches worker goroutines that process delivery jobs until ctx is cancelled.
 func (w *Worker) Start(ctx context.Context) {
 	slog.Info("delivery worker started",
+		slog.String("worker_id", w.cfg.WorkerID),
 		slog.Int("concurrency", w.cfg.Concurrency),
 		slog.Duration("poll_interval", w.cfg.PollInterval),
+		slog.Duration("lease_duration", w.cfg.LeaseDuration),
+		slog.Duration("heartbeat_interval", w.cfg.HeartbeatInterval),
 	)
 
 	for i := 0; i < w.cfg.Concurrency; i++ {
@@ -80,11 +103,12 @@ func (w *Worker) Start(ctx context.Context) {
 func (w *Worker) Stop() {
 	close(w.stopChan)
 	w.wg.Wait()
-	slog.Info("delivery worker stopped")
+	slog.Info("delivery worker stopped", slog.String("worker_id", w.cfg.WorkerID))
 }
 
-func (w *Worker) workerLoop(ctx context.Context, workerID int) {
+func (w *Worker) workerLoop(ctx context.Context, goroutineID int) {
 	defer w.wg.Done()
+	workerIdentifier := fmt.Sprintf("%s-%d", w.cfg.WorkerID, goroutineID)
 
 	ticker := time.NewTicker(w.cfg.PollInterval)
 	defer ticker.Stop()
@@ -96,10 +120,10 @@ func (w *Worker) workerLoop(ctx context.Context, workerID int) {
 		case <-w.stopChan:
 			return
 		default:
-			claimed, err := w.processNextJob(ctx, workerID)
+			claimed, err := w.processNextJob(ctx, workerIdentifier)
 			if err != nil {
 				slog.Error("error processing delivery job",
-					slog.Int("worker_id", workerID),
+					slog.String("worker_id", workerIdentifier),
 					slog.String("error", err.Error()),
 				)
 			}
@@ -119,11 +143,11 @@ func (w *Worker) workerLoop(ctx context.Context, workerID int) {
 
 // ProcessNextJob attempts to claim and execute a single job. Returns true if a job was claimed.
 func (w *Worker) ProcessNextJob(ctx context.Context) (bool, error) {
-	return w.processNextJob(ctx, 0)
+	return w.processNextJob(ctx, fmt.Sprintf("%s-0", w.cfg.WorkerID))
 }
 
-func (w *Worker) processNextJob(ctx context.Context, workerID int) (bool, error) {
-	job, err := w.jobStore.ClaimNextJob(ctx)
+func (w *Worker) processNextJob(ctx context.Context, workerIdentifier string) (bool, error) {
+	job, err := w.jobStore.ClaimNextJobWithLease(ctx, workerIdentifier, w.cfg.LeaseDuration)
 	if err != nil {
 		return false, fmt.Errorf("failed to claim job: %w", err)
 	}
@@ -131,13 +155,46 @@ func (w *Worker) processNextJob(ctx context.Context, workerID int) (bool, error)
 		return false, nil // No jobs ready
 	}
 
+	observability.RecordLeaseAcquired()
 	slog.Info("delivery started",
-		slog.Int("worker_id", workerID),
+		slog.String("worker_id", workerIdentifier),
 		slog.String("job_id", job.ID),
 		slog.String("event_id", job.EventID),
 		slog.String("destination_id", job.DestinationID),
 		slog.Int("attempt", job.Attempts),
+		slog.Duration("lease_duration", w.cfg.LeaseDuration),
 	)
+
+	// Lease renewal heartbeat goroutine
+	heartbeatCtx, cancelHeartbeat := context.WithCancel(ctx)
+	defer cancelHeartbeat()
+
+	heartbeatDone := make(chan struct{})
+	defer close(heartbeatDone)
+
+	go func() {
+		ticker := time.NewTicker(w.cfg.HeartbeatInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-heartbeatCtx.Done():
+				return
+			case <-heartbeatDone:
+				return
+			case <-ticker.C:
+				if err := w.jobStore.RenewLease(heartbeatCtx, job.ID, workerIdentifier, w.cfg.LeaseDuration); err != nil {
+					slog.Warn("failed to renew delivery job lease",
+						slog.String("job_id", job.ID),
+						slog.String("worker_id", workerIdentifier),
+						slog.String("error", err.Error()),
+					)
+					observability.RecordLeaseLoss()
+					return
+				}
+				observability.RecordLeaseRenewed()
+			}
+		}
+	}()
 
 	// Fetch event
 	ev, err := w.eventStore.GetByID(ctx, job.EventID)

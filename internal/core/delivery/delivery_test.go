@@ -290,3 +290,90 @@ func TestWorkerEndToEndDelivery(t *testing.T) {
 		t.Fatalf("expected delivery job to succeed after retry")
 	}
 }
+
+func TestDeliveryJobLeasesAndTakeover(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	job := NewJob("ev-100", "dest-100", 3)
+	if err := store.CreateJob(ctx, job); err != nil {
+		t.Fatalf("CreateJob failed: %v", err)
+	}
+
+	// 1. Worker A claims the job with a 50ms lease
+	claimedA, err := store.ClaimNextJobWithLease(ctx, "worker-A", 50*time.Millisecond)
+	if err != nil || claimedA == nil {
+		t.Fatalf("Worker A failed to claim job: %v", err)
+	}
+	if claimedA.LockedBy == nil || *claimedA.LockedBy != "worker-A" {
+		t.Fatalf("expected LockedBy 'worker-A', got %v", claimedA.LockedBy)
+	}
+	if claimedA.LeaseExpiresAt == nil || claimedA.LeaseExpiresAt.Before(time.Now().UTC()) {
+		t.Fatalf("expected future LeaseExpiresAt, got %v", claimedA.LeaseExpiresAt)
+	}
+
+	// 2. Worker B attempts to claim immediately -> should get nil (active lease)
+	claimedB, err := store.ClaimNextJobWithLease(ctx, "worker-B", 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("Worker B claim check failed: %v", err)
+	}
+	if claimedB != nil {
+		t.Fatalf("Worker B should not have claimed unexpired job leased to Worker A: %+v", claimedB)
+	}
+
+	// 3. Worker A renews lease
+	time.Sleep(10 * time.Millisecond)
+	oldExpiry := *claimedA.LeaseExpiresAt
+	if err := store.RenewLease(ctx, job.ID, "worker-A", 100*time.Millisecond); err != nil {
+		t.Fatalf("Worker A RenewLease failed: %v", err)
+	}
+	refreshedA, _ := store.GetByID(ctx, job.ID)
+	if !refreshedA.LeaseExpiresAt.After(oldExpiry) {
+		t.Fatalf("expected renewed expiry %v to be after old expiry %v", refreshedA.LeaseExpiresAt, oldExpiry)
+	}
+
+	// 4. Worker B attempts to renew -> should fail (not owner)
+	if err := store.RenewLease(ctx, job.ID, "worker-B", 100*time.Millisecond); err == nil {
+		t.Fatal("expected Worker B renewal to fail when job is locked by Worker A")
+	}
+
+	// 5. Worker A releases lease -> should revert to pending and allow Worker B to claim
+	if err := store.ReleaseLease(ctx, job.ID, "worker-A"); err != nil {
+		t.Fatalf("ReleaseLease failed: %v", err)
+	}
+	releasedJob, _ := store.GetByID(ctx, job.ID)
+	if releasedJob.Status != StatusPending || releasedJob.LockedBy != nil || releasedJob.LeaseExpiresAt != nil {
+		t.Fatalf("expected job to be pending with nil locks after release, got: %+v", releasedJob)
+	}
+
+	// 6. Worker B can now claim
+	claimedB2, err := store.ClaimNextJobWithLease(ctx, "worker-B", 100*time.Millisecond)
+	if err != nil || claimedB2 == nil || *claimedB2.LockedBy != "worker-B" {
+		t.Fatalf("Worker B failed to claim released job: %v, job: %+v", err, claimedB2)
+	}
+
+	// 7. Safe takeover simulation:
+	// Worker B crashes (stops heartbeating), simulate lease expiring:
+	store.mu.Lock()
+	past := time.Now().UTC().Add(-10 * time.Second)
+	store.jobs[job.ID].LeaseExpiresAt = &past
+	store.mu.Unlock()
+
+	// Worker C claims -> takes over expired job
+	claimedC, err := store.ClaimNextJobWithLease(ctx, "worker-C", 100*time.Millisecond)
+	if err != nil || claimedC == nil {
+		t.Fatalf("Worker C failed to take over expired lease: %v", err)
+	}
+	if claimedC.ID != job.ID || *claimedC.LockedBy != "worker-C" {
+		t.Fatalf("Worker C did not take over the expected job: %+v", claimedC)
+	}
+
+	// 8. Completed delivery clears lease
+	if err := store.MarkDelivered(ctx, job.ID); err != nil {
+		t.Fatalf("MarkDelivered failed: %v", err)
+	}
+	doneJob, _ := store.GetByID(ctx, job.ID)
+	if doneJob.LockedBy != nil || doneJob.LeaseExpiresAt != nil {
+		t.Fatalf("expected completed job to have nil lease info, got: %+v", doneJob)
+	}
+}

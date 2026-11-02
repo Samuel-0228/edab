@@ -9,18 +9,28 @@ import (
 	"strconv"
 	"strings"
 
+	"kerob/internal/core/auth"
 	"kerob/internal/core/workflow"
 )
 
 // ListWorkflowVersions returns the version history of a workflow.
 func (h *Handlers) ListWorkflowVersions(w http.ResponseWriter, r *http.Request) {
+	if !h.requirePermission(w, r, auth.PermWorkflowsRead) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 	id := r.PathValue("id")
-	if _, err := h.workflows.GetByID(r.Context(), id); err != nil {
+	wf, err := h.workflows.GetByID(r.Context(), id)
+	if err != nil {
 		if errors.Is(err, workflow.ErrWorkflowNotFound) {
 			respondError(w, http.StatusNotFound, "workflow not found")
 			return
 		}
 		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if h.multiTenancy && wf.TenantID != "" && wf.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot access workflow in another tenant", nil)
 		return
 	}
 
@@ -34,7 +44,25 @@ func (h *Handlers) ListWorkflowVersions(w http.ResponseWriter, r *http.Request) 
 
 // GetWorkflowVersion returns a specific version snapshot of a workflow.
 func (h *Handlers) GetWorkflowVersion(w http.ResponseWriter, r *http.Request) {
+	if !h.requirePermission(w, r, auth.PermWorkflowsRead) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 	id := r.PathValue("id")
+	wf, err := h.workflows.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, workflow.ErrWorkflowNotFound) {
+			respondError(w, http.StatusNotFound, "workflow not found")
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if h.multiTenancy && wf.TenantID != "" && wf.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot access workflow in another tenant", nil)
+		return
+	}
+
 	verStr := r.PathValue("version")
 	verNum, err := strconv.Atoi(verStr)
 	if err != nil {
@@ -56,7 +84,25 @@ func (h *Handlers) GetWorkflowVersion(w http.ResponseWriter, r *http.Request) {
 
 // RollbackWorkflow rolls back a workflow to a target version.
 func (h *Handlers) RollbackWorkflow(w http.ResponseWriter, r *http.Request) {
+	if !h.requirePermission(w, r, auth.PermWorkflowsWrite) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 	id := r.PathValue("id")
+	wf, err := h.workflows.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, workflow.ErrWorkflowNotFound) {
+			respondError(w, http.StatusNotFound, "workflow not found")
+			return
+		}
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if h.multiTenancy && wf.TenantID != "" && wf.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot rollback workflow in another tenant", nil)
+		return
+	}
+
 	verStr := r.PathValue("version")
 	verNum, err := strconv.Atoi(verStr)
 	if err != nil {
@@ -81,6 +127,7 @@ func (h *Handlers) RollbackWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	restoredWf.ID = id
+	restoredWf.TenantID = wf.TenantID
 	updated, err := h.workflows.Update(r.Context(), &restoredWf)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to update workflow during rollback: %s", err.Error()))
@@ -90,6 +137,10 @@ func (h *Handlers) RollbackWorkflow(w http.ResponseWriter, r *http.Request) {
 	// Record new version snapshot documenting the rollback
 	snapshot, _ := json.Marshal(updated)
 	_, _ = h.versionStore.RecordVersion(r.Context(), updated.ID, snapshot)
+
+	h.recordAudit(r, "workflow.rollback", "workflow", id, map[string]any{
+		"restored_version": verNum,
+	})
 
 	respondJSON(w, http.StatusOK, map[string]any{
 		"message":          fmt.Sprintf("workflow rolled back to version %d", verNum),

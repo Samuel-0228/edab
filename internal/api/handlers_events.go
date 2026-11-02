@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"kerob/internal/core/auth"
 	"kerob/internal/core/event"
 	"kerob/internal/observability"
 )
@@ -15,6 +16,10 @@ func (h *Handlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, []*event.Event{})
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermEventsRead) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	sourceID := r.URL.Query().Get("source_id")
 	eventType := r.URL.Query().Get("event_type")
@@ -47,6 +52,16 @@ func (h *Handlers) ListEvents(w http.ResponseWriter, r *http.Request) {
 		list = []*event.Event{}
 	}
 
+	if h.multiTenancy {
+		filtered := make([]*event.Event, 0, len(list))
+		for _, ev := range list {
+			if ev.TenantID == "" || ev.TenantID == identity.TenantID {
+				filtered = append(filtered, ev)
+			}
+		}
+		list = filtered
+	}
+
 	respondJSON(w, http.StatusOK, list)
 }
 
@@ -55,6 +70,10 @@ func (h *Handlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "event store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermEventsRead) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
 	ev, err := h.events.GetByID(r.Context(), id)
@@ -64,6 +83,11 @@ func (h *Handlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if h.multiTenancy && ev.TenantID != "" && ev.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot access event in another tenant", nil)
 		return
 	}
 
@@ -79,6 +103,11 @@ type ingestEventInput struct {
 }
 
 func (h *Handlers) IngestEvent(w http.ResponseWriter, r *http.Request) {
+	if !h.requirePermission(w, r, auth.PermEventsWrite) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
+
 	var input ingestEventInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid json body: "+err.Error())
@@ -99,6 +128,7 @@ func (h *Handlers) IngestEvent(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	ev.TenantID = identity.TenantID
 
 	RecordEventProcessed()
 
@@ -107,6 +137,12 @@ func (h *Handlers) IngestEvent(w http.ResponseWriter, r *http.Request) {
 	span.SetAttribute("event.id", ev.ID)
 	span.SetAttribute("event.source", ev.SourceID)
 	span.SetAttribute("event.type", ev.EventType)
+
+	h.recordAudit(r, "event.ingested", "event", ev.ID, map[string]any{
+		"source_id":   ev.SourceID,
+		"event_type":  ev.EventType,
+		"external_id": ev.ExternalEventID,
+	})
 
 	if h.workflowEngine != nil {
 		execs, err := h.workflowEngine.ProcessEvent(ctx, ev)

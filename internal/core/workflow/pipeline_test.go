@@ -105,6 +105,15 @@ func (m *mockDeliveryStore) List(ctx context.Context, filter delivery.ListFilter
 func (m *mockDeliveryStore) ClaimNextJob(ctx context.Context) (*delivery.DeliveryJob, error) {
 	return nil, nil
 }
+func (m *mockDeliveryStore) ClaimNextJobWithLease(ctx context.Context, workerID string, leaseDuration time.Duration) (*delivery.DeliveryJob, error) {
+	return nil, nil
+}
+func (m *mockDeliveryStore) RenewLease(ctx context.Context, id string, workerID string, leaseDuration time.Duration) error {
+	return nil
+}
+func (m *mockDeliveryStore) ReleaseLease(ctx context.Context, id string, workerID string) error {
+	return nil
+}
 func (m *mockDeliveryStore) MarkDelivered(ctx context.Context, id string) error {
 	return nil
 }

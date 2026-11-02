@@ -47,6 +47,8 @@ type ExecutionStep struct {
 // Execution represents an end-to-end execution of a workflow against an event.
 type Execution struct {
 	ID             string          `json:"id"`
+	TenantID       string          `json:"tenant_id,omitempty"`
+	ProjectID      *string         `json:"project_id,omitempty"`
 	WorkflowID     string          `json:"workflow_id"`
 	EventID        string          `json:"event_id"`
 	Status         ExecutionStatus `json:"status"`
@@ -60,6 +62,8 @@ type Execution struct {
 	CompletedAt    *time.Time      `json:"completed_at,omitempty"`
 	DurationMs     int64           `json:"duration_ms"`
 	Error          *string         `json:"error,omitempty"`
+	LockedBy       *string         `json:"locked_by,omitempty"`
+	LeaseExpiresAt *time.Time      `json:"lease_expires_at,omitempty"`
 	Steps          []ExecutionStep `json:"steps,omitempty"`
 	CreatedAt      time.Time       `json:"created_at"`
 	UpdatedAt      time.Time       `json:"updated_at"`
@@ -79,6 +83,9 @@ type ExecutionStore interface {
 	GetByID(ctx context.Context, id string) (*Execution, error)
 	List(ctx context.Context, filter ExecutionFilter) ([]*Execution, error)
 	ClaimPending(ctx context.Context) (*Execution, error)
+	ClaimPendingWithLease(ctx context.Context, workerID string, leaseDuration time.Duration) (*Execution, error)
+	RenewLease(ctx context.Context, id string, workerID string, leaseDuration time.Duration) error
+	ReleaseLease(ctx context.Context, id string, workerID string) error
 	UpdateStatus(ctx context.Context, id string, status ExecutionStatus, errStr *string, durationMs int64) error
 	RecordStep(ctx context.Context, step *ExecutionStep) error
 	ResetForRetry(ctx context.Context, id string) (*Execution, error)
@@ -138,9 +145,12 @@ func (s *MemoryExecutionStore) GetByID(ctx context.Context, id string) (*Executi
 	if !ok {
 		return nil, ErrExecutionNotFound
 	}
-	// Copy steps
-	exec.Steps = s.steps[id]
-	return exec, nil
+	execCopy := *exec
+	if steps, hasSteps := s.steps[id]; hasSteps {
+		execCopy.Steps = make([]ExecutionStep, len(steps))
+		copy(execCopy.Steps, steps)
+	}
+	return &execCopy, nil
 }
 
 func (s *MemoryExecutionStore) GetByWorkflowAndEvent(ctx context.Context, workflowID, eventID string) (*Execution, error) {
@@ -153,8 +163,12 @@ func (s *MemoryExecutionStore) GetByWorkflowAndEvent(ctx context.Context, workfl
 		return nil, ErrExecutionNotFound
 	}
 	exec := s.executions[id]
-	exec.Steps = s.steps[id]
-	return exec, nil
+	execCopy := *exec
+	if steps, hasSteps := s.steps[id]; hasSteps {
+		execCopy.Steps = make([]ExecutionStep, len(steps))
+		copy(execCopy.Steps, steps)
+	}
+	return &execCopy, nil
 }
 
 func (s *MemoryExecutionStore) List(ctx context.Context, filter ExecutionFilter) ([]*Execution, error) {
@@ -170,7 +184,10 @@ func (s *MemoryExecutionStore) List(ctx context.Context, filter ExecutionFilter)
 			continue
 		}
 		execCopy := *exec
-		execCopy.Steps = s.steps[exec.ID]
+		if steps, hasSteps := s.steps[exec.ID]; hasSteps {
+			execCopy.Steps = make([]ExecutionStep, len(steps))
+			copy(execCopy.Steps, steps)
+		}
 		result = append(result, &execCopy)
 	}
 
@@ -189,13 +206,23 @@ func (s *MemoryExecutionStore) List(ctx context.Context, filter ExecutionFilter)
 }
 
 func (s *MemoryExecutionStore) ClaimPending(ctx context.Context) (*Execution, error) {
+	return s.ClaimPendingWithLease(ctx, "default-worker", 30*time.Second)
+}
+
+func (s *MemoryExecutionStore) ClaimPendingWithLease(ctx context.Context, workerID string, leaseDuration time.Duration) (*Execution, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if leaseDuration <= 0 {
+		leaseDuration = 30 * time.Second
+	}
 	now := time.Now().UTC()
 	var best *Execution
 	for _, exec := range s.executions {
-		if (exec.Status == ExecutionPending || exec.Status == ExecutionRetrying || exec.Status == ExecutionWaiting) && (exec.NextAttemptAt.Before(now) || exec.NextAttemptAt.Equal(now)) {
+		isReady := (exec.Status == ExecutionPending || exec.Status == ExecutionRetrying || exec.Status == ExecutionWaiting) && !exec.NextAttemptAt.After(now)
+		isExpired := exec.Status == ExecutionRunning && exec.LeaseExpiresAt != nil && !exec.LeaseExpiresAt.After(now)
+
+		if isReady || isExpired {
 			if best == nil || exec.Priority > best.Priority || (exec.Priority == best.Priority && exec.CreatedAt.Before(best.CreatedAt)) {
 				best = exec
 			}
@@ -203,11 +230,72 @@ func (s *MemoryExecutionStore) ClaimPending(ctx context.Context) (*Execution, er
 	}
 	if best != nil {
 		best.Status = ExecutionRunning
-		best.Attempts++
+		best.LockedBy = &workerID
+		exp := now.Add(leaseDuration)
+		best.LeaseExpiresAt = &exp
 		best.UpdatedAt = now
-		return best, nil
+		execCopy := *best
+		if steps, hasSteps := s.steps[best.ID]; hasSteps {
+			execCopy.Steps = make([]ExecutionStep, len(steps))
+			copy(execCopy.Steps, steps)
+		}
+		return &execCopy, nil
 	}
 	return nil, nil
+}
+
+func (s *MemoryExecutionStore) ExpireLeaseForTest(id string, expiry time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if exec, ok := s.executions[id]; ok {
+		exec.LeaseExpiresAt = &expiry
+	}
+}
+
+func (s *MemoryExecutionStore) SetNextAttemptAtForTest(id string, nextAttempt time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if exec, ok := s.executions[id]; ok {
+		exec.NextAttemptAt = nextAttempt
+	}
+}
+
+func (s *MemoryExecutionStore) RenewLease(ctx context.Context, id string, workerID string, leaseDuration time.Duration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if leaseDuration <= 0 {
+		leaseDuration = 30 * time.Second
+	}
+	exec, ok := s.executions[id]
+	if !ok {
+		return ErrExecutionNotFound
+	}
+	if exec.Status != ExecutionRunning || exec.LockedBy == nil || *exec.LockedBy != workerID {
+		return errors.New("execution lease lost or execution not running")
+	}
+
+	exp := time.Now().UTC().Add(leaseDuration)
+	exec.LeaseExpiresAt = &exp
+	exec.UpdatedAt = time.Now().UTC()
+	return nil
+}
+
+func (s *MemoryExecutionStore) ReleaseLease(ctx context.Context, id string, workerID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	exec, ok := s.executions[id]
+	if !ok {
+		return ErrExecutionNotFound
+	}
+	if exec.LockedBy != nil && *exec.LockedBy == workerID && exec.Status == ExecutionRunning {
+		exec.LockedBy = nil
+		exec.LeaseExpiresAt = nil
+		exec.Status = ExecutionPending
+		exec.UpdatedAt = time.Now().UTC()
+	}
+	return nil
 }
 
 func (s *MemoryExecutionStore) UpdateStatus(ctx context.Context, id string, status ExecutionStatus, errStr *string, durationMs int64) error {
@@ -227,6 +315,11 @@ func (s *MemoryExecutionStore) UpdateStatus(ctx context.Context, id string, stat
 
 	if status == ExecutionSuccess || status == ExecutionFailed || status == ExecutionCancelled {
 		exec.CompletedAt = &now
+		exec.LockedBy = nil
+		exec.LeaseExpiresAt = nil
+	} else if status == ExecutionWaiting || status == ExecutionRetrying {
+		exec.LockedBy = nil
+		exec.LeaseExpiresAt = nil
 	}
 
 	return nil
@@ -256,7 +349,14 @@ func (s *MemoryExecutionStore) ResetForRetry(ctx context.Context, id string) (*E
 	exec.Status = ExecutionPending
 	exec.NextAttemptAt = now
 	exec.Error = nil
+	exec.LockedBy = nil
+	exec.LeaseExpiresAt = nil
 	exec.UpdatedAt = now
 
-	return exec, nil
+	execCopy := *exec
+	if steps, hasSteps := s.steps[id]; hasSteps {
+		execCopy.Steps = make([]ExecutionStep, len(steps))
+		copy(execCopy.Steps, steps)
+	}
+	return &execCopy, nil
 }

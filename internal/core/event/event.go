@@ -18,6 +18,8 @@ var (
 // The core engine never depends on service-specific fields.
 type Event struct {
 	ID              string          `json:"id"`
+	TenantID        string          `json:"tenant_id,omitempty"`
+	ProjectID       *string         `json:"project_id,omitempty"`
 	SourceID        string          `json:"source_id"`
 	ExternalEventID string          `json:"external_event_id"`
 	EventType       string          `json:"event_type"`

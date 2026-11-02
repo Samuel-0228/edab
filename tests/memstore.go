@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 
@@ -376,14 +377,24 @@ func (m *MemoryDeliveryStore) List(ctx context.Context, filter delivery.ListFilt
 }
 
 func (m *MemoryDeliveryStore) ClaimNextJob(ctx context.Context) (*delivery.DeliveryJob, error) {
+	return m.ClaimNextJobWithLease(ctx, "default-worker", 30*time.Second)
+}
+
+func (m *MemoryDeliveryStore) ClaimNextJobWithLease(ctx context.Context, workerID string, leaseDuration time.Duration) (*delivery.DeliveryJob, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if leaseDuration <= 0 {
+		leaseDuration = 30 * time.Second
+	}
 	now := time.Now().UTC()
 	var candidate *delivery.DeliveryJob
 
 	for _, j := range m.jobs {
-		if (j.Status == delivery.StatusPending || j.Status == delivery.StatusFailed) && !j.NextAttemptAt.After(now) {
+		isReady := (j.Status == delivery.StatusPending || j.Status == delivery.StatusFailed) && !j.NextAttemptAt.After(now)
+		isExpired := j.Status == delivery.StatusProcessing && j.LeaseExpiresAt != nil && !j.LeaseExpiresAt.After(now)
+
+		if isReady || isExpired {
 			if candidate == nil || j.NextAttemptAt.Before(candidate.NextAttemptAt) {
 				candidate = j
 			}
@@ -396,8 +407,50 @@ func (m *MemoryDeliveryStore) ClaimNextJob(ctx context.Context) (*delivery.Deliv
 
 	candidate.Status = delivery.StatusProcessing
 	candidate.Attempts++
+	candidate.LockedBy = &workerID
+	exp := now.Add(leaseDuration)
+	candidate.LeaseExpiresAt = &exp
 	candidate.UpdatedAt = now
-	return candidate, nil
+	cloned := *candidate
+	return &cloned, nil
+}
+
+func (m *MemoryDeliveryStore) RenewLease(ctx context.Context, id string, workerID string, leaseDuration time.Duration) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if leaseDuration <= 0 {
+		leaseDuration = 30 * time.Second
+	}
+	j, ok := m.jobs[id]
+	if !ok {
+		return delivery.ErrJobNotFound
+	}
+	if j.Status != delivery.StatusProcessing || j.LockedBy == nil || *j.LockedBy != workerID {
+		return errors.New("delivery job lease lost or not processing")
+	}
+
+	exp := time.Now().UTC().Add(leaseDuration)
+	j.LeaseExpiresAt = &exp
+	j.UpdatedAt = time.Now().UTC()
+	return nil
+}
+
+func (m *MemoryDeliveryStore) ReleaseLease(ctx context.Context, id string, workerID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	j, ok := m.jobs[id]
+	if !ok {
+		return delivery.ErrJobNotFound
+	}
+	if j.LockedBy != nil && *j.LockedBy == workerID && j.Status == delivery.StatusProcessing {
+		j.Status = delivery.StatusPending
+		j.LockedBy = nil
+		j.LeaseExpiresAt = nil
+		j.UpdatedAt = time.Now().UTC()
+	}
+	return nil
 }
 
 func (m *MemoryDeliveryStore) MarkDelivered(ctx context.Context, id string) error {
@@ -415,6 +468,8 @@ func (m *MemoryDeliveryStore) MarkDeliveredWithResult(ctx context.Context, id st
 	j.Result = result
 	now := time.Now().UTC()
 	j.DeliveredAt = &now
+	j.LockedBy = nil
+	j.LeaseExpiresAt = nil
 	j.UpdatedAt = now
 	return nil
 }
@@ -451,6 +506,8 @@ func (m *MemoryDeliveryStore) MarkFailed(ctx context.Context, id string, errStr 
 	j.Status = delivery.StatusFailed
 	j.LastError = &errStr
 	j.NextAttemptAt = nextAttempt
+	j.LockedBy = nil
+	j.LeaseExpiresAt = nil
 	j.UpdatedAt = time.Now().UTC()
 	return nil
 }
@@ -464,6 +521,8 @@ func (m *MemoryDeliveryStore) MarkDeadLetter(ctx context.Context, id string, err
 	}
 	j.Status = delivery.StatusDeadLetter
 	j.LastError = &errStr
+	j.LockedBy = nil
+	j.LeaseExpiresAt = nil
 	j.UpdatedAt = time.Now().UTC()
 	return nil
 }
@@ -479,6 +538,8 @@ func (m *MemoryDeliveryStore) ResetForRetry(ctx context.Context, id string) (*de
 	j.Attempts = 0
 	j.NextAttemptAt = time.Now().UTC()
 	j.LastError = nil
+	j.LockedBy = nil
+	j.LeaseExpiresAt = nil
 	j.UpdatedAt = time.Now().UTC()
 	return j, nil
 }

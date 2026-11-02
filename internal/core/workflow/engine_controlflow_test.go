@@ -409,11 +409,11 @@ func TestControlFlowDelayNonBlocking(t *testing.T) {
 
 	// Step 2: Queue / Scheduler claiming when next_attempt_at is reached
 	// Simulate time advancing past the delay:
+	execStore.SetNextAttemptAtForTest(execs[0].ID, time.Now().UTC().Add(-1*time.Second))
 	exec, err := execStore.GetByID(ctx, execs[0].ID)
 	if err != nil {
 		t.Fatalf("failed to get execution: %v", err)
 	}
-	exec.NextAttemptAt = time.Now().UTC().Add(-1 * time.Second) // Set to past
 
 	claimed, err := execStore.ClaimPending(ctx)
 	if err != nil {

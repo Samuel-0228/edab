@@ -207,3 +207,151 @@ type Provider interface {
   - `MemoryProvider`: In-memory recording for unit and integration testing assertions.
   - `SentryProvider`: Production integration with Sentry via standard HTTP ingestion without coupling the core engine to third-party SDKs.
 
+---
+
+## 8. Distributed Execution Foundation & Durable Job Leases
+
+Kerob supports horizontal scaling where multiple stateless server nodes and worker instances process workflow executions and delivery jobs concurrently against a shared PostgreSQL database.
+
+```text
+ ┌────────────────────────────────────────────────────────┐
+ │                   PostgreSQL Database                  │
+ │  • executions: locked_by, lease_expires_at, SKIP LOCKED│
+ │  • delivery_jobs: locked_by, lease_expires_at          │
+ └─────────────┬───────────────────────────┬──────────────┘
+               │                           │
+       FOR UPDATE SKIP LOCKED      FOR UPDATE SKIP LOCKED
+               │                           │
+               ▼                           ▼
+ ┌───────────────────────────┐ ┌───────────────────────────┐
+ │       Worker Node 1       │ │       Worker Node 2       │
+ │  ID: worker-node-1        │ │  ID: worker-node-2        │
+ │  • Workflow Concurrency=4 │ │  • Workflow Concurrency=4 │
+ │  • Delivery Concurrency=4 │ │  • Delivery Concurrency=4 │
+ │  • Periodic Heartbeats    │ │  • Periodic Heartbeats    │
+ └───────────────────────────┘ └───────────────────────────┘
+```
+
+### 1. Durable Leases & Zero Duplicate Claims
+Each claim operation uses atomic row locking with `FOR UPDATE SKIP LOCKED` over `executions` and `delivery_jobs`:
+- **Lock Owner**: Recorded in `locked_by` (configured `WORKER_ID` or auto-generated `<hostname>-<uuid8>`).
+- **Lease Duration**: Configurable via `WORKER_LEASE_DURATION` (default: 30s).
+- **Atomic State Transition**: Rows transitioning to `running` or `processing` claim the lease in a single atomic SQL transaction. Other workers immediately skip locked rows without lock contention or deadlocks.
+
+```sql
+UPDATE executions
+SET status = 'running',
+    locked_by = $1,
+    lease_expires_at = NOW() + ($2 || ' seconds')::interval,
+    updated_at = NOW()
+WHERE id = (
+    SELECT id FROM executions
+    WHERE (
+        (status IN ('pending', 'retrying', 'waiting') AND next_attempt_at <= NOW())
+        OR
+        (status = 'running' AND lease_expires_at IS NOT NULL AND lease_expires_at <= NOW())
+    )
+    ORDER BY priority DESC, next_attempt_at ASC, created_at ASC
+    FOR UPDATE SKIP LOCKED
+    LIMIT 1
+)
+RETURNING ...;
+```
+
+### 2. Renewal Heartbeats & Safe Crash Takeover
+- **Heartbeat Goroutine**: Active jobs/executions run background heartbeats every `WORKER_HEARTBEAT_INTERVAL` (default: 10s, recommended 1/3 of lease duration) to extend `lease_expires_at = NOW() + lease_duration`.
+- **Safe Crash Takeover**: If a worker node crashes, terminates abruptly (OOM/SIGKILL), or loses database connectivity, its lease expires automatically. Any available worker will safely claim the expired row on its next polling cycle.
+- **Lease Fencing**: If a worker takes longer than its lease duration and another worker takes over the lease, renewals by the zombie worker fail (`"execution lease lost or execution not running"`), preventing split-brain writes.
+
+### 3. Delayed, Retrying, and Scheduled Jobs Recovery
+- **Delayed Steps (`waiting`)**: Paused workflows with scheduled resumption (`StepTypeDelay`) store `next_attempt_at` in the future without holding database connections or worker goroutines.
+- **Exponential Backoff (`retrying`)**: Failed workflows calculate backoff and update `next_attempt_at`. Once `next_attempt_at <= NOW()`, the execution is eligible to be claimed by any available worker.
+- **Scheduled Triggers (`schedule`)**: Scheduler triggers use deterministic time-window bucketing (e.g. truncated to the minute/interval) when generating events, ensuring multi-node schedulers generate the exact same idempotent event key (`schedule:<workflow_id>:<bucket_timestamp>`), deduplicated by PostgreSQL's unique event constraint.
+- **Zero-Loss Restart Recovery**: If a server or worker restarts, all pending, waiting, retrying, or uncompleted jobs persist in PostgreSQL and immediately resume when due.
+
+### 4. Worker Concurrency & Graceful Shutdown
+- **Worker Pools**: Both `delivery.Worker` and `workflow.Worker` support configurable worker pool concurrency (`WORKER_CONCURRENCY` and `WORKFLOW_WORKER_CONCURRENCY`).
+- **Graceful Draining**: On `SIGTERM` or `SIGINT`, workers stop polling for new tasks, cancel the polling context, release clean idle leases, and wait on a `sync.WaitGroup` for active in-flight jobs to complete cleanly before process exit.
+
+### 5. Prometheus Metrics & Structured Logs
+Distributed execution operations are tracked in real-time via `/metrics`:
+- `kerob_leases_acquired_total`: Number of job or execution leases successfully acquired.
+- `kerob_leases_renewed_total`: Number of active lease renewals via heartbeats.
+- `kerob_leases_taken_over_total`: Number of expired leases taken over after worker crash.
+- `kerob_leases_released_total`: Leases voluntarily released upon completion or shutdown.
+- `kerob_lease_losses_total`: Count of lease losses detected during heartbeats.
+
+---
+
+## 9. Multi-Tenancy, Role-Based Access Control (RBAC), and Audit Logging
+
+Kerob provides enterprise multi-tenancy and granular role-based access control (RBAC), isolating tenant data at the database and service layers while supporting scoped machine tokens and an immutable, secret-scrubbed audit trail.
+
+```text
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │                      Tenant: "acme-corp" (ID: org_1)                   │
+ │                                                                        │
+ │  ┌────────────────────────────────┐   ┌─────────────────────────────┐  │
+ │  │      Users & Memberships       │   │    Scoped API Tokens        │  │
+ │  │  • Alice   (Owner)             │   │  • krb_ci_...   [workflows:*│  │
+ │  │  • Bob     (Admin)             │   │  • krb_ops_...  [events:rep]│  │
+ │  │  • Charlie (Editor)            │   └──────────────┬──────────────┘  │
+ │  │  • Dave    (Operator)          │                  │                 │
+ │  │  • Eve     (Viewer)            │                  ▼                 │
+ │  └────────────────────────────────┘      RBAC Middleware Gate          │
+ │                                             (Enforces Role & Scopes)   │
+ │                                                      │                 │
+ │  ┌───────────────────────────────────────────────────▼──────────────┐  │
+ │  │                   Isolated Tenant Resources                      │  │
+ │  │  Workflows • Credentials • Webhooks • Events • Executions • DLQ  │  │
+ │  └───────────────────────────────────────────────────┬──────────────┘  │
+ │                                                      │                 │
+ │                                                      ▼                 │
+ │  ┌──────────────────────────────────────────────────────────────────┐  │
+ │  │              Immutable Audit Trail (Secret Scrubbed)             │  │
+ │  │  action, actor_id, resource_id, scrubbed_details, ip_address    │  │
+ │  └──────────────────────────────────────────────────────────────────┘  │
+ └────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1. Tenant Data Isolation Model
+- **Tenants & Organizations**: Customers or organizational units are represented by `Tenant` records (`tenants` table).
+- **Resource Ownership**: Every resource (`workflows`, `credentials`, `webhooks`, `events`, `executions`, `dead_letter`, `sources`, `destinations`, `routes`, `delivery_jobs`) includes `tenant_id VARCHAR(64)` and optional `project_id VARCHAR(64)` foreign keys with indexed lookups (`idx_<resource>_tenant`).
+- **Database & Service Layer Enforcement**: All database queries filter by `tenant_id`. Handlers strictly verify tenant matching. Any attempt by an identity from Tenant A to inspect, alter, execute, or delete a resource owned by Tenant B is immediately rejected with HTTP 403 Forbidden and error code `CROSS_TENANT_DENIED`.
+
+### 2. Role-Based Access Control (RBAC) Hierarchy
+Kerob defines five standard hierarchical roles (`owner`, `admin`, `editor`, `operator`, `viewer`):
+
+| Role | Rank | Allowed Operations | Typical Use Case |
+| :--- | :--- | :--- | :--- |
+| **`owner`** | 5 | All tenant capabilities: manage organization, delete/transfer tenant, invite/remove members, manage API tokens, create/edit workflows, execute tests, retry runs, read secrets, view audit logs. | Company Founder, Platform Lead |
+| **`admin`** | 4 | All resource mutations, test executions, retries, and team management: invite members, update roles, create and revoke API tokens. Cannot delete the tenant organization. | DevOps Lead, Team Admin |
+| **`editor`** | 3 | Create, edit, patch, and delete workflows, credentials, webhooks, sources, and routes; execute tests and inject manual events. Cannot manage members or service tokens. | Automation Developer, Engineer |
+| **`operator`** | 2 | Operational control without configuration mutation: trigger on-demand test runs, retry failed executions, resolve dead-letter records, and replay events. Cannot edit pipeline definitions. | SRE, Support Engineer |
+| **`viewer`** | 1 | Read-only visibility: inspect pipelines, monitor live execution timelines, view dead-letter failures and audit logs. Sensitive credentials always masked. | Stakeholder, Security Auditor |
+
+### 3. Service Accounts & Scoped API Tokens
+Machine-to-machine integrations (e.g. GitHub Actions, CI/CD pipelines, external schedulers) authenticate using high-entropy API tokens:
+- **Token Generation**: Generated with format `krb_<prefix>_<32-byte-hex>` (e.g. `krb_live_4a1f8e...`) using `crypto/rand`.
+- **Hashed at Rest**: Plaintext secrets are displayed exactly once at creation time and never stored in the database. Kerob stores only the SHA-256 hash (`token_hash`) and a 12-character prefix (`token_prefix`) for identification.
+- **Constant-Time Verification**: Inbound Bearer tokens are SHA-256 hashed and compared in constant time (`crypto/subtle.ConstantTimeCompare`) against active token hashes.
+- **Granular Scopes**: Tokens support fine-grained scopes (e.g. `workflows:read`, `workflows:write`, `events:replay`, `dlq:retry`). If explicit scopes are configured, the token is strictly bounded by them regardless of the assigned base role. Wildcards (e.g. `workflows:*`) are supported.
+
+### 4. Security Audit Trail & Automated Secret Scrubbing
+All administrative, mutation, retry, replay, and sensitive access events emit structured audit records:
+- **Audited Events**:
+  - `auth.forbidden`: Authorization failures and permission denial attempts.
+  - `workflow.created`, `workflow.updated`, `workflow.deleted`, `workflow.patched`, `workflow.tested`.
+  - `credential.created`, `credential.updated`, `credential.deleted`, `credential.read`.
+  - `execution.retried`, `dlq.retried`, `dlq.discarded`, `dlq.bulk_retried`.
+  - `event.replayed`, `event.bulk_replayed`, `event.ingested`.
+  - `member.created`, `member.role_updated`, `member.deleted`.
+  - `token.created`, `token.revoked`.
+- **Automated Secret Scrubbing**: Every detail map passed to `RecordAuditLog` passes through `ScrubAuditDetails`, which recursively scans maps, slices, and structs, replacing any key matching sensitive patterns (`secret`, `token`, `password`, `key`, `auth`, `credential`, `bearer`, `private`, `cert`) with `"[REDACTED]"`. Plaintext secrets or credentials are never stored in audit tables or application logs.
+
+### 5. Backward Compatibility & Single-Tenant Dev Mode
+- **Zero Configuration Breaking**: Single-tenant local development remains the default (`MULTI_TENANCY_ENABLED=false`, `DEFAULT_TENANT_ID="default"`).
+- **Default Identity**: When multi-tenancy is disabled or running in local dev without authentication, incoming requests map seamlessly to `DefaultIdentity` (`tenant_id: "default"`, role: `owner`), preserving all previous test behaviors, developer scripts, and CLI workflows.
+
+
+

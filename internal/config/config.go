@@ -10,19 +10,28 @@ import (
 
 // Config holds all engine configuration loaded from environment variables.
 type Config struct {
-	DatabaseURL          string
-	ServerPort           string
-	WorkerPollInterval   time.Duration
-	WorkerConcurrency    int
-	MaxRetries           int
-	InitialBackoff       time.Duration
-	MaxBackoff           time.Duration
-	LogLevel             string
-	Environment          string
-	APIToken             string
-	EncryptionKey        string
-	SchedulerInterval    time.Duration
-	OtelExporterEndpoint string
+	DatabaseURL                string
+	ServerPort                 string
+	WorkerPollInterval         time.Duration
+	WorkerConcurrency          int
+	WorkerLeaseDuration        time.Duration
+	WorkerHeartbeatInterval    time.Duration
+	WorkerID                   string
+	WorkflowWorkerConcurrency  int
+	WorkflowWorkerPollInterval time.Duration
+	WorkflowWorkerEnabled      bool
+	MaxRetries                 int
+	InitialBackoff             time.Duration
+	MaxBackoff                 time.Duration
+	LogLevel                   string
+	Environment                string
+	APIToken                   string
+	EncryptionKey              string
+	SchedulerInterval          time.Duration
+	OtelExporterEndpoint       string
+
+	MultiTenancyEnabled bool
+	DefaultTenantID     string
 
 	TelegramBotToken           string
 	TelegramEnabled            bool
@@ -42,6 +51,12 @@ func Load() *Config {
 		ServerPort:                 getEnv("PORT", getEnv("SERVER_PORT", "8080")),
 		WorkerPollInterval:         getEnvDuration("WORKER_POLL_INTERVAL", time.Second),
 		WorkerConcurrency:          getEnvInt("WORKER_CONCURRENCY", 4),
+		WorkerLeaseDuration:        getEnvDuration("WORKER_LEASE_DURATION", 30*time.Second),
+		WorkerHeartbeatInterval:    getEnvDuration("WORKER_HEARTBEAT_INTERVAL", 10*time.Second),
+		WorkerID:                   getEnv("WORKER_ID", ""),
+		WorkflowWorkerConcurrency:  getEnvInt("WORKFLOW_WORKER_CONCURRENCY", 4),
+		WorkflowWorkerPollInterval: getEnvDuration("WORKFLOW_WORKER_POLL_INTERVAL", time.Second),
+		WorkflowWorkerEnabled:      getEnvBool("WORKFLOW_WORKER_ENABLED", true),
 		MaxRetries:                 getEnvInt("MAX_RETRIES", 3),
 		InitialBackoff:             getEnvDuration("INITIAL_BACKOFF", 2*time.Second),
 		MaxBackoff:                 getEnvDuration("MAX_BACKOFF", time.Minute),
@@ -51,6 +66,8 @@ func Load() *Config {
 		EncryptionKey:              getEnv("KEROB_ENCRYPTION_KEY", getEnv("ENCRYPTION_KEY", "kerob-default-local-encryption-key-32bytes!!")),
 		SchedulerInterval:          getEnvDuration("SCHEDULER_INTERVAL", 10*time.Second),
 		OtelExporterEndpoint:       getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
+		MultiTenancyEnabled:        getEnvBool("MULTI_TENANCY_ENABLED", false),
+		DefaultTenantID:            getEnv("DEFAULT_TENANT_ID", "default"),
 		TelegramBotToken:           botToken,
 		TelegramEnabled:            getEnvBool("TELEGRAM_ENABLED", botToken != ""),
 		TelegramAPIBaseURL:         getEnv("TELEGRAM_API_BASE_URL", ""),
@@ -111,6 +128,18 @@ func (c *Config) Validate() error {
 	}
 	if c.WorkerConcurrency < 1 {
 		return fmt.Errorf("WORKER_CONCURRENCY must be at least 1")
+	}
+	if c.WorkflowWorkerConcurrency <= 0 {
+		c.WorkflowWorkerConcurrency = 4
+	}
+	if c.WorkerLeaseDuration <= 0 {
+		c.WorkerLeaseDuration = 30 * time.Second
+	}
+	if c.WorkerHeartbeatInterval <= 0 {
+		c.WorkerHeartbeatInterval = c.WorkerLeaseDuration / 3
+	}
+	if c.WorkerHeartbeatInterval >= c.WorkerLeaseDuration {
+		return fmt.Errorf("WORKER_HEARTBEAT_INTERVAL must be less than WORKER_LEASE_DURATION")
 	}
 	if c.MaxRetries < 1 {
 		return fmt.Errorf("MAX_RETRIES must be at least 1")

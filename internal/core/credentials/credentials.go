@@ -19,6 +19,8 @@ var (
 // Encrypted at rest, plaintext is never serialized to JSON.
 type Credential struct {
 	ID           string            `json:"id"`
+	TenantID     string            `json:"tenant_id,omitempty"`
+	ProjectID    *string           `json:"project_id,omitempty"`
 	Name         string            `json:"name"`
 	Integration  string            `json:"integration"` // e.g. "telegram", "discord", "github", "http"
 	KeyID        string            `json:"key_id"`

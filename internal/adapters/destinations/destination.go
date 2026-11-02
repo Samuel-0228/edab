@@ -19,6 +19,7 @@ var (
 // Destination represents a database-backed external target configuration.
 type Destination struct {
 	ID          string          `json:"id"`
+	TenantID    string          `json:"tenant_id,omitempty"`
 	Name        string          `json:"name"`
 	AdapterType string          `json:"adapter_type"`
 	Config      json.RawMessage `json:"config"`

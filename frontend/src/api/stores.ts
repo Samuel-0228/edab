@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import type { AppRoute, Workflow } from './types';
+import type { AppRoute, Workflow, Identity, Role } from './types';
 import { api } from './client';
 
 export interface ToastNotification {
@@ -319,3 +319,43 @@ export const apiConfig = writable<{ token: string; baseUrl: string }>({
   token: typeof api !== 'undefined' && api ? api.getToken() : '',
   baseUrl: typeof api !== 'undefined' && api ? api.getBaseUrl() : ''
 });
+
+// Current Authenticated Identity & Permissions
+export const currentIdentity = writable<Identity | null>(null);
+
+export async function fetchCurrentIdentity(): Promise<Identity | null> {
+  try {
+    const me = await api.getMe();
+    currentIdentity.set(me);
+    return me;
+  } catch {
+    currentIdentity.set(null);
+    return null;
+  }
+}
+
+const roleWeights: Record<Role, number> = {
+  viewer: 1,
+  operator: 2,
+  editor: 3,
+  admin: 4,
+  owner: 5
+};
+
+export function hasMinimumRole(userRole: Role | undefined, requiredRole: Role): boolean {
+  if (!userRole) return false;
+  return (roleWeights[userRole] || 0) >= (roleWeights[requiredRole] || 0);
+}
+
+export function canManageMembers(userRole: Role | undefined): boolean {
+  return hasMinimumRole(userRole, 'admin');
+}
+
+export function canWriteWorkflows(userRole: Role | undefined): boolean {
+  return hasMinimumRole(userRole, 'editor');
+}
+
+export function canOperateActions(userRole: Role | undefined): boolean {
+  return hasMinimumRole(userRole, 'operator');
+}
+

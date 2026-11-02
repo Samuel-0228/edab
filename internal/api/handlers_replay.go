@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"kerob/internal/core/auth"
 	"kerob/internal/core/workflow"
 )
 
@@ -25,10 +26,20 @@ type bulkDLQRequest struct {
 
 // ReplayEvent replays a single ingested event through active matching workflows.
 func (h *Handlers) ReplayEvent(w http.ResponseWriter, r *http.Request) {
+	if !h.requirePermission(w, r, auth.PermEventsReplay) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
+
 	id := r.PathValue("id")
 	ev, err := h.events.GetByID(r.Context(), id)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "event not found")
+		return
+	}
+
+	if h.multiTenancy && ev.TenantID != "" && ev.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot replay event belonging to another tenant", nil)
 		return
 	}
 
@@ -53,6 +64,12 @@ func (h *Handlers) ReplayEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.recordAudit(r, "event.replayed", "event", ev.ID, map[string]any{
+		"target_event_id":    targetEv.ID,
+		"bypass_idempotency": req.BypassIdempotency,
+		"executions":         len(executions),
+	})
+
 	respondJSON(w, http.StatusOK, map[string]any{
 		"event_id":           ev.ID,
 		"replayed_event_id":  targetEv.ID,
@@ -63,6 +80,11 @@ func (h *Handlers) ReplayEvent(w http.ResponseWriter, r *http.Request) {
 
 // ReplayBulkEvents replays multiple events through the automation engine.
 func (h *Handlers) ReplayBulkEvents(w http.ResponseWriter, r *http.Request) {
+	if !h.requirePermission(w, r, auth.PermEventsReplay) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
+
 	var req bulkReplayRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
@@ -89,6 +111,11 @@ func (h *Handlers) ReplayBulkEvents(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		if h.multiTenancy && ev.TenantID != "" && ev.TenantID != identity.TenantID {
+			results = append(results, replayResult{EventID: eventID, Error: "cross-tenant access denied"})
+			continue
+		}
+
 		targetEv := ev
 		if req.BypassIdempotency {
 			cloned := *ev
@@ -110,6 +137,11 @@ func (h *Handlers) ReplayBulkEvents(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	h.recordAudit(r, "event.bulk_replayed", "event", "bulk", map[string]any{
+		"replayed_count":     len(results),
+		"bypass_idempotency": req.BypassIdempotency,
+	})
+
 	respondJSON(w, http.StatusOK, map[string]any{
 		"replayed_count":     len(results),
 		"bypass_idempotency": req.BypassIdempotency,
@@ -119,6 +151,11 @@ func (h *Handlers) ReplayBulkEvents(w http.ResponseWriter, r *http.Request) {
 
 // BulkRetryDeadLetters retries dead-letter executions.
 func (h *Handlers) BulkRetryDeadLetters(w http.ResponseWriter, r *http.Request) {
+	if !h.requirePermission(w, r, auth.PermDLQRetry) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
+
 	var req bulkDLQRequest
 	if r.Body != nil && r.ContentLength > 0 {
 		_ = json.NewDecoder(r.Body).Decode(&req)
@@ -141,12 +178,26 @@ func (h *Handlers) BulkRetryDeadLetters(w http.ResponseWriter, r *http.Request) 
 			continue
 		}
 
+		recTenant := rec.TenantID
+		if recTenant == "" && h.workflows != nil {
+			if wf, err := h.workflows.GetByID(r.Context(), rec.WorkflowID); err == nil && wf != nil {
+				recTenant = wf.TenantID
+			}
+		}
+		if h.multiTenancy && recTenant != "" && recTenant != identity.TenantID {
+			continue
+		}
+
 		if _, err := h.executions.ResetForRetry(r.Context(), rec.ExecutionID); err != nil {
 			continue
 		}
 		_ = h.deadLetters.Discard(r.Context(), rec.ID)
 		retried++
 	}
+
+	h.recordAudit(r, "dlq.bulk_retried", "dead_letter", "bulk", map[string]any{
+		"retried_count": retried,
+	})
 
 	respondJSON(w, http.StatusOK, map[string]any{
 		"retried_count": retried,
@@ -155,6 +206,11 @@ func (h *Handlers) BulkRetryDeadLetters(w http.ResponseWriter, r *http.Request) 
 
 // BulkDiscardDeadLetters discards dead-letter executions permanently.
 func (h *Handlers) BulkDiscardDeadLetters(w http.ResponseWriter, r *http.Request) {
+	if !h.requirePermission(w, r, auth.PermDLQRetry) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
+
 	var req bulkDLQRequest
 	if r.Body != nil && r.ContentLength > 0 {
 		_ = json.NewDecoder(r.Body).Decode(&req)
@@ -177,11 +233,25 @@ func (h *Handlers) BulkDiscardDeadLetters(w http.ResponseWriter, r *http.Request
 			continue
 		}
 
+		recTenant := rec.TenantID
+		if recTenant == "" && h.workflows != nil {
+			if wf, err := h.workflows.GetByID(r.Context(), rec.WorkflowID); err == nil && wf != nil {
+				recTenant = wf.TenantID
+			}
+		}
+		if h.multiTenancy && recTenant != "" && recTenant != identity.TenantID {
+			continue
+		}
+
 		_ = h.deadLetters.Discard(r.Context(), rec.ID)
 		errStr := rec.Error
 		_ = h.executions.UpdateStatus(r.Context(), rec.ExecutionID, workflow.ExecutionCancelled, &errStr, 0)
 		discarded++
 	}
+
+	h.recordAudit(r, "dlq.bulk_discarded", "dead_letter", "bulk", map[string]any{
+		"discarded_count": discarded,
+	})
 
 	respondJSON(w, http.StatusOK, map[string]any{
 		"discarded_count": discarded,

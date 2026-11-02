@@ -15,6 +15,11 @@ type Metrics struct {
 	EventsProcessed     atomic.Uint64
 	ActionFailures      atomic.Uint64
 	ExecutionDurationMs atomic.Uint64
+	LeasesAcquired      atomic.Uint64
+	LeasesRenewed       atomic.Uint64
+	LeasesTakenOver     atomic.Uint64
+	LeasesReleased      atomic.Uint64
+	LeaseLosses         atomic.Uint64
 }
 
 var DefaultMetrics Metrics
@@ -28,3 +33,8 @@ func RecordActionFailure()      { DefaultMetrics.ActionFailures.Add(1) }
 func RecordExecutionDuration(d time.Duration) {
 	DefaultMetrics.ExecutionDurationMs.Add(uint64(d.Milliseconds()))
 }
+func RecordLeaseAcquired()  { DefaultMetrics.LeasesAcquired.Add(1) }
+func RecordLeaseRenewed()   { DefaultMetrics.LeasesRenewed.Add(1) }
+func RecordLeaseTakenOver() { DefaultMetrics.LeasesTakenOver.Add(1) }
+func RecordLeaseReleased()  { DefaultMetrics.LeasesReleased.Add(1) }
+func RecordLeaseLoss()      { DefaultMetrics.LeaseLosses.Add(1) }

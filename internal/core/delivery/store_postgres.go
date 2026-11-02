@@ -17,7 +17,7 @@ func NewPostgresStore(db *sql.DB) *PostgresStore {
 	return &PostgresStore{db: db}
 }
 
-const jobColumns = `id, event_id, destination_id, status, attempts, max_attempts, next_attempt_at, last_error, result, delivered_at, created_at, updated_at`
+const jobColumns = `id, event_id, destination_id, status, attempts, max_attempts, next_attempt_at, last_error, result, delivered_at, created_at, updated_at, locked_by, lease_expires_at`
 
 type rowScanner interface {
 	Scan(dest ...any) error
@@ -26,6 +26,8 @@ type rowScanner interface {
 func scanJob(row rowScanner) (*DeliveryJob, error) {
 	var job DeliveryJob
 	var deliveredAt sql.NullTime
+	var leaseExpiresAt sql.NullTime
+	var lockedBy sql.NullString
 	var rawResult []byte
 	err := row.Scan(
 		&job.ID,
@@ -40,6 +42,8 @@ func scanJob(row rowScanner) (*DeliveryJob, error) {
 		&deliveredAt,
 		&job.CreatedAt,
 		&job.UpdatedAt,
+		&lockedBy,
+		&leaseExpiresAt,
 	)
 	if err != nil {
 		return nil, err
@@ -47,6 +51,13 @@ func scanJob(row rowScanner) (*DeliveryJob, error) {
 	if deliveredAt.Valid {
 		t := deliveredAt.Time
 		job.DeliveredAt = &t
+	}
+	if lockedBy.Valid {
+		job.LockedBy = &lockedBy.String
+	}
+	if leaseExpiresAt.Valid {
+		t := leaseExpiresAt.Time
+		job.LeaseExpiresAt = &t
 	}
 	if len(rawResult) > 0 {
 		job.Result = json.RawMessage(rawResult)
@@ -181,18 +192,31 @@ func (s *PostgresStore) List(ctx context.Context, filter ListFilter) ([]*Deliver
 	return jobs, nil
 }
 
-// ClaimNextJob safely claims the next pending or retryable job using FOR UPDATE SKIP LOCKED.
-func (s *PostgresStore) ClaimNextJob(ctx context.Context) (*DeliveryJob, error) {
+// ClaimNextJobWithLease safely claims the next pending, retryable, or expired processing job using FOR UPDATE SKIP LOCKED.
+func (s *PostgresStore) ClaimNextJobWithLease(ctx context.Context, workerID string, leaseDuration time.Duration) (*DeliveryJob, error) {
+	if leaseDuration <= 0 {
+		leaseDuration = 30 * time.Second
+	}
+	leaseSeconds := int64(leaseDuration.Seconds())
+	if leaseSeconds <= 0 {
+		leaseSeconds = 1
+	}
+
 	query := `
 		UPDATE delivery_jobs
 		SET status = 'processing',
 		    attempts = attempts + 1,
+		    locked_by = $1,
+		    lease_expires_at = NOW() + ($2 || ' seconds')::interval,
 		    updated_at = NOW()
 		WHERE id = (
 			SELECT id
 			FROM delivery_jobs
-			WHERE status IN ('pending', 'failed')
-			  AND next_attempt_at <= NOW()
+			WHERE (
+				(status IN ('pending', 'failed') AND next_attempt_at <= NOW())
+				OR
+				(status = 'processing' AND lease_expires_at IS NOT NULL AND lease_expires_at <= NOW())
+			)
 			ORDER BY next_attempt_at ASC, created_at ASC
 			FOR UPDATE SKIP LOCKED
 			LIMIT 1
@@ -200,14 +224,66 @@ func (s *PostgresStore) ClaimNextJob(ctx context.Context) (*DeliveryJob, error) 
 		RETURNING ` + jobColumns + `;
 	`
 
-	job, err := scanJob(s.db.QueryRowContext(ctx, query))
+	job, err := scanJob(s.db.QueryRowContext(ctx, query, workerID, leaseSeconds))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil // No jobs ready to claim
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to claim next delivery job: %w", err)
+		return nil, fmt.Errorf("failed to claim next delivery job with lease: %w", err)
 	}
 	return job, nil
+}
+
+// ClaimNextJob safely claims the next job using a default lease duration.
+func (s *PostgresStore) ClaimNextJob(ctx context.Context) (*DeliveryJob, error) {
+	return s.ClaimNextJobWithLease(ctx, "default-worker", 30*time.Second)
+}
+
+// RenewLease extends the lease duration of an actively processing job for workerID.
+func (s *PostgresStore) RenewLease(ctx context.Context, id string, workerID string, leaseDuration time.Duration) error {
+	if leaseDuration <= 0 {
+		leaseDuration = 30 * time.Second
+	}
+	leaseSeconds := int64(leaseDuration.Seconds())
+	if leaseSeconds <= 0 {
+		leaseSeconds = 1
+	}
+
+	query := `
+		UPDATE delivery_jobs
+		SET lease_expires_at = NOW() + ($3 || ' seconds')::interval,
+		    updated_at = NOW()
+		WHERE id = $1 AND locked_by = $2 AND status = 'processing';
+	`
+	res, err := s.db.ExecContext(ctx, query, id, workerID, leaseSeconds)
+	if err != nil {
+		return fmt.Errorf("failed to renew delivery job lease: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rows == 0 {
+		return errors.New("delivery job lease lost or job already finished")
+	}
+	return nil
+}
+
+// ReleaseLease unlocks a processing job immediately back to pending.
+func (s *PostgresStore) ReleaseLease(ctx context.Context, id string, workerID string) error {
+	query := `
+		UPDATE delivery_jobs
+		SET status = 'pending',
+		    locked_by = NULL,
+		    lease_expires_at = NULL,
+		    updated_at = NOW()
+		WHERE id = $1 AND locked_by = $2 AND status = 'processing';
+	`
+	_, err := s.db.ExecContext(ctx, query, id, workerID)
+	if err != nil {
+		return fmt.Errorf("failed to release delivery job lease: %w", err)
+	}
+	return nil
 }
 
 func (s *PostgresStore) MarkDelivered(ctx context.Context, id string) error {
@@ -221,7 +297,7 @@ func (s *PostgresStore) MarkDeliveredWithResult(ctx context.Context, id string, 
 	}
 	query := `
 		UPDATE delivery_jobs
-		SET status = 'delivered', result = $2, delivered_at = NOW(), updated_at = NOW()
+		SET status = 'delivered', result = $2, delivered_at = NOW(), locked_by = NULL, lease_expires_at = NULL, updated_at = NOW()
 		WHERE id = $1;
 	`
 	_, err := s.db.ExecContext(ctx, query, id, resultParam)
@@ -234,7 +310,7 @@ func (s *PostgresStore) MarkDeliveredWithResult(ctx context.Context, id string, 
 func (s *PostgresStore) MarkFailed(ctx context.Context, id string, errStr string, nextAttempt time.Time) error {
 	query := `
 		UPDATE delivery_jobs
-		SET status = 'failed', last_error = $2, next_attempt_at = $3, updated_at = NOW()
+		SET status = 'failed', last_error = $2, next_attempt_at = $3, locked_by = NULL, lease_expires_at = NULL, updated_at = NOW()
 		WHERE id = $1;
 	`
 	_, err := s.db.ExecContext(ctx, query, id, errStr, nextAttempt)
@@ -247,7 +323,7 @@ func (s *PostgresStore) MarkFailed(ctx context.Context, id string, errStr string
 func (s *PostgresStore) MarkDeadLetter(ctx context.Context, id string, errStr string) error {
 	query := `
 		UPDATE delivery_jobs
-		SET status = 'dead_letter', last_error = $2, updated_at = NOW()
+		SET status = 'dead_letter', last_error = $2, locked_by = NULL, lease_expires_at = NULL, updated_at = NOW()
 		WHERE id = $1;
 	`
 	_, err := s.db.ExecContext(ctx, query, id, errStr)
@@ -263,7 +339,7 @@ func (s *PostgresStore) MarkDeadLetter(ctx context.Context, id string, errStr st
 func (s *PostgresStore) ResetForRetry(ctx context.Context, id string) (*DeliveryJob, error) {
 	query := `
 		UPDATE delivery_jobs
-		SET status = 'pending', attempts = 0, next_attempt_at = NOW(), last_error = NULL, updated_at = NOW()
+		SET status = 'pending', attempts = 0, next_attempt_at = NOW(), last_error = NULL, locked_by = NULL, lease_expires_at = NULL, updated_at = NOW()
 		WHERE id = $1
 		RETURNING ` + jobColumns + `;
 	`

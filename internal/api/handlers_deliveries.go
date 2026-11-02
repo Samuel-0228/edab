@@ -2,9 +2,11 @@ package api
 
 import (
 	"errors"
-	"kerob/internal/core/delivery"
 	"net/http"
 	"strconv"
+
+	"kerob/internal/core/auth"
+	"kerob/internal/core/delivery"
 )
 
 // Deliveries handlers
@@ -13,6 +15,10 @@ func (h *Handlers) ListDeliveries(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, []*delivery.DeliveryJob{})
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermExecutionsRead) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	filter := delivery.ListFilter{}
 	if destID := r.URL.Query().Get("destination_id"); destID != "" {
@@ -43,6 +49,17 @@ func (h *Handlers) ListDeliveries(w http.ResponseWriter, r *http.Request) {
 	if jobs == nil {
 		jobs = []*delivery.DeliveryJob{}
 	}
+
+	if h.multiTenancy {
+		filtered := make([]*delivery.DeliveryJob, 0, len(jobs))
+		for _, job := range jobs {
+			if job.TenantID == "" || job.TenantID == identity.TenantID {
+				filtered = append(filtered, job)
+			}
+		}
+		jobs = filtered
+	}
+
 	respondJSON(w, http.StatusOK, jobs)
 }
 
@@ -51,6 +68,10 @@ func (h *Handlers) ListFailedDeliveries(w http.ResponseWriter, r *http.Request) 
 		respondJSON(w, http.StatusOK, []*delivery.DeliveryJob{})
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermDLQRead) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	failed, err := h.deliveries.List(r.Context(), delivery.ListFilter{Status: delivery.StatusFailed})
 	if err != nil {
@@ -67,12 +88,26 @@ func (h *Handlers) ListFailedDeliveries(w http.ResponseWriter, r *http.Request) 
 	if combined == nil {
 		combined = []*delivery.DeliveryJob{}
 	}
+
+	if h.multiTenancy {
+		filtered := make([]*delivery.DeliveryJob, 0, len(combined))
+		for _, job := range combined {
+			if job.TenantID == "" || job.TenantID == identity.TenantID {
+				filtered = append(filtered, job)
+			}
+		}
+		combined = filtered
+	}
+
 	respondJSON(w, http.StatusOK, combined)
 }
 
 func (h *Handlers) DeliveryStats(w http.ResponseWriter, r *http.Request) {
 	if h.deliveries == nil {
 		respondJSON(w, http.StatusOK, delivery.Stats{})
+		return
+	}
+	if !h.requirePermission(w, r, auth.PermExecutionsRead) {
 		return
 	}
 
@@ -89,6 +124,10 @@ func (h *Handlers) GetDelivery(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "delivery store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermExecutionsRead) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
 	job, err := h.deliveries.GetByID(r.Context(), id)
@@ -100,6 +139,12 @@ func (h *Handlers) GetDelivery(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	if h.multiTenancy && job.TenantID != "" && job.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot access delivery job in another tenant", nil)
+		return
+	}
+
 	respondJSON(w, http.StatusOK, job)
 }
 
@@ -108,8 +153,27 @@ func (h *Handlers) RetryDelivery(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "delivery store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermExecutionsRetry) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
+	existing, err := h.deliveries.GetByID(r.Context(), id)
+	if errors.Is(err, delivery.ErrJobNotFound) {
+		respondError(w, http.StatusNotFound, "delivery job not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if h.multiTenancy && existing.TenantID != "" && existing.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot retry delivery job in another tenant", nil)
+		return
+	}
+
 	job, err := h.deliveries.ResetForRetry(r.Context(), id)
 	if errors.Is(err, delivery.ErrJobNotFound) {
 		respondError(w, http.StatusNotFound, "delivery job not found")
@@ -119,5 +183,11 @@ func (h *Handlers) RetryDelivery(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	h.recordAudit(r, "delivery.retried", "delivery", job.ID, map[string]any{
+		"destination_id": job.DestinationID,
+		"event_id":       job.EventID,
+	})
+
 	respondJSON(w, http.StatusOK, job)
 }

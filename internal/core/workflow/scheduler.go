@@ -101,7 +101,17 @@ func (s *Scheduler) tick(ctx context.Context, now time.Time) {
 					"workflow_id":   w.ID,
 					"workflow_name": w.Name,
 				}
-				extID := fmt.Sprintf("sched:%s:%d", w.ID, t.Unix())
+				bucket := t.Truncate(time.Minute).Unix()
+				var schedCfg ScheduleConfig
+				if len(w.Trigger.Config) > 0 {
+					_ = json.Unmarshal(w.Trigger.Config, &schedCfg)
+				}
+				if schedCfg.IntervalStr != "" {
+					if d, err := time.ParseDuration(schedCfg.IntervalStr); err == nil && d > 0 {
+						bucket = t.Truncate(d).Unix()
+					}
+				}
+				extID := fmt.Sprintf("sched:%s:%d", w.ID, bucket)
 				ev, err := event.New("scheduler", extID, "schedule.tick", payload, nil)
 				if err != nil {
 					slog.Error("failed to construct scheduled event", slog.String("error", err.Error()))

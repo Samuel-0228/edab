@@ -27,6 +27,8 @@ const MaxWebhookPayloadBytes = 1024 * 1024 // 1 MB
 // Webhook defines an inbound generic webhook endpoint configuration.
 type Webhook struct {
 	ID                 string    `json:"id"`
+	TenantID           string    `json:"tenant_id,omitempty"`
+	ProjectID          *string   `json:"project_id,omitempty"`
 	Name               string    `json:"name"`
 	SecretToken        string    `json:"secret_token,omitempty"`
 	RateLimitPerMinute int       `json:"rate_limit_per_minute"`

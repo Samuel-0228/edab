@@ -16,6 +16,7 @@ var (
 // Route connects a source to a destination with optional filtering.
 type Route struct {
 	ID            string          `json:"id"`
+	TenantID      string          `json:"tenant_id,omitempty"`
 	SourceID      string          `json:"source_id"`
 	DestinationID string          `json:"destination_id"`
 	Enabled       bool            `json:"enabled"`

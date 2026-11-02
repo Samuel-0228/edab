@@ -6,6 +6,7 @@ import (
 
 	"kerob/internal/adapters/destinations"
 	"kerob/internal/adapters/sources"
+	"kerob/internal/core/auth"
 	"kerob/internal/core/credentials"
 	"kerob/internal/core/delivery"
 	"kerob/internal/core/errtracker"
@@ -40,6 +41,8 @@ type Handlers struct {
 	destReg      *destinations.Registry
 	telegramAPI  telegram.API
 	errorTracker errtracker.Provider
+	authStore    auth.Store
+	multiTenancy bool
 }
 
 // Config bundles all dependencies for NewHandlers.
@@ -52,6 +55,8 @@ type Config struct {
 	Creds          credentials.Store
 	WebhookStore   webhooks.Store
 	VersionStore   workflow.VersionStore
+	AuthStore      auth.Store
+	MultiTenancy   bool
 
 	Sources      sources.Store
 	Destinations destinations.Store
@@ -90,6 +95,8 @@ func NewHandlersFromConfig(cfg Config) *Handlers {
 		destReg:      cfg.DestReg,
 		telegramAPI:  cfg.TelegramAPI,
 		errorTracker: cfg.ErrorTracker,
+		authStore:    cfg.AuthStore,
+		multiTenancy: cfg.MultiTenancy,
 	}
 }
 

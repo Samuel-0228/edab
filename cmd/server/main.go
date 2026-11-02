@@ -14,6 +14,7 @@ import (
 	"kerob/internal/adapters/sources"
 	"kerob/internal/api"
 	"kerob/internal/config"
+	"kerob/internal/core/auth"
 	"kerob/internal/core/credentials"
 	"kerob/internal/core/delivery"
 	"kerob/internal/core/errtracker"
@@ -84,6 +85,7 @@ func main() {
 	routeStore := routing.NewPostgresStore(db)
 	eventStore := event.NewPostgresStore(db)
 	deliveryStore := delivery.NewPostgresStore(db)
+	authStore := auth.NewPostgresStore(db)
 
 	// 4. Register Source and Destination Adapters
 	srcRegistry := sources.NewRegistry()
@@ -160,10 +162,27 @@ func main() {
 		destStore,
 		destRegistry,
 		delivery.WorkerConfig{
-			PollInterval:   cfg.WorkerPollInterval,
-			Concurrency:    cfg.WorkerConcurrency,
-			InitialBackoff: cfg.InitialBackoff,
-			MaxBackoff:     cfg.MaxBackoff,
+			PollInterval:      cfg.WorkerPollInterval,
+			Concurrency:       cfg.WorkerConcurrency,
+			InitialBackoff:    cfg.InitialBackoff,
+			MaxBackoff:        cfg.MaxBackoff,
+			LeaseDuration:     cfg.WorkerLeaseDuration,
+			HeartbeatInterval: cfg.WorkerHeartbeatInterval,
+			WorkerID:          cfg.WorkerID,
+		},
+	)
+
+	wfWorker := workflow.NewWorker(
+		wfEngine,
+		execStore,
+		wfStore,
+		eventStore,
+		workflow.WorkerConfig{
+			PollInterval:      cfg.WorkflowWorkerPollInterval,
+			Concurrency:       cfg.WorkflowWorkerConcurrency,
+			LeaseDuration:     cfg.WorkerLeaseDuration,
+			HeartbeatInterval: cfg.WorkerHeartbeatInterval,
+			WorkerID:          cfg.WorkerID,
 		},
 	)
 
@@ -172,6 +191,9 @@ func main() {
 	defer stopRoot()
 
 	worker.Start(rootCtx)
+	if cfg.WorkflowWorkerEnabled {
+		wfWorker.Start(rootCtx)
+	}
 
 	scheduler := workflow.NewScheduler(wfStore, wfEngine, 10*time.Second)
 	scheduler.Start(rootCtx)
@@ -248,10 +270,15 @@ func main() {
 		DestReg:      destRegistry,
 		TelegramAPI:  teleAPI,
 		ErrorTracker: errTracker,
+		AuthStore:    authStore,
+		MultiTenancy: cfg.MultiTenancyEnabled,
 	})
 
 	server := api.NewServerWithOptions(cfg.ServerPort, handlers, api.ServerOptions{
-		APIToken: cfg.APIToken,
+		APIToken:            cfg.APIToken,
+		AuthStore:           authStore,
+		MultiTenancyEnabled: cfg.MultiTenancyEnabled,
+		DefaultTenantID:     cfg.DefaultTenantID,
 	})
 
 	go func() {
@@ -289,6 +316,9 @@ func main() {
 		teleListener.Stop()
 	}
 	worker.Stop()
+	if cfg.WorkflowWorkerEnabled {
+		wfWorker.Stop()
+	}
 
 	slog.Info("kerob engine stopped cleanly")
 }

@@ -15,7 +15,13 @@ import type {
   Workflow,
   WorkflowCreateInput,
   WorkflowTestInput,
-  WorkflowTestResponse
+  WorkflowTestResponse,
+  Role,
+  Tenant,
+  Membership,
+  APIToken,
+  AuditLog,
+  Identity
 } from './types';
 
 export class ApiError extends Error {
@@ -369,6 +375,75 @@ export class KerobApiClient {
 
   public async getMetricsText(): Promise<string> {
     return this.request<string>('/metrics');
+  }
+
+  // --- Multi-tenancy & RBAC ---
+  public async getMe(): Promise<Identity> {
+    return this.request<Identity>('/api/v1/auth/me');
+  }
+
+  public async listTenants(): Promise<Tenant[]> {
+    const data = await this.request<Tenant[]>('/api/v1/tenants');
+    return Array.isArray(data) ? data : [];
+  }
+
+  public async createTenant(name: string, slug?: string): Promise<Tenant> {
+    return this.request<Tenant>('/api/v1/tenants', {
+      method: 'POST',
+      body: JSON.stringify({ name, slug })
+    });
+  }
+
+  public async listMembers(): Promise<Membership[]> {
+    const data = await this.request<Membership[]>('/api/v1/tenants/current/members');
+    return Array.isArray(data) ? data : [];
+  }
+
+  public async createMember(userId: string, role: Role): Promise<Membership> {
+    return this.request<Membership>('/api/v1/tenants/current/members', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, role })
+    });
+  }
+
+  public async updateMemberRole(userId: string, role: Role): Promise<Membership> {
+    return this.request<Membership>(`/api/v1/tenants/current/members/${encodeURIComponent(userId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ role })
+    });
+  }
+
+  public async deleteMember(userId: string): Promise<void> {
+    await this.request<void>(`/api/v1/tenants/current/members/${encodeURIComponent(userId)}`, {
+      method: 'DELETE'
+    });
+  }
+
+  public async listAPITokens(): Promise<APIToken[]> {
+    const data = await this.request<APIToken[]>('/api/v1/tokens');
+    return Array.isArray(data) ? data : [];
+  }
+
+  public async createAPIToken(name: string, scopes: string[], expiresAt?: string): Promise<APIToken> {
+    return this.request<APIToken>('/api/v1/tokens', {
+      method: 'POST',
+      body: JSON.stringify({ name, scopes, expires_at: expiresAt })
+    });
+  }
+
+  public async revokeAPIToken(id: string): Promise<void> {
+    await this.request<void>(`/api/v1/tokens/${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    });
+  }
+
+  public async listAuditLogs(limit?: number, offset?: number): Promise<AuditLog[]> {
+    const params = new URLSearchParams();
+    if (limit) params.set('limit', String(limit));
+    if (offset) params.set('offset', String(offset));
+    const qs = params.toString();
+    const data = await this.request<AuditLog[]>(`/api/v1/audit-logs${qs ? `?${qs}` : ''}`);
+    return Array.isArray(data) ? data : [];
   }
 }
 

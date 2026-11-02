@@ -3,10 +3,17 @@
     currentRoute,
     triggerRefresh,
     openCreateWorkflow,
-    openDispatchModal
+    openDispatchModal,
+    currentIdentity,
+    fetchCurrentIdentity
   } from '../../api/stores';
+  import { onMount } from 'svelte';
   import type { AppRoute } from '../../api/types';
   import Button from '../common/Button.svelte';
+
+  onMount(() => {
+    fetchCurrentIdentity();
+  });
 
   const routeTitles: Record<AppRoute, { title: string; subtitle: string }> = {
     overview: {
@@ -79,6 +86,13 @@
   </div>
 
   <div class="header-actions">
+    {#if $currentIdentity}
+      <div class="tenant-badge mono">
+        <span class="tenant-name">{$currentIdentity.tenant_name || $currentIdentity.tenant_id}</span>
+        <span class="role-pill {$currentIdentity.role}">{$currentIdentity.role.toUpperCase()}</span>
+      </div>
+    {/if}
+
     <Button variant="ghost" size="sm" icon="refresh" onclick={triggerRefresh}>Sync</Button>
 
     <Button variant="secondary" size="sm" icon="play" onclick={() => openDispatchModal()}>
@@ -137,6 +151,49 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+  }
+
+  .tenant-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-surface-elevated, #181b20);
+    border: 1px solid var(--border-default, #272a30);
+    padding: 3px 8px;
+    border-radius: var(--radius-sm, 4px);
+    font-size: 11px;
+  }
+
+  .tenant-name {
+    color: var(--text-secondary, #9aa0a6);
+  }
+
+  .role-pill {
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+  }
+  .role-pill.owner {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+  }
+  .role-pill.admin {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+  }
+  .role-pill.operator {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+  }
+  .role-pill.editor {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+  }
+  .role-pill.viewer {
+    background: rgba(156, 163, 175, 0.2);
+    color: #9ca3af;
   }
 
   @media (max-width: 860px) {

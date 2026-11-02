@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"kerob/internal/adapters/destinations"
-	"kerob/internal/telegram"
 	"net/http"
+
+	"kerob/internal/adapters/destinations"
+	"kerob/internal/core/auth"
+	"kerob/internal/telegram"
 )
 
 // Destinations handlers
@@ -15,6 +17,11 @@ func (h *Handlers) ListDestinations(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, []*destinations.Destination{})
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermIntegrationsRead) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
+
 	list, err := h.destinations.List(r.Context())
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
@@ -23,6 +30,17 @@ func (h *Handlers) ListDestinations(w http.ResponseWriter, r *http.Request) {
 	if list == nil {
 		list = []*destinations.Destination{}
 	}
+
+	if h.multiTenancy {
+		filtered := make([]*destinations.Destination, 0, len(list))
+		for _, item := range list {
+			if item.TenantID == "" || item.TenantID == identity.TenantID {
+				filtered = append(filtered, item)
+			}
+		}
+		list = filtered
+	}
+
 	respondJSON(w, http.StatusOK, list)
 }
 
@@ -40,6 +58,10 @@ func (h *Handlers) CreateDestination(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "destination store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermIntegrationsWrite) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	var input destinationInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -61,6 +83,7 @@ func (h *Handlers) CreateDestination(w http.ResponseWriter, r *http.Request) {
 
 	dest := destinations.Destination{
 		ID:          input.ID,
+		TenantID:    identity.TenantID,
 		Name:        input.Name,
 		AdapterType: input.AdapterType,
 		Config:      input.Config,
@@ -77,6 +100,12 @@ func (h *Handlers) CreateDestination(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	h.recordAudit(r, "destination.created", "destination", created.ID, map[string]any{
+		"name":         created.Name,
+		"adapter_type": created.AdapterType,
+	})
+
 	respondJSON(w, http.StatusCreated, created)
 }
 
@@ -85,6 +114,10 @@ func (h *Handlers) GetDestination(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "destination store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermIntegrationsRead) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
 	dest, err := h.destinations.GetByID(r.Context(), id)
@@ -96,6 +129,12 @@ func (h *Handlers) GetDestination(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	if h.multiTenancy && dest.TenantID != "" && dest.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot access destination in another tenant", nil)
+		return
+	}
+
 	respondJSON(w, http.StatusOK, dest)
 }
 
@@ -104,14 +143,37 @@ func (h *Handlers) UpdateDestination(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "destination store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermIntegrationsWrite) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
+	existing, err := h.destinations.GetByID(r.Context(), id)
+	if errors.Is(err, destinations.ErrDestinationNotFound) {
+		respondError(w, http.StatusNotFound, "destination not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if h.multiTenancy && existing.TenantID != "" && existing.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot modify destination in another tenant", nil)
+		return
+	}
+
 	var dest destinations.Destination
 	if err := json.NewDecoder(r.Body).Decode(&dest); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid json body: "+err.Error())
 		return
 	}
 	dest.ID = id
+	if dest.TenantID == "" {
+		dest.TenantID = existing.TenantID
+	}
+
 	if valErrs := ValidateDestinationInput(&dest, h.destReg); len(valErrs) > 0 {
 		respondValidationError(w, r, valErrs)
 		return
@@ -126,6 +188,12 @@ func (h *Handlers) UpdateDestination(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	h.recordAudit(r, "destination.updated", "destination", updated.ID, map[string]any{
+		"name":         updated.Name,
+		"adapter_type": updated.AdapterType,
+	})
+
 	respondJSON(w, http.StatusOK, updated)
 }
 
@@ -134,6 +202,10 @@ func (h *Handlers) PatchDestination(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "destination store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermIntegrationsWrite) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
 	dest, err := h.destinations.GetByID(r.Context(), id)
@@ -143,6 +215,11 @@ func (h *Handlers) PatchDestination(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if h.multiTenancy && dest.TenantID != "" && dest.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot patch destination in another tenant", nil)
 		return
 	}
 
@@ -179,6 +256,12 @@ func (h *Handlers) PatchDestination(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	h.recordAudit(r, "destination.patched", "destination", updated.ID, map[string]any{
+		"name":         updated.Name,
+		"adapter_type": updated.AdapterType,
+	})
+
 	respondJSON(w, http.StatusOK, updated)
 }
 
@@ -187,9 +270,13 @@ func (h *Handlers) DeleteDestination(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "destination store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermIntegrationsWrite) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
-	err := h.destinations.Delete(r.Context(), id)
+	existing, err := h.destinations.GetByID(r.Context(), id)
 	if errors.Is(err, destinations.ErrDestinationNotFound) {
 		respondError(w, http.StatusNotFound, "destination not found")
 		return
@@ -198,10 +285,35 @@ func (h *Handlers) DeleteDestination(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	if h.multiTenancy && existing.TenantID != "" && existing.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot delete destination in another tenant", nil)
+		return
+	}
+
+	err = h.destinations.Delete(r.Context(), id)
+	if errors.Is(err, destinations.ErrDestinationNotFound) {
+		respondError(w, http.StatusNotFound, "destination not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.recordAudit(r, "destination.deleted", "destination", id, map[string]any{
+		"name": existing.Name,
+	})
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handlers) CheckDestinationAccess(w http.ResponseWriter, r *http.Request) {
+	if !h.requirePermission(w, r, auth.PermIntegrationsRead) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
+
 	id := r.PathValue("id")
 	dest, err := h.destinations.GetByID(r.Context(), id)
 	if errors.Is(err, destinations.ErrDestinationNotFound) {
@@ -210,6 +322,11 @@ func (h *Handlers) CheckDestinationAccess(w http.ResponseWriter, r *http.Request
 	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if h.multiTenancy && dest.TenantID != "" && dest.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot check destination in another tenant", nil)
 		return
 	}
 

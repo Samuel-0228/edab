@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"kerob/internal/adapters/sources"
-	"kerob/internal/telegram"
 	"net/http"
 	"strings"
+
+	"kerob/internal/adapters/sources"
+	"kerob/internal/core/auth"
+	"kerob/internal/telegram"
 )
 
 // Sources handlers
@@ -17,6 +19,11 @@ func (h *Handlers) ListSources(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, []*sources.Source{})
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermIntegrationsRead) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
+
 	list, err := h.sources.List(r.Context())
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
@@ -25,6 +32,17 @@ func (h *Handlers) ListSources(w http.ResponseWriter, r *http.Request) {
 	if list == nil {
 		list = []*sources.Source{}
 	}
+
+	if h.multiTenancy {
+		filtered := make([]*sources.Source, 0, len(list))
+		for _, item := range list {
+			if item.TenantID == "" || item.TenantID == identity.TenantID {
+				filtered = append(filtered, item)
+			}
+		}
+		list = filtered
+	}
+
 	respondJSON(w, http.StatusOK, list)
 }
 
@@ -43,6 +61,10 @@ func (h *Handlers) CreateSource(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "source store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermIntegrationsWrite) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	var input sourceInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -74,6 +96,7 @@ func (h *Handlers) CreateSource(w http.ResponseWriter, r *http.Request) {
 
 	src := sources.Source{
 		ID:          input.ID,
+		TenantID:    identity.TenantID,
 		Name:        input.Name,
 		AdapterType: input.AdapterType,
 		Config:      input.Config,
@@ -90,6 +113,12 @@ func (h *Handlers) CreateSource(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	h.recordAudit(r, "source.created", "source", created.ID, map[string]any{
+		"name":         created.Name,
+		"adapter_type": created.AdapterType,
+	})
+
 	respondJSON(w, http.StatusCreated, created)
 }
 
@@ -98,6 +127,10 @@ func (h *Handlers) GetSource(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "source store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermIntegrationsRead) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
 	src, err := h.sources.GetByID(r.Context(), id)
@@ -109,6 +142,12 @@ func (h *Handlers) GetSource(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	if h.multiTenancy && src.TenantID != "" && src.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot access source belonging to another tenant", nil)
+		return
+	}
+
 	respondJSON(w, http.StatusOK, src)
 }
 
@@ -117,14 +156,37 @@ func (h *Handlers) UpdateSource(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "source store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermIntegrationsWrite) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
+	existing, err := h.sources.GetByID(r.Context(), id)
+	if errors.Is(err, sources.ErrSourceNotFound) {
+		respondError(w, http.StatusNotFound, "source not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if h.multiTenancy && existing.TenantID != "" && existing.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot modify source belonging to another tenant", nil)
+		return
+	}
+
 	var src sources.Source
 	if err := json.NewDecoder(r.Body).Decode(&src); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid json body: "+err.Error())
 		return
 	}
 	src.ID = id
+	if src.TenantID == "" {
+		src.TenantID = existing.TenantID
+	}
+
 	if valErrs := ValidateSourceInput(&src, h.sourceReg); len(valErrs) > 0 {
 		respondValidationError(w, r, valErrs)
 		return
@@ -139,6 +201,12 @@ func (h *Handlers) UpdateSource(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	h.recordAudit(r, "source.updated", "source", updated.ID, map[string]any{
+		"name":         updated.Name,
+		"adapter_type": updated.AdapterType,
+	})
+
 	respondJSON(w, http.StatusOK, updated)
 }
 
@@ -147,6 +215,10 @@ func (h *Handlers) PatchSource(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "source store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermIntegrationsWrite) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
 	src, err := h.sources.GetByID(r.Context(), id)
@@ -156,6 +228,11 @@ func (h *Handlers) PatchSource(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if h.multiTenancy && src.TenantID != "" && src.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot patch source belonging to another tenant", nil)
 		return
 	}
 
@@ -202,6 +279,12 @@ func (h *Handlers) PatchSource(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	h.recordAudit(r, "source.patched", "source", updated.ID, map[string]any{
+		"name":         updated.Name,
+		"adapter_type": updated.AdapterType,
+	})
+
 	respondJSON(w, http.StatusOK, updated)
 }
 
@@ -210,9 +293,13 @@ func (h *Handlers) DeleteSource(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "source store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermIntegrationsWrite) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
-	err := h.sources.Delete(r.Context(), id)
+	existing, err := h.sources.GetByID(r.Context(), id)
 	if errors.Is(err, sources.ErrSourceNotFound) {
 		respondError(w, http.StatusNotFound, "source not found")
 		return
@@ -221,10 +308,35 @@ func (h *Handlers) DeleteSource(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	if h.multiTenancy && existing.TenantID != "" && existing.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot delete source belonging to another tenant", nil)
+		return
+	}
+
+	err = h.sources.Delete(r.Context(), id)
+	if errors.Is(err, sources.ErrSourceNotFound) {
+		respondError(w, http.StatusNotFound, "source not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.recordAudit(r, "source.deleted", "source", id, map[string]any{
+		"name": existing.Name,
+	})
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handlers) CheckSourceAccess(w http.ResponseWriter, r *http.Request) {
+	if !h.requirePermission(w, r, auth.PermIntegrationsRead) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
+
 	id := r.PathValue("id")
 	src, err := h.sources.GetByID(r.Context(), id)
 	if errors.Is(err, sources.ErrSourceNotFound) {
@@ -233,6 +345,11 @@ func (h *Handlers) CheckSourceAccess(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if h.multiTenancy && src.TenantID != "" && src.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot check source access in another tenant", nil)
 		return
 	}
 
@@ -273,6 +390,11 @@ func (h *Handlers) CheckSourceAccess(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) SyncSource(w http.ResponseWriter, r *http.Request) {
+	if !h.requirePermission(w, r, auth.PermIntegrationsWrite) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
+
 	id := r.PathValue("id")
 	src, err := h.sources.GetByID(r.Context(), id)
 	if errors.Is(err, sources.ErrSourceNotFound) {
@@ -281,6 +403,11 @@ func (h *Handlers) SyncSource(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if h.multiTenancy && src.TenantID != "" && src.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot sync source in another tenant", nil)
 		return
 	}
 

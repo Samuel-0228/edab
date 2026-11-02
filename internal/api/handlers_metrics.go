@@ -89,6 +89,26 @@ func (h *Handlers) Metrics(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(&b, "kerob_circuit_breaker_open_total %d\n\n", openCBs)
 
+	fmt.Fprintf(&b, "# HELP kerob_leases_acquired_total Total job and execution leases acquired\n")
+	fmt.Fprintf(&b, "# TYPE kerob_leases_acquired_total counter\n")
+	fmt.Fprintf(&b, "kerob_leases_acquired_total %d\n\n", observability.DefaultMetrics.LeasesAcquired.Load())
+
+	fmt.Fprintf(&b, "# HELP kerob_leases_renewed_total Total job and execution leases renewed\n")
+	fmt.Fprintf(&b, "# TYPE kerob_leases_renewed_total counter\n")
+	fmt.Fprintf(&b, "kerob_leases_renewed_total %d\n\n", observability.DefaultMetrics.LeasesRenewed.Load())
+
+	fmt.Fprintf(&b, "# HELP kerob_leases_taken_over_total Total expired leases taken over from failed workers\n")
+	fmt.Fprintf(&b, "# TYPE kerob_leases_taken_over_total counter\n")
+	fmt.Fprintf(&b, "kerob_leases_taken_over_total %d\n\n", observability.DefaultMetrics.LeasesTakenOver.Load())
+
+	fmt.Fprintf(&b, "# HELP kerob_leases_released_total Total job and execution leases released\n")
+	fmt.Fprintf(&b, "# TYPE kerob_leases_released_total counter\n")
+	fmt.Fprintf(&b, "kerob_leases_released_total %d\n\n", observability.DefaultMetrics.LeasesReleased.Load())
+
+	fmt.Fprintf(&b, "# HELP kerob_lease_losses_total Total job and execution lease renewals failed or lost\n")
+	fmt.Fprintf(&b, "# TYPE kerob_lease_losses_total counter\n")
+	fmt.Fprintf(&b, "kerob_lease_losses_total %d\n\n", observability.DefaultMetrics.LeaseLosses.Load())
+
 	observability.DefaultWorkflowMetrics.ExportPrometheus(&b)
 
 	_, _ = w.Write([]byte(b.String()))

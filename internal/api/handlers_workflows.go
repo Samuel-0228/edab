@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"kerob/internal/core/auth"
 	"kerob/internal/core/event"
 	"kerob/internal/core/workflow"
 )
@@ -15,6 +16,11 @@ func (h *Handlers) ListWorkflows(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, []*workflow.Workflow{})
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermWorkflowsRead) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
+
 	list, err := h.workflows.List(r.Context())
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
@@ -23,6 +29,17 @@ func (h *Handlers) ListWorkflows(w http.ResponseWriter, r *http.Request) {
 	if list == nil {
 		list = []*workflow.Workflow{}
 	}
+
+	if h.multiTenancy {
+		filtered := make([]*workflow.Workflow, 0, len(list))
+		for _, item := range list {
+			if item.TenantID == "" || item.TenantID == identity.TenantID {
+				filtered = append(filtered, item)
+			}
+		}
+		list = filtered
+	}
+
 	respondJSON(w, http.StatusOK, list)
 }
 
@@ -31,11 +48,19 @@ func (h *Handlers) CreateWorkflow(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "workflow store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermWorkflowsWrite) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	var wf workflow.Workflow
 	if err := json.NewDecoder(r.Body).Decode(&wf); err != nil {
 		respondErrorWithCode(w, http.StatusBadRequest, "MALFORMED_JSON", "invalid json body: "+err.Error(), nil)
 		return
+	}
+
+	if wf.TenantID == "" {
+		wf.TenantID = identity.TenantID
 	}
 
 	if valErrs := ValidateWorkflowInput(&wf, false); len(valErrs) > 0 {
@@ -54,6 +79,11 @@ func (h *Handlers) CreateWorkflow(w http.ResponseWriter, r *http.Request) {
 		_, _ = h.versionStore.RecordVersion(r.Context(), created.ID, snapshot)
 	}
 
+	h.recordAudit(r, "workflow.created", "workflow", created.ID, map[string]any{
+		"name":         created.Name,
+		"trigger_type": created.Trigger.Type,
+	})
+
 	respondJSON(w, http.StatusCreated, created)
 }
 
@@ -62,6 +92,10 @@ func (h *Handlers) GetWorkflow(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "workflow store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermWorkflowsRead) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
 	wf, err := h.workflows.GetByID(r.Context(), id)
@@ -74,6 +108,11 @@ func (h *Handlers) GetWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.multiTenancy && wf.TenantID != "" && wf.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot access workflow in another tenant", nil)
+		return
+	}
+
 	respondJSON(w, http.StatusOK, wf)
 }
 
@@ -82,14 +121,35 @@ func (h *Handlers) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "workflow store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermWorkflowsWrite) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
+	existing, err := h.workflows.GetByID(r.Context(), id)
+	if errors.Is(err, workflow.ErrWorkflowNotFound) {
+		respondError(w, http.StatusNotFound, "workflow not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if h.multiTenancy && existing.TenantID != "" && existing.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot modify workflow in another tenant", nil)
+		return
+	}
+
 	var wf workflow.Workflow
 	if err := json.NewDecoder(r.Body).Decode(&wf); err != nil {
 		respondErrorWithCode(w, http.StatusBadRequest, "MALFORMED_JSON", "invalid json body: "+err.Error(), nil)
 		return
 	}
 	wf.ID = id
+	if wf.TenantID == "" {
+		wf.TenantID = existing.TenantID
+	}
 
 	if valErrs := ValidateWorkflowInput(&wf, false); len(valErrs) > 0 {
 		respondValidationError(w, r, valErrs)
@@ -111,6 +171,10 @@ func (h *Handlers) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 		_, _ = h.versionStore.RecordVersion(r.Context(), updated.ID, snapshot)
 	}
 
+	h.recordAudit(r, "workflow.updated", "workflow", updated.ID, map[string]any{
+		"name": updated.Name,
+	})
+
 	respondJSON(w, http.StatusOK, updated)
 }
 
@@ -119,6 +183,10 @@ func (h *Handlers) PatchWorkflow(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "workflow store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermWorkflowsWrite) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
 	wf, err := h.workflows.GetByID(r.Context(), id)
@@ -128,6 +196,10 @@ func (h *Handlers) PatchWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if h.multiTenancy && wf.TenantID != "" && wf.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot patch workflow in another tenant", nil)
 		return
 	}
 
@@ -171,6 +243,10 @@ func (h *Handlers) PatchWorkflow(w http.ResponseWriter, r *http.Request) {
 		_, _ = h.versionStore.RecordVersion(r.Context(), updated.ID, snapshot)
 	}
 
+	h.recordAudit(r, "workflow.patched", "workflow", updated.ID, map[string]any{
+		"name": updated.Name,
+	})
+
 	respondJSON(w, http.StatusOK, updated)
 }
 
@@ -179,9 +255,13 @@ func (h *Handlers) DeleteWorkflow(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "workflow store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermWorkflowsDelete) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
-	err := h.workflows.Delete(r.Context(), id)
+	existing, err := h.workflows.GetByID(r.Context(), id)
 	if errors.Is(err, workflow.ErrWorkflowNotFound) {
 		respondError(w, http.StatusNotFound, "workflow not found")
 		return
@@ -190,6 +270,24 @@ func (h *Handlers) DeleteWorkflow(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if h.multiTenancy && existing.TenantID != "" && existing.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot delete workflow in another tenant", nil)
+		return
+	}
+
+	err = h.workflows.Delete(r.Context(), id)
+	if errors.Is(err, workflow.ErrWorkflowNotFound) {
+		respondError(w, http.StatusNotFound, "workflow not found")
+		return
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.recordAudit(r, "workflow.deleted", "workflow", id, map[string]any{
+		"name": existing.Name,
+	})
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -214,6 +312,10 @@ func (h *Handlers) TestWorkflow(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "workflow engine or store not initialized")
 		return
 	}
+	if !h.requirePermission(w, r, auth.PermWorkflowsExecute) {
+		return
+	}
+	identity := auth.GetIdentity(r.Context())
 
 	id := r.PathValue("id")
 	wf, err := h.workflows.GetByID(r.Context(), id)
@@ -223,6 +325,11 @@ func (h *Handlers) TestWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if h.multiTenancy && wf.TenantID != "" && wf.TenantID != identity.TenantID {
+		respondErrorWithCode(w, http.StatusForbidden, "CROSS_TENANT_DENIED", "cannot test workflow in another tenant", nil)
 		return
 	}
 

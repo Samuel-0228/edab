@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"kerob/internal/core/auth"
 )
 
 type Server struct {
@@ -23,7 +24,10 @@ func NewServer(port string, handlers *Handlers) *Server {
 
 // ServerOptions controls deployment-sensitive HTTP protections.
 type ServerOptions struct {
-	APIToken string
+	APIToken            string
+	AuthStore           auth.Store
+	MultiTenancyEnabled bool
+	DefaultTenantID     string
 }
 
 func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions) *Server {
@@ -33,6 +37,29 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("GET /health", handlers.Health)
 	mux.HandleFunc("GET /ready", handlers.Ready)
 	mux.HandleFunc("GET /metrics", handlers.Metrics)
+
+	// Auth, Multi-Tenancy & RBAC
+	mux.HandleFunc("GET /api/v1/auth/me", handlers.Me)
+	mux.HandleFunc("GET /api/v1/tenants", handlers.ListTenants)
+	mux.HandleFunc("POST /api/v1/tenants", handlers.CreateTenant)
+	mux.HandleFunc("GET /api/v1/tenants/{id}", handlers.GetTenant)
+
+	mux.HandleFunc("GET /api/v1/members", handlers.ListMembers)
+	mux.HandleFunc("POST /api/v1/members", handlers.CreateMember)
+	mux.HandleFunc("PATCH /api/v1/members/{id}", handlers.UpdateMemberRole)
+	mux.HandleFunc("DELETE /api/v1/members/{id}", handlers.DeleteMember)
+
+	mux.HandleFunc("GET /api/v1/tenants/current/members", handlers.ListMembers)
+	mux.HandleFunc("POST /api/v1/tenants/current/members", handlers.CreateMember)
+	mux.HandleFunc("PATCH /api/v1/tenants/current/members/{id}", handlers.UpdateMemberRole)
+	mux.HandleFunc("PUT /api/v1/tenants/current/members/{id}", handlers.UpdateMemberRole)
+	mux.HandleFunc("DELETE /api/v1/tenants/current/members/{id}", handlers.DeleteMember)
+
+	mux.HandleFunc("GET /api/v1/tokens", handlers.ListAPITokens)
+	mux.HandleFunc("POST /api/v1/tokens", handlers.CreateAPIToken)
+	mux.HandleFunc("DELETE /api/v1/tokens/{id}", handlers.RevokeAPIToken)
+
+	mux.HandleFunc("GET /api/v1/audit-logs", handlers.ListAuditLogs)
 
 	// Dashboard UI & Static Assets
 	mux.HandleFunc("GET /{$}", handlers.DashboardUI)
@@ -175,7 +202,7 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("GET /deliveries/{id}", handlers.GetDelivery)
 	mux.HandleFunc("POST /deliveries/{id}/retry", handlers.RetryDelivery)
 
-	loggedHandler := requestIDMiddleware(loggingMiddleware(securityMiddleware(authMiddleware(mux, options.APIToken))))
+	loggedHandler := requestIDMiddleware(loggingMiddleware(securityMiddleware(authMiddleware(mux, options))))
 
 	return &Server{
 		httpServer: &http.Server{
@@ -189,24 +216,123 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	}
 }
 
-func authMiddleware(next http.Handler, token string) http.Handler {
+func authMiddleware(next http.Handler, options ServerOptions) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		isWebhookIngest := r.Method == http.MethodPost && (strings.HasPrefix(r.URL.Path, "/webhooks/") || strings.HasSuffix(r.URL.Path, "/ingest"))
-		isUI := r.URL.Path == "/" || r.URL.Path == "/ui" || strings.HasPrefix(r.URL.Path, "/ui/")
+		isUI := r.URL.Path == "/" || r.URL.Path == "/ui" || strings.HasPrefix(r.URL.Path, "/ui/") || r.URL.Path == "/kerob_logo.png" || r.URL.Path == "/favicon.ico"
 		isHealth := r.URL.Path == "/health" || r.URL.Path == "/ready" || r.URL.Path == "/metrics"
 
-		if token == "" || isHealth || isUI || isWebhookIngest {
+		if isHealth || isUI || isWebhookIngest {
 			next.ServeHTTP(w, r)
 			return
 		}
 
 		provided := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
-		if provided == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="kerob"`)
-			respondError(w, http.StatusUnauthorized, "authentication required")
+		requestedTenant := strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
+		if requestedTenant == "" {
+			requestedTenant = options.DefaultTenantID
+			if requestedTenant == "" {
+				requestedTenant = "default"
+			}
+		}
+
+		// 1. Single-tenant development mode (multi-tenancy disabled)
+		if !options.MultiTenancyEnabled {
+			// If a database API token was explicitly provided in dev mode, authenticate it
+			if options.AuthStore != nil && strings.HasPrefix(provided, "krb_") {
+				tokenHash := auth.HashToken(provided)
+				tok, err := options.AuthStore.GetAPITokenByHash(r.Context(), tokenHash)
+				if err == nil && tok != nil {
+					_ = options.AuthStore.TouchAPIToken(r.Context(), tok.ID)
+					projID := ""
+					if tok.ProjectID != nil {
+						projID = *tok.ProjectID
+					}
+					ctx := auth.WithIdentity(r.Context(), &auth.Identity{
+						TenantID:  tok.TenantID,
+						ProjectID: projID,
+						UserID:    tok.Name,
+						ActorType: "api_token",
+						Role:      tok.Role,
+						Scopes:    tok.Scopes,
+						IsAuth:    true,
+					})
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+			}
+
+			// If static API_TOKEN is required in single-tenant mode
+			if options.APIToken != "" {
+				if provided == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(options.APIToken)) != 1 {
+					w.Header().Set("WWW-Authenticate", `Bearer realm="kerob"`)
+					respondError(w, http.StatusUnauthorized, "authentication required")
+					return
+				}
+			}
+
+			// Default development identity with owner permissions
+			ctx := auth.WithIdentity(r.Context(), &auth.Identity{
+				TenantID:  requestedTenant,
+				UserID:    "default-user",
+				ActorType: "system",
+				Role:      auth.RoleOwner,
+				IsAuth:    true,
+			})
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
-		next.ServeHTTP(w, r)
+
+		// 2. Multi-tenancy enabled: strict authentication required
+		if provided == "" {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="kerob"`)
+			respondErrorWithCode(w, http.StatusUnauthorized, "UNAUTHORIZED", "authentication token required", nil)
+			return
+		}
+
+		// Check static master token (acts as system Owner across tenants)
+		if options.APIToken != "" && subtle.ConstantTimeCompare([]byte(provided), []byte(options.APIToken)) == 1 {
+			ctx := auth.WithIdentity(r.Context(), &auth.Identity{
+				TenantID:  requestedTenant,
+				UserID:    "admin",
+				ActorType: "system",
+				Role:      auth.RoleOwner,
+				IsAuth:    true,
+			})
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		// Check database API tokens
+		if options.AuthStore != nil && strings.HasPrefix(provided, "krb_") {
+			tokenHash := auth.HashToken(provided)
+			tok, err := options.AuthStore.GetAPITokenByHash(r.Context(), tokenHash)
+			if err != nil || tok == nil {
+				w.Header().Set("WWW-Authenticate", `Bearer realm="kerob"`)
+				respondErrorWithCode(w, http.StatusUnauthorized, "INVALID_TOKEN", "invalid or expired api token", nil)
+				return
+			}
+
+			_ = options.AuthStore.TouchAPIToken(r.Context(), tok.ID)
+			projID := ""
+			if tok.ProjectID != nil {
+				projID = *tok.ProjectID
+			}
+			ctx := auth.WithIdentity(r.Context(), &auth.Identity{
+				TenantID:  tok.TenantID,
+				ProjectID: projID,
+				UserID:    tok.Name,
+				ActorType: "api_token",
+				Role:      tok.Role,
+				Scopes:    tok.Scopes,
+				IsAuth:    true,
+			})
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		w.Header().Set("WWW-Authenticate", `Bearer realm="kerob"`)
+		respondErrorWithCode(w, http.StatusUnauthorized, "UNAUTHORIZED", "invalid authentication credentials", nil)
 	})
 }
 

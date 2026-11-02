@@ -103,6 +103,8 @@ type ActionStep struct {
 // Structure: WHEN [trigger] IF [conditions] THEN [actions]
 type Workflow struct {
 	ID              string                          `json:"id"`
+	TenantID        string                          `json:"tenant_id,omitempty"`
+	ProjectID       *string                         `json:"project_id,omitempty"`
 	Name            string                          `json:"name"`
 	Description     string                          `json:"description,omitempty"`
 	Enabled         bool                            `json:"enabled"`

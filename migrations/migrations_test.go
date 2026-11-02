@@ -78,4 +78,28 @@ func TestEmbeddedMigrations(t *testing.T) {
 			t.Errorf("expected 000003_workflow_engine_v2.up.sql to contain '%s'", kw)
 		}
 	}
+
+	// Verify 000004 defines distributed execution leases
+	v4Up, ok := upMigrations["000004_distributed_execution.up.sql"]
+	if !ok {
+		t.Fatal("000004_distributed_execution.up.sql is required")
+	}
+	v4Required := []string{"locked_by", "lease_expires_at", "idx_delivery_jobs_lease", "idx_executions_lease"}
+	for _, kw := range v4Required {
+		if !strings.Contains(v4Up, kw) {
+			t.Errorf("expected 000004_distributed_execution.up.sql to contain '%s'", kw)
+		}
+	}
+
+	// Verify 000005 defines multi-tenancy, RBAC, API tokens, and audit logs
+	v5Up, ok := upMigrations["000005_multi_tenancy_and_rbac.up.sql"]
+	if !ok {
+		t.Fatal("000005_multi_tenancy_and_rbac.up.sql is required")
+	}
+	v5Required := []string{"tenants", "users", "memberships", "projects", "api_tokens", "audit_logs", "tenant_id"}
+	for _, kw := range v5Required {
+		if !strings.Contains(v5Up, kw) {
+			t.Errorf("expected 000005_multi_tenancy_and_rbac.up.sql to contain '%s'", kw)
+		}
+	}
 }

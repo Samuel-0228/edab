@@ -258,3 +258,76 @@ export type AppRoute =
   | 'schedules'
   | 'health'
   | 'settings';
+
+export type Role = 'owner' | 'admin' | 'operator' | 'editor' | 'viewer';
+
+export interface Tenant {
+  id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface Membership {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  role: Role;
+  created_at: string;
+  user?: User;
+}
+
+export interface Project {
+  id: string;
+  tenant_id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+}
+
+export interface APIToken {
+  id: string;
+  tenant_id: string;
+  user_id?: string;
+  name: string;
+  token_prefix: string;
+  scopes: string[];
+  expires_at?: string;
+  last_used_at?: string;
+  created_at: string;
+  token?: string; // only returned once upon creation
+}
+
+export interface AuditLog {
+  id: string;
+  tenant_id: string;
+  user_id?: string;
+  actor_email?: string;
+  action: string;
+  resource_type: string;
+  resource_id?: string;
+  details?: Record<string, unknown>;
+  ip_address?: string;
+  user_agent?: string;
+  created_at: string;
+}
+
+export interface Identity {
+  user_id: string;
+  email: string;
+  name: string;
+  tenant_id: string;
+  tenant_name: string;
+  role: Role;
+  scopes: string[];
+}
+

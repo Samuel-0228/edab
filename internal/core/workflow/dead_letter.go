@@ -18,6 +18,7 @@ var (
 // Allows operators to inspect errors, understand the context, retry safely, or discard.
 type DeadLetterRecord struct {
 	ID          string          `json:"id"`
+	TenantID    string          `json:"tenant_id,omitempty"`
 	ExecutionID string          `json:"execution_id"`
 	WorkflowID  string          `json:"workflow_id"`
 	EventID     string          `json:"event_id"`
