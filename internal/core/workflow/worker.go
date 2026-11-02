@@ -117,6 +117,11 @@ func (w *Worker) workerLoop(ctx context.Context, goroutineID int) {
 				)
 			}
 			if !claimed {
+				// Check for expired approvals needing timeout or escalation
+				if w.engine != nil {
+					_, _ = w.engine.CheckExpiredApprovals(ctx)
+				}
+
 				select {
 				case <-ctx.Done():
 					return

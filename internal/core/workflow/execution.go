@@ -19,14 +19,18 @@ var (
 type ExecutionStatus string
 
 const (
-	ExecutionPending   ExecutionStatus = "pending"
-	ExecutionRunning   ExecutionStatus = "running"
-	ExecutionSuccess   ExecutionStatus = "success"
-	ExecutionFailed    ExecutionStatus = "failed"
-	ExecutionRetrying  ExecutionStatus = "retrying"
-	ExecutionWaiting   ExecutionStatus = "waiting"
-	ExecutionPaused    ExecutionStatus = "paused"
-	ExecutionCancelled ExecutionStatus = "cancelled"
+	ExecutionPending            ExecutionStatus = "pending"
+	ExecutionRunning            ExecutionStatus = "running"
+	ExecutionSuccess            ExecutionStatus = "success"
+	ExecutionFailed             ExecutionStatus = "failed"
+	ExecutionRetrying           ExecutionStatus = "retrying"
+	ExecutionWaiting            ExecutionStatus = "waiting"
+	ExecutionPaused             ExecutionStatus = "paused"
+	ExecutionCancelled          ExecutionStatus = "cancelled"
+	ExecutionWaitingApproval    ExecutionStatus = "waiting_approval"
+	ExecutionCompensating       ExecutionStatus = "compensating"
+	ExecutionCompensated        ExecutionStatus = "compensated"
+	ExecutionCompensationFailed ExecutionStatus = "compensation_failed"
 )
 
 // ExecutionStep represents a granular recorded stage of the execution pipeline:

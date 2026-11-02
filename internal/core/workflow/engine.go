@@ -38,6 +38,7 @@ type Engine struct {
 	circuitBreakers *CircuitBreakerRegistry
 	activeRegistry  *ActiveExecutionRegistry
 	listener        ExecutionEventListener
+	approvals       ApprovalStore
 }
 
 // SetErrorTracker sets the error tracker provider for the workflow engine.
@@ -70,7 +71,18 @@ func (e *Engine) Actions() *ActionRegistry {
 	return e.actions
 }
 
-// CancelExecution cancels an execution immediately if running and marks it cancelled in persistence.
+// Approvals returns the engine's approval store.
+func (e *Engine) Approvals() ApprovalStore {
+	return e.approvals
+}
+
+// SetApprovalStore sets the persistent approval store.
+func (e *Engine) SetApprovalStore(store ApprovalStore) {
+	e.approvals = store
+}
+
+// CancelExecution cancels an execution immediately if running, marks it cancelled,
+// and executes reverse saga compensation if any completed steps define compensation actions.
 func (e *Engine) CancelExecution(ctx context.Context, id string) (*Execution, error) {
 	if e.activeRegistry != nil {
 		e.activeRegistry.Cancel(id)
@@ -83,6 +95,15 @@ func (e *Engine) CancelExecution(ctx context.Context, id string) (*Execution, er
 	if e.listener != nil {
 		e.listener.OnExecutionCancelled(exec)
 	}
+
+	// Trigger saga compensation rollback if any completed steps have compensation defined
+	if wf, _ := e.workflows.GetByID(ctx, exec.WorkflowID); wf != nil && e.HasCompensableSteps(wf, exec) {
+		compExec, cErr := e.CompensateExecution(ctx, exec.ID, "execution cancelled by operator")
+		if cErr == nil && compExec != nil {
+			return compExec, nil
+		}
+	}
+
 	return exec, nil
 }
 
@@ -141,6 +162,7 @@ func NewEngine(
 		traffic:         NewTrafficController(),
 		circuitBreakers: NewCircuitBreakerRegistry(CircuitBreakerConfig{}),
 		activeRegistry:  NewActiveExecutionRegistry(),
+		approvals:       NewMemoryApprovalStore(),
 	}
 }
 
@@ -548,6 +570,21 @@ func (e *Engine) handleExecutionFailure(
 		slog.String("workflow_id", wf.ID),
 		slog.String("error", errStr),
 	)
+
+	// Trigger Saga compensation rollback if workflow has compensable steps
+	if e.HasCompensableSteps(wf, exec) {
+		compExec, compErr := e.CompensateExecution(ctx, exec.ID, errStr)
+		if compErr != nil {
+			slog.Error("saga compensation rollback encountered error",
+				slog.String("execution_id", exec.ID),
+				slog.String("error", compErr.Error()),
+			)
+		}
+		if compExec != nil {
+			return compExec, fmt.Errorf("%s", errStr)
+		}
+	}
+
 	return exec, fmt.Errorf("%s", errStr)
 }
 
@@ -626,4 +663,49 @@ func extractConcurrencyKey(keyPath string, payloadRaw json.RawMessage) string {
 		return fmt.Sprintf("%v", val)
 	}
 	return ""
+}
+
+// CheckExpiredApprovals processes pending approvals that have exceeded their expiration deadline.
+func (e *Engine) CheckExpiredApprovals(ctx context.Context) ([]*Approval, error) {
+	if e.approvals == nil {
+		return nil, nil
+	}
+	expired, err := e.approvals.ListExpiredPending(ctx, time.Now().UTC())
+	if err != nil {
+		return nil, fmt.Errorf("failed to query expired approvals: %w", err)
+	}
+
+	var processed []*Approval
+	for _, app := range expired {
+		if app.TimeoutAction == "escalate" && app.Status == ApprovalPending {
+			// Escalate approval
+			_ = e.approvals.UpdateStatus(ctx, app.ID, ApprovalEscalated)
+			slog.Warn("approval escalated due to expiration timeout",
+				slog.String("approval_id", app.ID),
+				slog.String("execution_id", app.ExecutionID),
+			)
+			processed = append(processed, app)
+			continue
+		}
+
+		// Reject / Expire approval
+		decidedBy := "system:timeout"
+		note := "approval expired without human decision"
+		updated, uErr := e.approvals.UpdateDecision(ctx, app.ID, ApprovalExpired, decidedBy, note)
+		if uErr == nil && updated != nil {
+			processed = append(processed, updated)
+			// Trigger compensation or fail execution
+			if exec, gErr := e.executions.GetByID(ctx, app.ExecutionID); gErr == nil && exec != nil {
+				wf, _ := e.workflows.GetByID(ctx, exec.WorkflowID)
+				if wf != nil && e.HasCompensableSteps(wf, exec) {
+					_, _ = e.CompensateExecution(ctx, exec.ID, "approval timed out without decision")
+				} else {
+					errStr := "approval timed out without decision"
+					_ = e.executions.UpdateStatus(ctx, exec.ID, ExecutionFailed, &errStr, 0)
+				}
+			}
+		}
+	}
+
+	return processed, nil
 }

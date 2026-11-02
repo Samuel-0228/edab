@@ -13,4 +13,7 @@ type ExecutionEventListener interface {
 	OnExecutionPaused(exec *Execution)
 	OnExecutionResumed(exec *Execution)
 	OnExecutionCancelled(exec *Execution)
+	OnExecutionWaitingApproval(exec *Execution, approval *Approval)
+	OnExecutionCompensating(exec *Execution)
+	OnExecutionCompensated(exec *Execution)
 }

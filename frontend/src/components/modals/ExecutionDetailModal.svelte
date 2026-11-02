@@ -10,13 +10,15 @@
     latestOperationalEvent
   } from '../../api/stores';
   import { api } from '../../api/client';
-  import type { Execution } from '../../api/types';
+  import type { Execution, Approval } from '../../api/types';
   import Dialog from '../common/Dialog.svelte';
   import Button from '../common/Button.svelte';
   import Badge from '../common/Badge.svelte';
   import CodeBox from '../common/CodeBox.svelte';
 
   let execution = $state<Execution | null>(null);
+  let pendingApproval = $state<Approval | null>(null);
+  let approvalNote = $state('');
   let loading = $state(false);
   let retrying = $state(false);
   let operating = $state(false);
@@ -26,6 +28,8 @@
       loadExecution($executionDetailModal.executionId);
     } else {
       execution = null;
+      pendingApproval = null;
+      approvalNote = '';
     }
   });
 
@@ -40,11 +44,68 @@
     loading = true;
     try {
       execution = await api.getExecution(id);
+      if (execution.status === 'waiting_approval') {
+        const apps = await api.listApprovals({ execution_id: id, status: 'pending' });
+        pendingApproval = apps[0] || null;
+      } else {
+        pendingApproval = null;
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to load execution';
       notifyError(msg);
     } finally {
       loading = false;
+    }
+  }
+
+  async function handleApprove() {
+    if (!pendingApproval) return;
+    operating = true;
+    try {
+      await api.approveApproval(pendingApproval.id, approvalNote || 'Approved via execution audit modal');
+      notifySuccess('Approval granted — workflow execution resumed');
+      triggerRefresh();
+      if (execution) await loadExecution(execution.id);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Approval failed';
+      notifyError(msg);
+    } finally {
+      operating = false;
+    }
+  }
+
+  async function handleReject() {
+    if (!pendingApproval) return;
+    operating = true;
+    try {
+      await api.rejectApproval(pendingApproval.id, approvalNote || 'Rejected via execution audit modal');
+      notifySuccess('Approval rejected — saga compensation rollback initiated');
+      triggerRefresh();
+      if (execution) await loadExecution(execution.id);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Rejection failed';
+      notifyError(msg);
+    } finally {
+      operating = false;
+    }
+  }
+
+  async function handleCompensate() {
+    if (!execution) return;
+    if (!confirm('Initiate saga rollback compensation for this execution? Completed steps with defined compensation actions will be undone.')) {
+      return;
+    }
+    operating = true;
+    try {
+      await api.compensateExecution(execution.id, 'Operator-initiated rollback');
+      notifySuccess('Saga compensation completed');
+      triggerRefresh();
+      await loadExecution(execution.id);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Compensation failed';
+      notifyError(msg);
+    } finally {
+      operating = false;
     }
   }
 
@@ -145,6 +206,14 @@
               <Badge variant="failed">FAILED</Badge>
             {:else if execution.status === 'running'}
               <Badge variant="running">RUNNING</Badge>
+            {:else if execution.status === 'waiting_approval'}
+              <Badge variant="warning">WAITING APPROVAL</Badge>
+            {:else if execution.status === 'compensating'}
+              <Badge variant="running">COMPENSATING</Badge>
+            {:else if execution.status === 'compensated'}
+              <Badge variant="neutral">COMPENSATED</Badge>
+            {:else if execution.status === 'compensation_failed'}
+              <Badge variant="failed">COMP FAILED</Badge>
             {:else if execution.status === 'paused'}
               <Badge variant="warning">PAUSED</Badge>
             {:else if execution.status === 'cancelled'}
@@ -159,6 +228,43 @@
           <span class="meta-val mono">{execution.duration_ms} ms</span>
         </div>
       </div>
+
+      <!-- Pending Human Approval Banner -->
+      {#if pendingApproval}
+        <div class="approval-box">
+          <div class="approval-box-header">
+            <Badge variant="warning">ACTION REQUIRED: HUMAN APPROVAL</Badge>
+            <span class="approval-box-title">{pendingApproval.title}</span>
+          </div>
+          {#if pendingApproval.description}
+            <div class="approval-box-desc">{pendingApproval.description}</div>
+          {/if}
+          <div class="approval-box-meta">
+            <span>Step ID: <code class="mono-id">{pendingApproval.step_id}</code></span>
+            {#if pendingApproval.approver_roles?.length}
+              <span>Required Roles: {pendingApproval.approver_roles.join(', ')}</span>
+            {/if}
+            <span>Expires: {new Date(pendingApproval.expires_at).toLocaleString()}</span>
+          </div>
+
+          <div class="approval-box-action-row">
+            <input
+              type="text"
+              class="approval-note-input"
+              placeholder="Optional decision note (e.g. Verified by Risk team)..."
+              bind:value={approvalNote}
+            />
+            {#if canOperateActions($currentIdentity?.role)}
+              <Button variant="primary" size="sm" loading={operating} onclick={handleApprove}>
+                Approve & Resume
+              </Button>
+              <Button variant="danger" size="sm" loading={operating} onclick={handleReject}>
+                Reject & Rollback
+              </Button>
+            {/if}
+          </div>
+        </div>
+      {/if}
 
       <!-- Error Card if present -->
       {#if execution.error}
@@ -192,6 +298,8 @@
                         <Badge variant="stage-if">IF CONDITION</Badge>
                       {:else if step.step_type === 'transformation'}
                         <Badge variant="stage-transform">TRANSFORM</Badge>
+                      {:else if step.step_type === 'approval'}
+                        <Badge variant="stage-if">APPROVAL STEP</Badge>
                       {:else}
                         <Badge variant="stage-then">THEN ACTION</Badge>
                       {/if}
@@ -204,6 +312,8 @@
                         <Badge variant="success">PASS</Badge>
                       {:else if step.status === 'skipped'}
                         <Badge variant="skipped">SKIPPED</Badge>
+                      {:else if step.status === 'waiting_approval'}
+                        <Badge variant="warning">WAITING</Badge>
                       {:else}
                         <Badge variant="failed">FAIL</Badge>
                       {/if}
@@ -236,6 +346,13 @@
       {#if execution.status === 'failed'}
         <Button variant="primary" size="sm" icon="refresh" loading={retrying} onclick={handleRetry}>
           Retry Execution
+        </Button>
+        <Button variant="danger" size="sm" loading={operating} onclick={handleCompensate}>
+          Rollback (Compensate)
+        </Button>
+      {:else if execution.status === 'waiting_approval'}
+        <Button variant="danger" size="sm" loading={operating} onclick={handleCompensate}>
+          Rollback (Compensate)
         </Button>
       {:else if execution.status === 'running' || execution.status === 'pending' || execution.status === 'retrying'}
         <Button variant="secondary" size="sm" loading={operating} onclick={handlePause}>
@@ -300,6 +417,64 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .approval-box {
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-subtle);
+    border-left: 3px solid #eab308;
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .approval-box-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .approval-box-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .approval-box-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .approval-box-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .approval-box-action-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .approval-note-input {
+    flex: 1;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--text-primary);
+  }
+
+  .approval-note-input:focus {
+    outline: none;
+    border-color: var(--accent-cyan);
   }
 
   .error-card {

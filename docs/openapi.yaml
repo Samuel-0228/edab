@@ -647,6 +647,145 @@ paths:
         '200':
           description: Execution cancelled and active context terminated
 
+  /api/v1/executions/{id}/compensate:
+    post:
+      summary: Trigger operator-initiated saga compensation rollback for an execution
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        '200':
+          description: Execution compensated or compensation initiated
+
+  /api/v1/approvals:
+    get:
+      summary: List pending and historical workflow approval steps
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, approved, rejected, expired, escalated] }
+        - name: workflow_id
+          in: query
+          schema: { type: string }
+        - name: execution_id
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: List of approval records
+
+  /api/v1/approvals/{id}:
+    get:
+      summary: Get details of a human approval step
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Approval record
+        '404':
+          description: Approval not found
+
+  /api/v1/approvals/{id}/approve:
+    post:
+      summary: Approve a pending human approval step
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string }
+      responses:
+        '200':
+          description: Approval accepted and execution resumed
+
+  /api/v1/approvals/{id}/reject:
+    post:
+      summary: Reject a pending human approval step and trigger saga compensation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string }
+      responses:
+        '200':
+          description: Approval rejected and saga compensation triggered
+
+  /api/v1/approval-tokens/{token}:
+    get:
+      summary: Get safe preview of an approval using cryptographic token (no credentials/secrets)
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Safe approval preview
+        '404':
+          description: Token not found or expired
+    post:
+      summary: Submit approval or rejection decision using cryptographic token
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approve, reject] }
+                note: { type: string }
+                approver: { type: string }
+      responses:
+        '200':
+          description: Decision applied successfully
+
   /api/v1/operations/stream:
     get:
       summary: Server-Sent Events stream for real-time operational execution updates

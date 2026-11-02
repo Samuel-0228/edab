@@ -57,6 +57,9 @@ type Handlers struct {
 	streamOffsets  streaming.OffsetStore
 	streamDLQStore streaming.DeadLetterStore
 	streamReplay   *streaming.ReplayEngine
+
+	// Sagas & Human Approvals
+	approvals workflow.ApprovalStore
 }
 
 // Config bundles all dependencies for NewHandlers.
@@ -80,6 +83,8 @@ type Config struct {
 	StreamOffsets  streaming.OffsetStore
 	StreamDLQStore streaming.DeadLetterStore
 	StreamReplay   *streaming.ReplayEngine
+
+	Approvals workflow.ApprovalStore
 
 	Sources      sources.Store
 	Destinations destinations.Store
@@ -136,6 +141,14 @@ func NewHandlersFromConfig(cfg Config) *Handlers {
 		repEngine = streaming.NewReplayEngine(cfg.Events, cfg.WorkflowEngine, dlqStore, producer)
 	}
 
+	appStore := cfg.Approvals
+	if appStore == nil && cfg.WorkflowEngine != nil && cfg.WorkflowEngine.Approvals() != nil {
+		appStore = cfg.WorkflowEngine.Approvals()
+	}
+	if appStore == nil {
+		appStore = workflow.NewMemoryApprovalStore()
+	}
+
 	return &Handlers{
 		workflows:      cfg.Workflows,
 		executions:     cfg.Executions,
@@ -167,6 +180,8 @@ func NewHandlersFromConfig(cfg Config) *Handlers {
 		streamOffsets:  offStore,
 		streamDLQStore: dlqStore,
 		streamReplay:   repEngine,
+
+		approvals: appStore,
 	}
 }
 

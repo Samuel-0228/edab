@@ -119,6 +119,15 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("POST /api/v1/executions/{id}/cancel", handlers.CancelExecution)
 	mux.HandleFunc("POST /api/v1/executions/{id}/pause", handlers.PauseExecution)
 	mux.HandleFunc("POST /api/v1/executions/{id}/resume", handlers.ResumeExecution)
+	mux.HandleFunc("POST /api/v1/executions/{id}/compensate", handlers.CompensateExecution)
+
+	// Sagas & Human Approvals
+	mux.HandleFunc("GET /api/v1/approvals", handlers.ListApprovals)
+	mux.HandleFunc("GET /api/v1/approvals/{id}", handlers.GetApproval)
+	mux.HandleFunc("POST /api/v1/approvals/{id}/approve", handlers.ApproveApproval)
+	mux.HandleFunc("POST /api/v1/approvals/{id}/reject", handlers.RejectApproval)
+	mux.HandleFunc("GET /api/v1/approval-tokens/{token}", handlers.GetApprovalByToken)
+	mux.HandleFunc("POST /api/v1/approval-tokens/{token}", handlers.DecideApprovalByToken)
 
 	// Real-time Operations Streaming
 	mux.HandleFunc("GET /api/v1/operations/stream", handlers.OperationsStream)

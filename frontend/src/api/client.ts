@@ -30,7 +30,8 @@ import type {
   StreamPublishResult,
   StreamConsumerOffset,
   StreamDeadLetterEvent,
-  StreamReplayResult
+  StreamReplayResult,
+  Approval
 } from './types';
 
 export class ApiError extends Error {
@@ -426,6 +427,66 @@ export class KerobApiClient {
   public async resumeExecution(id: string): Promise<Execution> {
     return this.request<Execution>(`/api/v1/executions/${encodeURIComponent(id)}/resume`, {
       method: 'POST'
+    });
+  }
+
+  public async compensateExecution(id: string, reason?: string): Promise<Execution> {
+    return this.request<Execution>(`/api/v1/executions/${encodeURIComponent(id)}/compensate`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    });
+  }
+
+  // --- Sagas & Human Approvals ---
+  public async listApprovals(filter?: {
+    workflow_id?: string;
+    execution_id?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<Approval[]> {
+    const params = new URLSearchParams();
+    if (filter?.workflow_id) params.set('workflow_id', filter.workflow_id);
+    if (filter?.execution_id) params.set('execution_id', filter.execution_id);
+    if (filter?.status) params.set('status', filter.status);
+    if (filter?.limit) params.set('limit', String(filter.limit));
+    if (filter?.offset) params.set('offset', String(filter.offset));
+    const qs = params.toString();
+    const data = await this.request<Approval[]>(`/api/v1/approvals${qs ? `?${qs}` : ''}`);
+    return Array.isArray(data) ? data : [];
+  }
+
+  public async getApproval(id: string): Promise<Approval> {
+    return this.request<Approval>(`/api/v1/approvals/${encodeURIComponent(id)}`);
+  }
+
+  public async approveApproval(id: string, note?: string): Promise<Approval> {
+    return this.request<Approval>(`/api/v1/approvals/${encodeURIComponent(id)}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ note })
+    });
+  }
+
+  public async rejectApproval(id: string, note?: string): Promise<Approval> {
+    return this.request<Approval>(`/api/v1/approvals/${encodeURIComponent(id)}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ note })
+    });
+  }
+
+  public async getApprovalByToken(token: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>(`/api/v1/approval-tokens/${encodeURIComponent(token)}`);
+  }
+
+  public async decideApprovalByToken(
+    token: string,
+    decision: 'approve' | 'reject',
+    note?: string,
+    approver?: string
+  ): Promise<Approval> {
+    return this.request<Approval>(`/api/v1/approval-tokens/${encodeURIComponent(token)}`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, note, approver })
     });
   }
 

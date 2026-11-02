@@ -125,6 +125,7 @@ func main() {
 	schemaRegistry := schema.NewRegistry(schemaStore)
 	streamOffsetStore := streaming.NewPostgresOffsetStore(db)
 	streamDLQStore := streaming.NewPostgresDeadLetterStore(db)
+	approvalStore := workflow.NewPostgresApprovalStore(db)
 
 	streamAdapter, err := streaming.CreateAdapter(cfg.StreamAdapter, map[string]any{
 		"data_dir":   cfg.StreamDataDir,
@@ -168,6 +169,7 @@ func main() {
 	}
 	errtracker.SetGlobalProvider(errTracker)
 	wfEngine.SetErrorTracker(errTracker)
+	wfEngine.SetApprovalStore(approvalStore)
 	actionRegistry.Register(actions.NewCallWorkflowActionExecutor(wfEngine))
 
 	// 6. Initialize Engine Pipeline & Delivery Worker
@@ -328,6 +330,7 @@ func main() {
 		StreamAdapter:  streamAdapter,
 		StreamOffsets:  streamOffsetStore,
 		StreamDLQStore: streamDLQStore,
+		Approvals:      approvalStore,
 	})
 
 	server := api.NewServerWithOptions(cfg.ServerPort, handlers, api.ServerOptions{

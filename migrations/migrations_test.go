@@ -114,4 +114,16 @@ func TestEmbeddedMigrations(t *testing.T) {
 			t.Errorf("expected 000006_event_streaming_and_schemas.up.sql to contain '%s'", kw)
 		}
 	}
+
+	// Verify 000007 defines sagas, compensation, and human approvals
+	v7Up, ok := upMigrations["000007_sagas_compensation_and_approvals.up.sql"]
+	if !ok {
+		t.Fatal("000007_sagas_compensation_and_approvals.up.sql is required")
+	}
+	v7Required := []string{"workflow_approvals", "token_hash", "approver_roles", "timeout_action", "escalation_roles", "expires_at"}
+	for _, kw := range v7Required {
+		if !strings.Contains(v7Up, kw) {
+			t.Errorf("expected 000007_sagas_compensation_and_approvals.up.sql to contain '%s'", kw)
+		}
+	}
 }

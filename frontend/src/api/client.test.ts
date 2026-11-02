@@ -297,4 +297,39 @@ describe('KerobApiClient', () => {
     expect(dlq).toHaveLength(1);
     expect(mockFetch.mock.calls[4][0]).toContain('/api/v1/streams/dlq?topic=orders');
   });
+
+  it('supports Sagas, Compensation, and Human Approval operations', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => [{ id: 'app-1', title: 'High-value transfer', status: 'pending' }]
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const apps = await client.listApprovals({ status: 'pending' });
+    expect(apps).toHaveLength(1);
+    expect(apps[0].id).toBe('app-1');
+    expect(mockFetch.mock.calls[0][0]).toContain('/api/v1/approvals?status=pending');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ id: 'app-1', status: 'approved' })
+    });
+    const approved = await client.approveApproval('app-1', 'Approved by manager');
+    expect(approved.status).toBe('approved');
+    expect(mockFetch.mock.calls[1][0]).toContain('/api/v1/approvals/app-1/approve');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ id: 'exec-1', status: 'compensated' })
+    });
+    const compensated = await client.compensateExecution('exec-1', 'Customer cancelled');
+    expect(compensated.status).toBe('compensated');
+    expect(mockFetch.mock.calls[2][0]).toContain('/api/v1/executions/exec-1/compensate');
+  });
 });

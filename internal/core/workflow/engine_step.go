@@ -100,6 +100,11 @@ func (e *Engine) dispatchStep(
 	renderVars map[string]any,
 	start time.Time,
 ) (stepExecutionOutcome, error) {
+	// If the step is an approval step or requires approval before executing
+	if act.Type == StepTypeApproval || (act.Approval != nil && stepStates[act.ID].Status != "approved") {
+		return e.executeApprovalStep(ctx, wf, ev, exec, transformedPayload, act, stepStates, renderVars, start)
+	}
+
 	switch act.Type {
 	case StepTypeBranch:
 		return e.executeBranchStep(ctx, wf, ev, exec, transformedPayload, act, stepStates, renderVars, start)
@@ -299,7 +304,209 @@ func (e *Engine) applyOnError(
 
 	default: // OnErrorFail or empty
 		exec.CurrentStepID = act.ID
-		_, err := e.handleExecutionFailure(ctx, exec, wf, ev, act.ID, errStr, start)
+		failedExec, err := e.handleExecutionFailure(ctx, exec, wf, ev, act.ID, errStr, start)
+		if failedExec != nil {
+			exec.Status = failedExec.Status
+			exec.NextAttemptAt = failedExec.NextAttemptAt
+			exec.Error = failedExec.Error
+		}
 		return outcomeFailed, err
 	}
+}
+
+func (e *Engine) executeApprovalStep(
+	ctx context.Context,
+	wf *Workflow,
+	ev *event.Event,
+	exec *Execution,
+	transformedPayload map[string]any,
+	act ActionStep,
+	stepStates map[string]transformations.StepOutput,
+	renderVars map[string]any,
+	start time.Time,
+) (stepExecutionOutcome, error) {
+	stepStart := time.Now().UTC()
+	stepName := act.Name
+	if stepName == "" {
+		if act.Approval != nil && act.Approval.Title != "" {
+			stepName = act.Approval.Title
+		} else {
+			stepName = fmt.Sprintf("Approval: %s", act.ID)
+		}
+	}
+
+	// 1. Check if approval record already exists in store
+	if e.approvals != nil {
+		app, err := e.approvals.GetByExecutionAndStep(ctx, exec.ID, act.ID)
+		if err == nil && app != nil {
+			switch app.Status {
+			case ApprovalApproved:
+				appStep := &ExecutionStep{
+					ExecutionID: exec.ID,
+					StepID:      act.ID,
+					StepType:    "approval",
+					Name:        stepName,
+					Status:      "approved",
+					Output: map[string]any{
+						"approved_by":   app.ApprovedBy,
+						"decision_note": app.DecisionNote,
+						"status":        string(app.Status),
+					},
+					StartedAt:   app.CreatedAt,
+					CompletedAt: app.UpdatedAt,
+					DurationMs:  app.UpdatedAt.Sub(app.CreatedAt).Milliseconds(),
+				}
+				e.recordStep(ctx, appStep)
+				stepStates[act.ID] = transformations.StepOutput{
+					Status:     "approved",
+					Output:     appStep.Output,
+					DurationMs: appStep.DurationMs,
+				}
+
+				// If this was an action with an approval check, now run the underlying action!
+				if act.Type != "" && act.Type != StepTypeApproval {
+					return e.executeActionStep(ctx, wf, ev, exec, transformedPayload, act, stepStates, renderVars, start)
+				}
+				return outcomeSuccess, nil
+
+			case ApprovalRejected, ApprovalExpired:
+				reason := fmt.Sprintf("human approval %s", app.Status)
+				if app.DecisionNote != nil && *app.DecisionNote != "" {
+					reason = fmt.Sprintf("%s: %s", reason, *app.DecisionNote)
+				}
+				appStep := &ExecutionStep{
+					ExecutionID: exec.ID,
+					StepID:      act.ID,
+					StepType:    "approval",
+					Name:        stepName,
+					Status:      "rejected",
+					Error:       &reason,
+					StartedAt:   app.CreatedAt,
+					CompletedAt: app.UpdatedAt,
+					DurationMs:  app.UpdatedAt.Sub(app.CreatedAt).Milliseconds(),
+				}
+				e.recordStep(ctx, appStep)
+				stepStates[act.ID] = transformations.StepOutput{
+					Status:     "rejected",
+					Error:      reason,
+					DurationMs: appStep.DurationMs,
+				}
+
+				// Approval rejection is a terminal operator decision: trigger saga compensation immediately
+				if e.HasCompensableSteps(wf, exec) {
+					compExec, cErr := e.CompensateExecution(ctx, exec.ID, reason)
+					if cErr == nil && compExec != nil {
+						exec.Status = compExec.Status
+						return outcomeFailed, fmt.Errorf("%s", reason)
+					}
+				}
+				exec.Status = ExecutionFailed
+				_ = e.executions.UpdateStatus(ctx, exec.ID, ExecutionFailed, &reason, time.Since(start).Milliseconds())
+				return outcomeFailed, fmt.Errorf("%s", reason)
+
+			default: // ApprovalPending or ApprovalEscalated
+				return outcomeWaiting, nil
+			}
+		}
+	}
+
+	// 2. First time encountering approval: generate cryptographic token & persist approval
+	token, tokenHash, tErr := GenerateApprovalToken()
+	if tErr != nil {
+		return outcomeFailed, fmt.Errorf("failed to generate secure approval token: %w", tErr)
+	}
+
+	title := stepName
+	desc := ""
+	var approverRoles []string
+	var approverUsers []string
+	var escalationRoles []string
+	var escalationContact string
+	timeoutAction := "reject"
+	timeoutDur := 24 * time.Hour
+
+	if act.Approval != nil {
+		if act.Approval.Title != "" {
+			title = act.Approval.Title
+		}
+		desc = act.Approval.Description
+		approverRoles = act.Approval.ApproverRoles
+		approverUsers = act.Approval.ApproverUsers
+		escalationRoles = act.Approval.EscalationRoles
+		escalationContact = act.Approval.EscalationContact
+		if act.Approval.TimeoutAction != "" {
+			timeoutAction = act.Approval.TimeoutAction
+		}
+		if act.Approval.TimeoutSeconds > 0 {
+			timeoutDur = time.Duration(act.Approval.TimeoutSeconds) * time.Second
+		} else if act.Approval.Timeout != "" {
+			if parsed, pErr := time.ParseDuration(act.Approval.Timeout); pErr == nil && parsed > 0 {
+				timeoutDur = parsed
+			}
+		}
+	}
+
+	newApp := &Approval{
+		TenantID:          exec.TenantID,
+		ExecutionID:       exec.ID,
+		StepID:            act.ID,
+		WorkflowID:        wf.ID,
+		Title:             title,
+		Description:       desc,
+		Token:             token,
+		TokenHash:         tokenHash,
+		Status:            ApprovalPending,
+		ApproverRoles:     approverRoles,
+		ApproverUsers:     approverUsers,
+		ExpiresAt:         time.Now().UTC().Add(timeoutDur),
+		TimeoutAction:     timeoutAction,
+		EscalationRoles:   escalationRoles,
+		EscalationContact: escalationContact,
+	}
+
+	var createdApp *Approval
+	if e.approvals != nil {
+		created, cErr := e.approvals.Create(ctx, newApp)
+		if cErr != nil {
+			return outcomeFailed, fmt.Errorf("failed to persist approval record: %w", cErr)
+		}
+		createdApp = created
+	} else {
+		createdApp = newApp
+	}
+
+	// Update execution status to waiting_approval
+	exec.CurrentStepID = act.ID
+	exec.Status = ExecutionWaitingApproval
+	e.updateStatus(ctx, exec.ID, ExecutionWaitingApproval, nil, time.Since(start).Milliseconds())
+
+	// Record initial ExecutionStep with status waiting_approval
+	appStep := &ExecutionStep{
+		ExecutionID: exec.ID,
+		StepID:      act.ID,
+		StepType:    "approval",
+		Name:        stepName,
+		Status:      "waiting_approval",
+		StartedAt:   stepStart,
+		Input: map[string]any{
+			"approval_id":    createdApp.ID,
+			"title":          createdApp.Title,
+			"approver_roles": createdApp.ApproverRoles,
+			"expires_at":     createdApp.ExpiresAt,
+		},
+	}
+	e.recordStep(ctx, appStep)
+
+	if e.listener != nil {
+		e.listener.OnExecutionWaitingApproval(exec, createdApp)
+	}
+
+	slog.Info("workflow execution entered durable waiting_approval state",
+		slog.String("workflow_id", wf.ID),
+		slog.String("execution_id", exec.ID),
+		slog.String("approval_id", createdApp.ID),
+		slog.Time("expires_at", createdApp.ExpiresAt),
+	)
+
+	return outcomeWaiting, nil
 }

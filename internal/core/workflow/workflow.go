@@ -58,6 +58,7 @@ const (
 	StepTypeDelay    = "delay"
 	StepTypeWait     = "wait"
 	StepTypeParallel = "parallel"
+	StepTypeApproval = "approval"
 )
 
 // BranchCase defines a conditional branch inside a branch step.
@@ -97,6 +98,12 @@ type ActionStep struct {
 	// Control Flow: Delay / Wait
 	Duration    string `json:"duration,omitempty"`
 	DurationSec int    `json:"duration_seconds,omitempty"`
+
+	// Human Approvals
+	Approval *ApprovalConfig `json:"approval,omitempty"`
+
+	// Sagas & Compensation (optional compensation action run if subsequent steps fail)
+	Compensation *ActionStep `json:"compensation,omitempty"`
 }
 
 // Workflow represents a declarative, event-driven automation pipeline.
@@ -184,6 +191,10 @@ func validateStep(act ActionStep, prefix string) error {
 		if strings.TrimSpace(act.Duration) == "" && act.DurationSec <= 0 {
 			return fmt.Errorf("%s (delay) requires duration or duration_seconds", prefix)
 		}
+	case StepTypeApproval:
+		if act.Approval == nil && strings.TrimSpace(act.Name) == "" {
+			return fmt.Errorf("%s (approval) requires name or approval config", prefix)
+		}
 	default:
 		if act.Integration == "" {
 			return fmt.Errorf("%s.integration is required", prefix)
@@ -192,6 +203,13 @@ func validateStep(act ActionStep, prefix string) error {
 			return fmt.Errorf("%s.action_type is required", prefix)
 		}
 	}
+
+	if act.Compensation != nil {
+		if err := validateStep(*act.Compensation, fmt.Sprintf("%s.compensation", prefix)); err != nil {
+			return fmt.Errorf("invalid compensation action for %s: %w", prefix, err)
+		}
+	}
+
 	return nil
 }
 

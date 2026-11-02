@@ -251,6 +251,46 @@ func (h *LiveHub) OnExecutionCancelled(exec *workflow.Execution) {
 	})
 }
 
+func (h *LiveHub) OnExecutionWaitingApproval(exec *workflow.Execution, approval *workflow.Approval) {
+	if exec == nil {
+		return
+	}
+	h.Broadcast(&OperationalEvent{
+		Type:        "execution.waiting_approval",
+		TenantID:    exec.TenantID,
+		ExecutionID: exec.ID,
+		WorkflowID:  exec.WorkflowID,
+		Status:      string(workflow.ExecutionWaitingApproval),
+		Payload:     approval,
+	})
+}
+
+func (h *LiveHub) OnExecutionCompensating(exec *workflow.Execution) {
+	if exec == nil {
+		return
+	}
+	h.Broadcast(&OperationalEvent{
+		Type:        "execution.compensating",
+		TenantID:    exec.TenantID,
+		ExecutionID: exec.ID,
+		WorkflowID:  exec.WorkflowID,
+		Status:      string(workflow.ExecutionCompensating),
+	})
+}
+
+func (h *LiveHub) OnExecutionCompensated(exec *workflow.Execution) {
+	if exec == nil {
+		return
+	}
+	h.Broadcast(&OperationalEvent{
+		Type:        "execution.compensated",
+		TenantID:    exec.TenantID,
+		ExecutionID: exec.ID,
+		WorkflowID:  exec.WorkflowID,
+		Status:      string(exec.Status),
+	})
+}
+
 // BroadcastDLQ emits real-time dead-letter events.
 func (h *LiveHub) BroadcastDLQ(eventType string, tenantID string, dl *workflow.DeadLetterRecord) {
 	if h == nil || dl == nil {

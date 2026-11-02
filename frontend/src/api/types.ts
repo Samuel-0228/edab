@@ -1,5 +1,50 @@
 export type ExecutionStatus =
-  'pending' | 'running' | 'success' | 'failed' | 'retrying' | 'waiting' | 'paused' | 'cancelled';
+  | 'pending'
+  | 'running'
+  | 'success'
+  | 'failed'
+  | 'retrying'
+  | 'waiting'
+  | 'paused'
+  | 'cancelled'
+  | 'waiting_approval'
+  | 'compensating'
+  | 'compensated'
+  | 'compensation_failed';
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'escalated';
+
+export interface ApprovalConfig {
+  title?: string;
+  description?: string;
+  approver_roles?: string[];
+  approver_users?: string[];
+  timeout_seconds?: number;
+  escalation_role?: string;
+}
+
+export interface Approval {
+  id: string;
+  tenant_id?: string;
+  execution_id: string;
+  step_id: string;
+  workflow_id: string;
+  title: string;
+  description: string;
+  approver_roles: string[];
+  approver_users: string[];
+  timeout_seconds: number;
+  escalation_role?: string;
+  token?: string;
+  token_hash?: string;
+  status: ApprovalStatus;
+  decided_by?: string;
+  decision_note?: string;
+  decided_at?: string;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface OperationalEvent {
   type: string;
@@ -17,9 +62,17 @@ export interface OperationalEvent {
 export interface ExecutionStep {
   id: string;
   execution_id: string;
-  step_type: 'trigger' | 'condition' | 'transformation' | 'action';
+  step_type: 'trigger' | 'condition' | 'transformation' | 'action' | 'approval';
   name: string;
-  status: 'success' | 'skipped' | 'failed';
+  status:
+    | 'success'
+    | 'skipped'
+    | 'failed'
+    | 'waiting_approval'
+    | 'approved'
+    | 'rejected'
+    | 'compensating'
+    | 'compensated';
   input?: unknown;
   output?: unknown;
   error?: string;
@@ -71,7 +124,7 @@ export interface BranchCase {
 export interface WorkflowActionStep {
   id?: string;
   name?: string;
-  type?: 'action' | 'branch' | 'for_each' | 'delay' | 'wait' | 'parallel';
+  type?: 'action' | 'branch' | 'for_each' | 'delay' | 'wait' | 'parallel' | 'approval';
   integration?: string;
   action_type?: string;
   credential_id?: string;
@@ -80,6 +133,12 @@ export interface WorkflowActionStep {
   on_error?: 'fail' | 'continue' | 'skip_rest';
   max_retries?: number;
   backoff_seconds?: number;
+
+  // Sagas & Compensation
+  compensation?: WorkflowActionStep;
+
+  // Human Approvals
+  approval?: ApprovalConfig;
 
   // Control Flow: Branch
   cases?: BranchCase[];
