@@ -93,6 +93,18 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("GET /api/v1/integrations/{id}", handlers.GetIntegration)
 	mux.HandleFunc("GET /api/v1/integrations/{id}/schema", handlers.GetIntegrationSchema)
 
+	// Connector SDK Catalog & Dynamic Health
+	mux.HandleFunc("GET /api/v1/connectors", handlers.ListConnectors)
+	mux.HandleFunc("GET /api/v1/connectors/{id}", handlers.GetConnector)
+	mux.HandleFunc("GET /api/v1/connectors/{id}/health", handlers.CheckConnectorHealth)
+
+	// OAuth2 Authorization & Token Lifecycle
+	mux.HandleFunc("GET /api/v1/oauth/{connector}/authorize", handlers.AuthorizeOAuth)
+	mux.HandleFunc("GET /api/v1/oauth/{connector}/callback", handlers.CallbackOAuth)
+	mux.HandleFunc("POST /api/v1/oauth/{connector}/callback", handlers.CallbackOAuth)
+	mux.HandleFunc("POST /api/v1/oauth/{connector}/refresh", handlers.RefreshOAuth)
+	mux.HandleFunc("POST /api/v1/oauth/{connector}/revoke", handlers.RevokeOAuth)
+
 	// Credentials API (AES-256 encrypted at rest, never exposes raw secrets)
 	mux.HandleFunc("GET /api/v1/credentials", handlers.ListCredentials)
 	mux.HandleFunc("POST /api/v1/credentials", handlers.CreateCredential)

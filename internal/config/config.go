@@ -41,6 +41,9 @@ type Config struct {
 	TelegramRateGlobal         float64
 	TelegramRatePerChat        float64
 	TelegramPublicPollInterval time.Duration
+
+	GitHubClientID     string
+	GitHubClientSecret string
 }
 
 // Load loads configuration from environment variables with sensible defaults.
@@ -76,6 +79,8 @@ func Load() *Config {
 		TelegramRateGlobal:         getEnvFloat("TELEGRAM_RATE_GLOBAL", 25),
 		TelegramRatePerChat:        getEnvFloat("TELEGRAM_RATE_PER_CHAT", 1),
 		TelegramPublicPollInterval: getEnvDuration("TELEGRAM_PUBLIC_POLL_INTERVAL", 15*time.Second),
+		GitHubClientID:             getEnv("GITHUB_CLIENT_ID", ""),
+		GitHubClientSecret:         getEnv("GITHUB_CLIENT_SECRET", ""),
 	}
 }
 

@@ -21,7 +21,10 @@ import type {
   Membership,
   APIToken,
   AuditLog,
-  Identity
+  Identity,
+  ConnectorManifest,
+  ConnectorHealthStatus,
+  OAuthAuthorizeResponse
 } from './types';
 
 export class ApiError extends Error {
@@ -258,6 +261,47 @@ export class KerobApiClient {
   public async deleteCredential(id: string): Promise<void> {
     await this.request<void>(`/api/v1/credentials/${encodeURIComponent(id)}`, {
       method: 'DELETE'
+    });
+  }
+
+  // --- Connector SDK & OAuth ---
+  public async listConnectors(): Promise<ConnectorManifest[]> {
+    const data = await this.request<ConnectorManifest[]>('/api/v1/connectors');
+    return Array.isArray(data) ? data : [];
+  }
+
+  public async getConnector(id: string): Promise<ConnectorManifest> {
+    return this.request<ConnectorManifest>(`/api/v1/connectors/${encodeURIComponent(id)}`);
+  }
+
+  public async checkConnectorHealth(id: string, credentialId?: string): Promise<ConnectorHealthStatus> {
+    const query = credentialId ? `?credential_id=${encodeURIComponent(credentialId)}` : '';
+    return this.request<ConnectorHealthStatus>(`/api/v1/connectors/${encodeURIComponent(id)}/health${query}`);
+  }
+
+  public async authorizeOAuth(connectorId: string, redirectUri?: string): Promise<OAuthAuthorizeResponse> {
+    const query = redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : '';
+    return this.request<OAuthAuthorizeResponse>(`/api/v1/oauth/${encodeURIComponent(connectorId)}/authorize${query}`);
+  }
+
+  public async callbackOAuth(connectorId: string, state: string, code: string, redirectUri?: string): Promise<Credential> {
+    return this.request<Credential>(`/api/v1/oauth/${encodeURIComponent(connectorId)}/callback`, {
+      method: 'POST',
+      body: JSON.stringify({ state, code, redirect_uri: redirectUri })
+    });
+  }
+
+  public async refreshOAuthToken(connectorId: string, credentialId: string): Promise<Credential> {
+    return this.request<Credential>(`/api/v1/oauth/${encodeURIComponent(connectorId)}/refresh`, {
+      method: 'POST',
+      body: JSON.stringify({ credential_id: credentialId })
+    });
+  }
+
+  public async revokeOAuthToken(connectorId: string, credentialId: string): Promise<{ status: string; message: string }> {
+    return this.request<{ status: string; message: string }>(`/api/v1/oauth/${encodeURIComponent(connectorId)}/revoke`, {
+      method: 'POST',
+      body: JSON.stringify({ credential_id: credentialId })
     });
   }
 

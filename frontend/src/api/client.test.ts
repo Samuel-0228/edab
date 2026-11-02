@@ -183,4 +183,59 @@ describe('KerobApiClient', () => {
     client.setToken('');
     expect(client.getOperationsStreamUrl()).toBe('http://localhost:8080/api/v1/operations/stream');
   });
+
+  it('supports Connector SDK and OAuth lifecycle operations', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => [{ id: 'github', name: 'GitHub', capabilities: ['oauth2', 'actions'] }]
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const connectors = await client.listConnectors();
+    expect(connectors).toHaveLength(1);
+    expect(connectors[0].id).toBe('github');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ status: 'healthy', latency_ms: 15 })
+    });
+    const health = await client.checkConnectorHealth('github', 'cred-123');
+    expect(health.status).toBe('healthy');
+    expect(mockFetch.mock.calls[1][0]).toContain('/api/v1/connectors/github/health?credential_id=cred-123');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ authorize_url: 'https://github.com/login/oauth/authorize?state=xyz', state: 'xyz' })
+    });
+    const authResp = await client.authorizeOAuth('github', 'https://app.kerob.dev/cb');
+    expect(authResp.state).toBe('xyz');
+    expect(mockFetch.mock.calls[2][0]).toContain('/api/v1/oauth/github/authorize?redirect_uri=https%3A%2F%2Fapp.kerob.dev%2Fcb');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ id: 'cred-1', name: 'GitHub OAuth' })
+    });
+    const refreshed = await client.refreshOAuthToken('github', 'cred-1');
+    expect(refreshed.id).toBe('cred-1');
+    expect(mockFetch.mock.calls[3][1].method).toBe('POST');
+    expect(JSON.parse(mockFetch.mock.calls[3][1].body)).toEqual({ credential_id: 'cred-1' });
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ status: 'revoked', message: 'Token successfully revoked' })
+    });
+    const revoked = await client.revokeOAuthToken('github', 'cred-1');
+    expect(revoked.status).toBe('revoked');
+    expect(mockFetch.mock.calls[4][0]).toContain('/api/v1/oauth/github/revoke');
+  });
 });

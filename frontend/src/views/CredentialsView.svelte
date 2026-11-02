@@ -38,6 +38,41 @@
     loadCredentials();
   });
 
+  function isOAuthCred(c: Credential): boolean {
+    if (!c.masked_fields) return false;
+    return 'access_token' in c.masked_fields || 'refresh_token' in c.masked_fields;
+  }
+
+  async function handleRefreshOAuth(c: Credential) {
+    try {
+      await api.refreshOAuthToken(c.integration, c.id);
+      notifySuccess(`OAuth token successfully rotated for "${c.name}"`);
+      await loadCredentials();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to refresh OAuth token';
+      notifyError(msg);
+    }
+  }
+
+  function confirmRevokeOAuth(c: Credential) {
+    showConfirm({
+      title: 'Revoke Upstream OAuth Authorization',
+      message: `Are you sure you want to revoke authorization for "${c.name}"? The token will be invalidated at ${c.integration} and purged from Kerob.`,
+      confirmLabel: 'Revoke & Purge',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api.revokeOAuthToken(c.integration, c.id);
+          notifySuccess(`OAuth token for "${c.name}" revoked`);
+          await loadCredentials();
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Failed to revoke token';
+          notifyError(msg);
+        }
+      }
+    });
+  }
+
   function confirmDelete(c: Credential) {
     showConfirm({
       title: 'Delete Encrypted Credential',
@@ -87,13 +122,19 @@
           </thead>
           <tbody>
             {#each credentials as c (c.id)}
+              {@const isOAuth = isOAuthCred(c)}
               <tr>
                 <td>
                   <div class="cred-name">{c.name}</div>
                   <div class="cred-id mono">ID: <code>{c.id.slice(0, 8)}...</code></div>
                 </td>
                 <td>
-                  <Badge variant="neutral">{c.integration}</Badge>
+                  <div class="integration-badge-group">
+                    <Badge variant="neutral">{c.integration}</Badge>
+                    {#if isOAuth}
+                      <Badge variant="stage-transform">OAuth 2.0</Badge>
+                    {/if}
+                  </div>
                 </td>
                 <td class="mono">{c.key_id}</td>
                 <td>
@@ -103,9 +144,22 @@
                 </td>
                 <td class="text-muted">{new Date(c.created_at).toLocaleDateString()}</td>
                 <td style="text-align: right;">
-                  <Button variant="danger" size="sm" onclick={() => confirmDelete(c)}>
-                    Delete
-                  </Button>
+                  <div class="actions-row">
+                    {#if isOAuth}
+                      {#if c.masked_fields?.refresh_token}
+                        <Button variant="secondary" size="sm" onclick={() => handleRefreshOAuth(c)}>
+                          Rotate
+                        </Button>
+                      {/if}
+                      <Button variant="danger" size="sm" onclick={() => confirmRevokeOAuth(c)}>
+                        Revoke
+                      </Button>
+                    {:else}
+                      <Button variant="danger" size="sm" onclick={() => confirmDelete(c)}>
+                        Delete
+                      </Button>
+                    {/if}
+                  </div>
                 </td>
               </tr>
             {/each}
@@ -139,7 +193,6 @@
     padding: 30px;
     text-align: center;
     color: var(--text-muted);
-    font-size: 12px;
   }
 
   .table-container {
@@ -149,55 +202,61 @@
   .tech-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: 0.85rem;
   }
 
   .tech-table th {
     text-align: left;
-    padding: 10px 14px;
-    font-size: 10.5px;
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    padding: 10px 16px;
     background: var(--bg-surface-elevated);
     border-bottom: 1px solid var(--border-default);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   .tech-table td {
-    padding: 12px 14px;
+    padding: 12px 16px;
     border-bottom: 1px solid var(--border-subtle);
-    color: var(--text-secondary);
-  }
-
-  .tech-table tr:hover td {
-    background: var(--bg-surface-elevated);
-    color: var(--text-primary);
+    vertical-align: middle;
   }
 
   .cred-name {
-    font-weight: 600;
+    font-weight: 500;
     color: var(--text-primary);
-    font-size: 13px;
   }
 
   .cred-id {
-    font-size: 10.5px;
-    color: var(--text-faint);
-    margin-top: 3px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .integration-badge-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 
   .masked-box {
-    display: inline-block;
-    padding: 2px 6px;
-    background: var(--bg-deep);
+    background: var(--bg-surface);
     border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-xs);
-    font-size: 11px;
-    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .text-muted {
-    color: var(--text-muted);
+  .actions-row {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
   }
 </style>

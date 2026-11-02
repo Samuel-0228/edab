@@ -26,6 +26,8 @@ import (
 	"kerob/internal/observability"
 	"kerob/internal/telegram"
 	"kerob/internal/version"
+	"kerob/pkg/connector"
+	"kerob/pkg/connector/builtin/github"
 )
 
 func main() {
@@ -108,6 +110,13 @@ func main() {
 	actionRegistry.Register(actions.NewSlackActionExecutor())
 	actionRegistry.Register(actions.NewTeamsActionExecutor())
 	actionRegistry.Register(actions.NewSMTPActionExecutor())
+
+	// Extensible Connector SDK & Builtin Connectors
+	ghConnector := github.NewConnector(github.Config{
+		ClientID:     cfg.GitHubClientID,
+		ClientSecret: cfg.GitHubClientSecret,
+	})
+	_ = connector.Register(ghConnector)
 
 	var teleAPI telegram.API
 	if cfg.TelegramEnabled && cfg.TelegramBotToken != "" {

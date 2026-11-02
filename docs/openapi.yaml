@@ -389,6 +389,146 @@ paths:
         '404':
           description: Integration not found
 
+  /api/v1/connectors:
+    get:
+      summary: List registered connectors in the Extensible Connector SDK
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Array of connector manifests with declared capabilities
+
+  /api/v1/connectors/{id}:
+    get:
+      summary: Get connector manifest by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Connector manifest
+        '404':
+          description: Connector not found
+
+  /api/v1/connectors/{id}/health:
+    get:
+      summary: Perform dynamic health check and probe latency for a connector
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: credential_id
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Health check result and latency metrics
+
+  /api/v1/oauth/{connector}/authorize:
+    get:
+      summary: Initiate OAuth2 flow with CSRF state protection
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: connector
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: redirect_uri
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Authorization URL and high-entropy state token
+
+  /api/v1/oauth/{connector}/callback:
+    post:
+      summary: Exchange OAuth authorization code for encrypted tokens
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: connector
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state, code]
+              properties:
+                state: { type: string }
+                code: { type: string }
+                redirect_uri: { type: string }
+      responses:
+        '201':
+          description: Stored credential with masked token fields
+
+  /api/v1/oauth/{connector}/refresh:
+    post:
+      summary: Rotate OAuth refresh tokens
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: connector
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential_id]
+              properties:
+                credential_id: { type: string }
+      responses:
+        '200':
+          description: Updated credential with rotated tokens
+
+  /api/v1/oauth/{connector}/revoke:
+    post:
+      summary: Revoke upstream OAuth token and delete credentials
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: connector
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential_id]
+              properties:
+                credential_id: { type: string }
+      responses:
+        '200':
+          description: Revocation confirmation
+
   /api/v1/credentials:
     get:
       summary: List stored credentials (masked)

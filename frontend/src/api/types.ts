@@ -254,6 +254,44 @@ export interface IntegrationMetadata {
   credentials: IntegrationCredentialField[];
 }
 
+export interface ConnectorManifest {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  category: string;
+  icon?: string;
+  capabilities: string[];
+  auth_type: string;
+  oauth2_config?: {
+    client_id: string;
+    auth_url: string;
+    token_url: string;
+    scopes: string[];
+    pkce_enabled: boolean;
+  };
+  required_credential_type?: string;
+  config_schema?: Record<string, unknown>;
+  schemas?: Record<string, Record<string, unknown>>;
+  triggers: Array<{ type: string; name: string; description: string }>;
+  actions: Array<{ type: string; name: string; description: string }>;
+  credentials: Array<{ key: string; label: string; type: string; required: boolean; description: string }>;
+  documentation_url?: string;
+}
+
+export interface ConnectorHealthStatus {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  latency_ms: number;
+  message?: string;
+  checked_at: string;
+  details?: Record<string, unknown>;
+}
+
+export interface OAuthAuthorizeResponse {
+  authorize_url: string;
+  state: string;
+}
+
 export interface OverviewResponse {
   status: string;
   active_workflows: number;

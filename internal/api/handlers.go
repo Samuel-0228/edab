@@ -11,11 +11,13 @@ import (
 	"kerob/internal/core/delivery"
 	"kerob/internal/core/errtracker"
 	"kerob/internal/core/event"
+	"kerob/internal/core/oauth"
 	"kerob/internal/core/routing"
 	"kerob/internal/core/webhooks"
 	"kerob/internal/core/workflow"
 	"kerob/internal/telegram"
 	"kerob/internal/version"
+	"kerob/pkg/connector"
 )
 
 // Handlers houses the HTTP handler implementations across all Kerob domains.
@@ -44,6 +46,8 @@ type Handlers struct {
 	authStore    auth.Store
 	multiTenancy bool
 	liveHub      *LiveHub
+	connectorReg *connector.Registry
+	oauthManager *oauth.Manager
 }
 
 // Config bundles all dependencies for NewHandlers.
@@ -59,6 +63,8 @@ type Config struct {
 	AuthStore      auth.Store
 	MultiTenancy   bool
 	LiveHub        *LiveHub
+	ConnectorReg   *connector.Registry
+	OAuthManager   *oauth.Manager
 
 	Sources      sources.Store
 	Destinations destinations.Store
@@ -84,6 +90,15 @@ func NewHandlersFromConfig(cfg Config) *Handlers {
 	if cfg.WorkflowEngine != nil {
 		cfg.WorkflowEngine.SetEventListener(hub)
 	}
+	cReg := cfg.ConnectorReg
+	if cReg == nil {
+		cReg = connector.Default()
+	}
+	oMgr := cfg.OAuthManager
+	if oMgr == nil && cfg.Creds != nil {
+		oMgr = oauth.NewManager(cReg, cfg.Creds, nil)
+	}
+
 	return &Handlers{
 		workflows:      cfg.Workflows,
 		executions:     cfg.Executions,
@@ -107,7 +122,25 @@ func NewHandlersFromConfig(cfg Config) *Handlers {
 		authStore:    cfg.AuthStore,
 		multiTenancy: cfg.MultiTenancy,
 		liveHub:      hub,
+		connectorReg: cReg,
+		oauthManager: oMgr,
 	}
+}
+
+// ConnectorRegistry returns the active connector registry.
+func (h *Handlers) ConnectorRegistry() *connector.Registry {
+	if h.connectorReg == nil {
+		h.connectorReg = connector.Default()
+	}
+	return h.connectorReg
+}
+
+// OAuthManager returns the active OAuth manager.
+func (h *Handlers) OAuthManager() *oauth.Manager {
+	if h.oauthManager == nil {
+		h.oauthManager = oauth.NewManager(h.ConnectorRegistry(), h.creds, nil)
+	}
+	return h.oauthManager
 }
 
 // LiveHub returns the operational event broadcast hub.
