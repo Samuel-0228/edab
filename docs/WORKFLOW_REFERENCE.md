@@ -300,3 +300,46 @@ All outbound actions execute through the SSRF-safe dialer (`ssrf.SafeHTTPClient`
 - **Circuit Breaker**: Each integration automatically trips to `open` after 5 consecutive failures, guarding upstream services.
 - **Dry-Run API**: `POST /api/v1/workflows/{id}/test` runs full validation, condition matching, and transformation traces without executing outbound side effects.
 - **Version History & Rollback**: `GET /api/v1/workflows/{id}/versions`, `POST /api/v1/workflows/{id}/rollback/{version}`.
+
+---
+
+## 8. Visual Workflow Builder & Studio
+
+Kerob features an interactive, production-grade visual workflow editor embedded in the dashboard for authoring and orchestrating automation graphs.
+
+```text
+  ┌────────────────────────────────────────────────────────────────────────────────────────┐
+  │                           Visual Graph Studio Canvas                                   │
+  │                                                                                        │
+  │   [WHEN TRIGGER] ───► [IF CONDITION] ───► [TRANSFORM] ───► [BRANCH / THEN ACTIONS]     │
+  │     (Left End)          (Filter AST)        (Format)         (Parallel / Loop / Delay) │
+  └────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1. Left-to-Right Flow Architecture
+- **Left-Aligned Origin**: Graph layouts originate strictly from the left end (`x = 30px`), anchoring the root `Trigger` node and flowing horizontally downstream to the right through condition filters, transformations, branches, and actions.
+- **Port Types**:
+  - `Trigger`: Single output emitting normalized `event` payloads (`payload`, `metadata`, `event_type`, `source_id`). Triggers cannot accept incoming connections.
+  - `Condition`: Input for event data; dual outputs (`pass` for true branch, `fail` for false branch).
+  - `Transformation`: Input for raw event data; output emitting formatted data dictionary.
+  - `Action`: Inbound flow input; outbound flow handle for chaining downstream actions or delays.
+  - `Branch`: Condition expression with `Matched` output for true branch steps and `Default` output for fallbacks.
+  - `Loop (ForEach)`: Iterates over array expressions (e.g. `payload.items`) with `Each Item` body output and `Complete` continuation output.
+  - `Delay (Wait)`: Pauses execution durably via background queue before resuming downstream steps.
+  - `Parallel (Fan-Out)`: Concurrently triggers multiple downstream branches up to configured concurrency limits.
+
+### 2. Connection Validation & Cycle Detection
+- **Directed Acyclic Graph (DAG) Enforcement**: Every candidate connection is evaluated using depth-first cycle detection before being accepted. Any wire that would form an infinite loop is rejected with an explanatory error (`Cycle detected: node connection creates a circular loop`).
+- **Connection Rules**:
+  - Nodes cannot connect to themselves.
+  - Triggers cannot receive inbound connections.
+  - Input ports accept only one incoming wire unless fan-in capability is enabled.
+
+### 3. Draft Editing & Safety Controls
+- **Autosave Prevention**: Edits are held in local reactive state. Pipelines are only updated on the engine when the operator explicitly clicks **Publish Automation** (or **Update Automation** in edit mode).
+- **Undo / Redo History**: History stack tracks all node additions, removals, moves, connections, and configuration edits with `Ctrl+Z` and `Ctrl+Y` keyboard shortcuts.
+- **Import / Export**:
+  - **Export JSON**: Serializes the current graph to backward-compatible Kerob workflow JSON, copying to clipboard or downloading.
+  - **Import JSON**: Validates pasted or uploaded JSON definitions and reconstructs the visual graph with automatic layout.
+- **Pre-Flight Validation**: Before publishing, the studio runs full verification (required fields, valid JSON config, cycle absence, trigger existence). Any issues are highlighted in an issue banner and pinned to the respective node.
+- **Security**: The editor operates purely on declarative schemas and templates without permitting arbitrary JavaScript or shell execution.

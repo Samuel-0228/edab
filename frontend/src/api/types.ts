@@ -63,12 +63,44 @@ export interface TransformationConfig {
   mapping?: Record<string, string>;
 }
 
-export interface ActionConfig {
-  integration: string;
-  action_type: string;
-  credential_id?: string;
-  config: Record<string, unknown>;
+export interface BranchCase {
+  when: ConditionRule | Record<string, unknown>;
+  steps: WorkflowActionStep[];
 }
+
+export interface WorkflowActionStep {
+  id?: string;
+  name?: string;
+  type?: 'action' | 'branch' | 'for_each' | 'delay' | 'wait' | 'parallel';
+  integration?: string;
+  action_type?: string;
+  credential_id?: string;
+  config?: Record<string, unknown>;
+  timeout_seconds?: number;
+  on_error?: 'fail' | 'continue' | 'skip_rest';
+  max_retries?: number;
+  backoff_seconds?: number;
+
+  // Control Flow: Branch
+  cases?: BranchCase[];
+  default?: WorkflowActionStep[];
+
+  // Control Flow: ForEach
+  items?: string;
+  item_var?: string;
+  index_var?: string;
+  max_iterations?: number;
+
+  // Control Flow: Parallel / Inner steps
+  steps?: WorkflowActionStep[];
+  concurrency?: number;
+
+  // Control Flow: Delay / Wait
+  duration?: string;
+  duration_seconds?: number;
+}
+
+export type ActionConfig = WorkflowActionStep;
 
 export interface Workflow {
   id: string;
