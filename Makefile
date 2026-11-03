@@ -41,6 +41,9 @@ help:
 build:
 	CGO_ENABLED=0 go build -v -ldflags="$(LDFLAGS)" -o bin/kerob ./cmd/server
 
+build-cli:
+	CGO_ENABLED=0 go build -v -ldflags="$(LDFLAGS)" -o bin/kerob-cli ./cmd/kerob
+
 build-frontend:
 	cd frontend && npm ci && npm run build
 
@@ -68,6 +71,12 @@ test-docker:
 
 test-frontend:
 	cd frontend && npm test
+
+test-sdk-go:
+	go test -v -race ./pkg/sdk
+
+test-sdk-ts:
+	./frontend/node_modules/.bin/vitest run sdks/typescript/tests/client.test.ts
 
 test-coverage:
 	go test -coverprofile=coverage.out $$(go list ./... | grep -v node_modules)

@@ -62,6 +62,16 @@ for TARGET in "${TARGETS[@]}"; do
     -ldflags="${LDFLAGS}" \
     -o "${OUTPUT_DIR}/${BINARY_NAME}" \
     ./cmd/server
+
+  CLI_NAME="kerob-cli"
+  if [ "${GOOS}" = "windows" ]; then
+    CLI_NAME="kerob-cli.exe"
+  fi
+  CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" go build \
+    -trimpath \
+    -ldflags="${LDFLAGS}" \
+    -o "${OUTPUT_DIR}/${CLI_NAME}" \
+    ./cmd/kerob
 done
 
 echo "--> Packaging archives (tar.gz / zip)..."

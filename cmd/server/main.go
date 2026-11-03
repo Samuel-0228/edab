@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -13,6 +12,7 @@ import (
 	"kerob/internal/adapters/destinations"
 	"kerob/internal/adapters/sources"
 	"kerob/internal/api"
+	"kerob/internal/cli"
 	"kerob/internal/config"
 	"kerob/internal/core/auth"
 	"kerob/internal/core/credentials"
@@ -33,10 +33,12 @@ import (
 )
 
 func main() {
-	for _, arg := range os.Args[1:] {
-		if arg == "-v" || arg == "--version" || arg == "version" {
-			_, _ = fmt.Fprintln(os.Stdout, version.Info())
-			return
+	if len(os.Args) > 1 {
+		first := os.Args[1]
+		if first == "server" {
+			os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
+		} else if isCLICommand(first) {
+			os.Exit(cli.Run(os.Args[1:]))
 		}
 	}
 
@@ -384,4 +386,13 @@ func main() {
 
 func setupLogger(levelStr string) {
 	observability.ConfigureLogger(levelStr)
+}
+
+func isCLICommand(cmd string) bool {
+	switch cmd {
+	case "version", "-v", "--version", "login", "tenant", "workflow", "deploy", "event", "execution", "logs", "dlq", "completion", "help", "--help", "-h":
+		return true
+	default:
+		return false
+	}
 }
