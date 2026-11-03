@@ -11,7 +11,11 @@ import type {
   Tenant,
   Member,
   APIToken,
-  Identity
+  Identity,
+  GovernancePolicy,
+  PolicyValidationResult,
+  AuditVerificationResult,
+  RetentionPruneResult
 } from './types.js';
 
 export class KerobApiError extends Error {
@@ -310,5 +314,30 @@ export class KerobClient {
   public async bulkDiscardFailures(ids: string[]): Promise<number> {
     const res = await this.request<{ discarded_count: number }>('POST', '/api/v1/failures/discard-bulk', { body: { ids } });
     return res.discarded_count;
+  }
+
+  // --- Governance & Policy Engine ---
+  public async getGovernancePolicy(): Promise<GovernancePolicy> {
+    return this.request<GovernancePolicy>('GET', '/api/v1/governance/policy');
+  }
+
+  public async updateGovernancePolicy(policy: Partial<GovernancePolicy>): Promise<GovernancePolicy> {
+    return this.request<GovernancePolicy>('PUT', '/api/v1/governance/policy', { body: policy });
+  }
+
+  public async validateWorkflowPolicy(workflow: unknown): Promise<PolicyValidationResult> {
+    return this.request<PolicyValidationResult>('POST', '/api/v1/governance/policy/validate', { body: workflow });
+  }
+
+  public async verifyAuditChain(): Promise<AuditVerificationResult> {
+    return this.request<AuditVerificationResult>('GET', '/api/v1/governance/audit/verify');
+  }
+
+  public async exportAuditLogs(format: 'json' | 'csv' = 'json', filter?: Record<string, string>): Promise<string> {
+    return this.request<string>('GET', '/api/v1/audit-logs/export', { query: { format, ...filter } });
+  }
+
+  public async pruneRetention(): Promise<RetentionPruneResult> {
+    return this.request<RetentionPruneResult>('POST', '/api/v1/governance/retention/prune');
   }
 }

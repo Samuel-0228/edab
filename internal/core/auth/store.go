@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 var (
@@ -54,4 +55,5 @@ type Store interface {
 	// Audit Logs
 	RecordAuditLog(ctx context.Context, log *AuditLog) error
 	ListAuditLogs(ctx context.Context, tenantID string, filter AuditFilter) ([]*AuditLog, error)
+	PruneAuditLogs(ctx context.Context, tenantID string, before time.Time) (int64, error)
 }

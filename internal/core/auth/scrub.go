@@ -1,6 +1,10 @@
 package auth
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -79,4 +83,33 @@ func scrubValue(v any) any {
 	default:
 		return val
 	}
+}
+
+// computeAuditEntryHash computes a deterministic cryptographic SHA-256 hash
+// linking the record to the previous audit entry in the tenant's chain.
+func computeAuditEntryHash(log *AuditLog) string {
+	if log == nil {
+		return ""
+	}
+
+	detailsBytes, err := json.Marshal(log.Details)
+	if err != nil {
+		detailsBytes = []byte("{}")
+	}
+
+	h := sha256.New()
+	fmt.Fprintf(h, "%s|%d|%s|%s|%s|%s|%s|%s|%s|%d",
+		log.TenantID,
+		log.SequenceNum,
+		log.PrevHash,
+		log.ActorID,
+		log.ActorType,
+		log.Action,
+		log.ResourceType,
+		log.ResourceID,
+		string(detailsBytes),
+		log.CreatedAt.UTC().UnixNano(),
+	)
+
+	return hex.EncodeToString(h.Sum(nil))
 }

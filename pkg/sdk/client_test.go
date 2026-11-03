@@ -120,6 +120,34 @@ func TestGoSDKClient(t *testing.T) {
 		})
 	})
 
+	// Mock /api/v1/governance/policy
+	mux.HandleFunc("GET /api/v1/governance/policy", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(GovernancePolicy{
+			TenantID:        "tenant_test",
+			EnforcementMode: "enforce",
+		})
+	})
+
+	// Mock /api/v1/governance/audit/verify
+	mux.HandleFunc("GET /api/v1/governance/audit/verify", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(AuditVerificationResult{
+			Valid:        true,
+			TenantID:     "tenant_test",
+			TotalRecords: 5,
+		})
+	})
+
+	// Mock /api/v1/governance/policy/validate
+	mux.HandleFunc("POST /api/v1/governance/policy/validate", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(PolicyValidationResult{
+			Valid:    true,
+			TenantID: "tenant_test",
+		})
+	})
+
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
@@ -215,6 +243,31 @@ func TestGoSDKClient(t *testing.T) {
 	}
 	if retryExec.ID != "exec_retried" {
 		t.Fatalf("unexpected retry execution: %+v", retryExec)
+	}
+
+	// 11. Test Governance Policy and Audit Chain
+	policy, err := client.GetGovernancePolicy(ctx)
+	if err != nil {
+		t.Fatalf("GetGovernancePolicy failed: %v", err)
+	}
+	if policy.TenantID != "tenant_test" {
+		t.Fatalf("unexpected policy tenant: %s", policy.TenantID)
+	}
+
+	chainRes, err := client.VerifyAuditChain(ctx)
+	if err != nil {
+		t.Fatalf("VerifyAuditChain failed: %v", err)
+	}
+	if !chainRes.Valid {
+		t.Fatalf("expected audit chain to be valid")
+	}
+
+	valRes, err := client.ValidateWorkflowPolicy(ctx, map[string]any{"name": "Candidate"})
+	if err != nil {
+		t.Fatalf("ValidateWorkflowPolicy failed: %v", err)
+	}
+	if !valRes.Valid {
+		t.Fatalf("expected valid dry run result")
 	}
 }
 

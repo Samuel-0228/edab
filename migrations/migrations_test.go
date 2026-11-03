@@ -126,4 +126,16 @@ func TestEmbeddedMigrations(t *testing.T) {
 			t.Errorf("expected 000007_sagas_compensation_and_approvals.up.sql to contain '%s'", kw)
 		}
 	}
+
+	// Verify 000008 defines governance policies and audit log chaining
+	v8Up, ok := upMigrations["000008_governance_and_policy_engine.up.sql"]
+	if !ok {
+		t.Fatal("000008_governance_and_policy_engine.up.sql is required")
+	}
+	v8Required := []string{"governance_policies", "allowed_connectors", "allowed_outbound_domains", "max_workflow_retries", "max_payload_size_bytes", "sequence_num", "prev_hash", "entry_hash"}
+	for _, kw := range v8Required {
+		if !strings.Contains(v8Up, kw) {
+			t.Errorf("expected 000008_governance_and_policy_engine.up.sql to contain '%s'", kw)
+		}
+	}
 }

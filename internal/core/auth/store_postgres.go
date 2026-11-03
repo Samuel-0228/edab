@@ -459,21 +459,47 @@ func (s *PostgresStore) RecordAuditLog(ctx context.Context, log *AuditLog) error
 	if log.CreatedAt.IsZero() {
 		log.CreatedAt = time.Now().UTC()
 	}
+	if log.TenantID == "" {
+		log.TenantID = "default"
+	}
 
 	// Scrub any sensitive secrets or tokens from details
 	scrubbed := ScrubAuditDetails(log.Details)
+	log.Details = scrubbed
 	detailsJSON, err := json.Marshal(scrubbed)
 	if err != nil {
 		detailsJSON = []byte("{}")
 	}
 
+	if log.SequenceNum <= 0 {
+		var maxSeq sql.NullInt64
+		var prevHash sql.NullString
+		seqQuery := `
+			SELECT sequence_num, entry_hash
+			FROM audit_logs
+			WHERE tenant_id = $1
+			ORDER BY sequence_num DESC
+			LIMIT 1;
+		`
+		row := s.db.QueryRowContext(ctx, seqQuery, log.TenantID)
+		if err := row.Scan(&maxSeq, &prevHash); err == nil && maxSeq.Valid {
+			log.SequenceNum = maxSeq.Int64 + 1
+			log.PrevHash = prevHash.String
+		} else {
+			log.SequenceNum = 1
+			log.PrevHash = "0000000000000000000000000000000000000000000000000000000000000000"
+		}
+		log.EntryHash = computeAuditEntryHash(log)
+	}
+
 	query := `
-		INSERT INTO audit_logs (id, tenant_id, actor_id, actor_type, action, resource_type, resource_id, details, ip_address, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+		INSERT INTO audit_logs (id, tenant_id, actor_id, actor_type, action, resource_type, resource_id, details, ip_address, sequence_num, prev_hash, entry_hash, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13);
 	`
 	_, err = s.db.ExecContext(ctx, query,
 		log.ID, log.TenantID, log.ActorID, log.ActorType, log.Action,
-		log.ResourceType, log.ResourceID, detailsJSON, log.IPAddress, log.CreatedAt,
+		log.ResourceType, log.ResourceID, detailsJSON, log.IPAddress,
+		log.SequenceNum, log.PrevHash, log.EntryHash, log.CreatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to record audit log: %w", err)
@@ -483,7 +509,7 @@ func (s *PostgresStore) RecordAuditLog(ctx context.Context, log *AuditLog) error
 
 func (s *PostgresStore) ListAuditLogs(ctx context.Context, tenantID string, filter AuditFilter) ([]*AuditLog, error) {
 	query := `
-		SELECT id, tenant_id, actor_id, actor_type, action, resource_type, resource_id, details, ip_address, created_at
+		SELECT id, tenant_id, actor_id, actor_type, action, resource_type, resource_id, details, ip_address, sequence_num, prev_hash, entry_hash, created_at
 		FROM audit_logs
 		WHERE tenant_id = $1
 		  AND ($2 = '' OR resource_type = $2)
@@ -511,17 +537,38 @@ func (s *PostgresStore) ListAuditLogs(ctx context.Context, tenantID string, filt
 	for rows.Next() {
 		var l AuditLog
 		var rawDetails []byte
+		var seq sql.NullInt64
+		var prevHash, entryHash sql.NullString
 		if err := rows.Scan(
 			&l.ID, &l.TenantID, &l.ActorID, &l.ActorType, &l.Action,
-			&l.ResourceType, &l.ResourceID, &rawDetails, &l.IPAddress, &l.CreatedAt,
+			&l.ResourceType, &l.ResourceID, &rawDetails, &l.IPAddress,
+			&seq, &prevHash, &entryHash, &l.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan audit log: %w", err)
 		}
 		_ = json.Unmarshal(rawDetails, &l.Details)
+		if seq.Valid {
+			l.SequenceNum = seq.Int64
+		}
+		if prevHash.Valid {
+			l.PrevHash = prevHash.String
+		}
+		if entryHash.Valid {
+			l.EntryHash = entryHash.String
+		}
 		list = append(list, &l)
 	}
 	if list == nil {
 		list = []*AuditLog{}
 	}
 	return list, nil
+}
+
+func (s *PostgresStore) PruneAuditLogs(ctx context.Context, tenantID string, before time.Time) (int64, error) {
+	query := `DELETE FROM audit_logs WHERE ($1 = '' OR tenant_id = $1) AND created_at < $2;`
+	res, err := s.db.ExecContext(ctx, query, tenantID, before)
+	if err != nil {
+		return 0, fmt.Errorf("failed to prune audit logs: %w", err)
+	}
+	return res.RowsAffected()
 }

@@ -59,7 +59,16 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("POST /api/v1/tokens", handlers.CreateAPIToken)
 	mux.HandleFunc("DELETE /api/v1/tokens/{id}", handlers.RevokeAPIToken)
 
+	// Audit Logs & Cryptographic Verification & Export
 	mux.HandleFunc("GET /api/v1/audit-logs", handlers.ListAuditLogs)
+	mux.HandleFunc("GET /api/v1/audit-logs/export", handlers.ExportAuditLogs)
+	mux.HandleFunc("GET /api/v1/governance/audit/verify", handlers.VerifyAuditChain)
+
+	// Governance & Policy Engine
+	mux.HandleFunc("GET /api/v1/governance/policy", handlers.GetGovernancePolicy)
+	mux.HandleFunc("PUT /api/v1/governance/policy", handlers.UpdateGovernancePolicy)
+	mux.HandleFunc("POST /api/v1/governance/policy/validate", handlers.ValidateWorkflowPolicy)
+	mux.HandleFunc("POST /api/v1/governance/retention/prune", handlers.PruneRetention)
 
 	// Dashboard UI & Static Assets
 	mux.HandleFunc("GET /{$}", handlers.DashboardUI)

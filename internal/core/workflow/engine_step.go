@@ -224,6 +224,20 @@ func (e *Engine) executeActionStep(
 		}
 	}
 
+	// 5.5 Governance runtime policy enforcement
+	if e.governance != nil {
+		if govErr := e.governance.EnforceActionRuntime(ctx, wf.TenantID, act, transformedPayload, renderedConfig); govErr != nil {
+			errStr := fmt.Sprintf("governance policy violation: %v", govErr)
+			actionStep.Status = "failed"
+			actionStep.Error = &errStr
+			actionStep.CompletedAt = time.Now().UTC()
+			actionStep.DurationMs = time.Since(actStart).Milliseconds()
+			e.recordStep(ctx, actionStep)
+
+			return e.applyOnError(ctx, exec, wf, ev, act, errStr, start)
+		}
+	}
+
 	result, err := executor.Execute(actCtx, ActionRequest{
 		WorkflowID:  wf.ID,
 		ActionID:    act.ID,

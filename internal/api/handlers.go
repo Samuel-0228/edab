@@ -11,6 +11,7 @@ import (
 	"kerob/internal/core/delivery"
 	"kerob/internal/core/errtracker"
 	"kerob/internal/core/event"
+	"kerob/internal/core/governance"
 	"kerob/internal/core/oauth"
 	"kerob/internal/core/routing"
 	"kerob/internal/core/schema"
@@ -60,6 +61,9 @@ type Handlers struct {
 
 	// Sagas & Human Approvals
 	approvals workflow.ApprovalStore
+
+	// Governance & Policy Engine
+	governanceEngine *governance.GovernanceEngine
 }
 
 // Config bundles all dependencies for NewHandlers.
@@ -85,6 +89,8 @@ type Config struct {
 	StreamReplay   *streaming.ReplayEngine
 
 	Approvals workflow.ApprovalStore
+
+	GovernanceEngine *governance.GovernanceEngine
 
 	Sources      sources.Store
 	Destinations destinations.Store
@@ -149,6 +155,14 @@ func NewHandlersFromConfig(cfg Config) *Handlers {
 		appStore = workflow.NewMemoryApprovalStore()
 	}
 
+	govEngine := cfg.GovernanceEngine
+	if govEngine == nil {
+		govEngine = governance.NewGovernanceEngine(nil)
+	}
+	if cfg.WorkflowEngine != nil && cfg.WorkflowEngine.Governance() == nil {
+		cfg.WorkflowEngine.SetGovernance(govEngine)
+	}
+
 	return &Handlers{
 		workflows:      cfg.Workflows,
 		executions:     cfg.Executions,
@@ -181,7 +195,8 @@ func NewHandlersFromConfig(cfg Config) *Handlers {
 		streamDLQStore: dlqStore,
 		streamReplay:   repEngine,
 
-		approvals: appStore,
+		approvals:        appStore,
+		governanceEngine: govEngine,
 	}
 }
 

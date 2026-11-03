@@ -19,26 +19,30 @@ type MemoryStore struct {
 	users        map[string]*User
 	usersByEmail map[string]string
 
-	memberships  map[string]*Membership // key: "tenant_id:user_id"
-	projects     map[string]*Project    // key: "tenant_id:project_id"
-	apiTokens    map[string]*APIToken   // key: token_id
-	tokensByHash map[string]string      // key: token_hash -> token_id
-	auditLogs    []*AuditLog
+	memberships     map[string]*Membership // key: "tenant_id:user_id"
+	projects        map[string]*Project    // key: "tenant_id:project_id"
+	apiTokens       map[string]*APIToken   // key: token_id
+	tokensByHash    map[string]string      // key: token_hash -> token_id
+	auditLogs       []*AuditLog
+	latestAuditSeq  map[string]int64
+	latestAuditHash map[string]string
 }
 
 // NewMemoryStore initializes a new MemoryStore pre-seeded with default tenant, user, and membership.
 func NewMemoryStore() *MemoryStore {
 	now := time.Now().UTC()
 	s := &MemoryStore{
-		tenants:       make(map[string]*Tenant),
-		tenantsBySlug: make(map[string]string),
-		users:         make(map[string]*User),
-		usersByEmail:  make(map[string]string),
-		memberships:   make(map[string]*Membership),
-		projects:      make(map[string]*Project),
-		apiTokens:     make(map[string]*APIToken),
-		tokensByHash:  make(map[string]string),
-		auditLogs:     make([]*AuditLog, 0),
+		tenants:         make(map[string]*Tenant),
+		tenantsBySlug:   make(map[string]string),
+		users:           make(map[string]*User),
+		usersByEmail:    make(map[string]string),
+		memberships:     make(map[string]*Membership),
+		projects:        make(map[string]*Project),
+		apiTokens:       make(map[string]*APIToken),
+		tokensByHash:    make(map[string]string),
+		auditLogs:       make([]*AuditLog, 0),
+		latestAuditSeq:  make(map[string]int64),
+		latestAuditHash: make(map[string]string),
 	}
 
 	// Seed default single-tenant setup
@@ -449,9 +453,25 @@ func (s *MemoryStore) RecordAuditLog(ctx context.Context, log *AuditLog) error {
 	if log.CreatedAt.IsZero() {
 		log.CreatedAt = time.Now().UTC()
 	}
+	if log.TenantID == "" {
+		log.TenantID = "default"
+	}
 
 	// Always scrub details before saving to prevent leak of secrets or credentials
 	log.Details = ScrubAuditDetails(log.Details)
+
+	if log.SequenceNum <= 0 {
+		s.latestAuditSeq[log.TenantID]++
+		log.SequenceNum = s.latestAuditSeq[log.TenantID]
+
+		prevHash := s.latestAuditHash[log.TenantID]
+		if prevHash == "" {
+			prevHash = "0000000000000000000000000000000000000000000000000000000000000000"
+		}
+		log.PrevHash = prevHash
+		log.EntryHash = computeAuditEntryHash(log)
+		s.latestAuditHash[log.TenantID] = log.EntryHash
+	}
 
 	cloned := *log
 	s.auditLogs = append(s.auditLogs, &cloned)
@@ -501,4 +521,21 @@ func (s *MemoryStore) ListAuditLogs(ctx context.Context, tenantID string, filter
 	}
 
 	return result, nil
+}
+
+func (s *MemoryStore) PruneAuditLogs(_ context.Context, tenantID string, before time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var kept []*AuditLog
+	var pruned int64
+	for _, l := range s.auditLogs {
+		if (tenantID == "" || l.TenantID == tenantID) && l.CreatedAt.Before(before) {
+			pruned++
+		} else {
+			kept = append(kept, l)
+		}
+	}
+	s.auditLogs = kept
+	return pruned, nil
 }

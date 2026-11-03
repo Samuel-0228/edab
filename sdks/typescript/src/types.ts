@@ -250,3 +250,49 @@ export interface DiffResult {
   changes: string[];
   diff_text?: string;
 }
+
+export interface GovernancePolicy {
+  tenant_id: string;
+  allowed_connectors: string[];
+  allowed_outbound_domains: string[];
+  max_workflow_retries: number;
+  max_payload_size_bytes: number;
+  data_retention_days: number;
+  require_approval_irreversible: boolean;
+  mask_pii: boolean;
+  mask_secrets: boolean;
+  blocked_keywords: string[];
+  allowed_environments: string[];
+  enforcement_mode: 'enforce' | 'audit';
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PolicyViolation {
+  rule: string;
+  field: string;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface PolicyValidationResult {
+  valid: boolean;
+  violations: PolicyViolation[];
+  tenant_id: string;
+}
+
+export interface AuditVerificationResult {
+  valid: boolean;
+  tenant_id: string;
+  total_records: number;
+  verified_at: string;
+  broken_at_sequence?: number;
+  error_message?: string;
+}
+
+export interface RetentionPruneResult {
+  pruned_audit_logs: number;
+  retention_days: number;
+  cutoff: string;
+  tenant_id: string;
+}

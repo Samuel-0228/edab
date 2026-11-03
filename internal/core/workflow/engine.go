@@ -39,6 +39,16 @@ type Engine struct {
 	activeRegistry  *ActiveExecutionRegistry
 	listener        ExecutionEventListener
 	approvals       ApprovalStore
+	governance      GovernanceEnforcer
+}
+
+// GovernanceEnforcer defines the governance capabilities required by the workflow engine.
+type GovernanceEnforcer interface {
+	EnforceActionRuntime(ctx context.Context, tenantID string, act ActionStep, payload map[string]any, renderedConfig json.RawMessage) error
+	MaskExecution(tenantID string, exec *Execution) *Execution
+	MaskStep(tenantID string, step *ExecutionStep) *ExecutionStep
+	MaskData(tenantID string, data any) any
+	MaskString(tenantID string, s string) string
 }
 
 // SetErrorTracker sets the error tracker provider for the workflow engine.
@@ -79,6 +89,16 @@ func (e *Engine) Approvals() ApprovalStore {
 // SetApprovalStore sets the persistent approval store.
 func (e *Engine) SetApprovalStore(store ApprovalStore) {
 	e.approvals = store
+}
+
+// Governance returns the engine's governance policy enforcer.
+func (e *Engine) Governance() GovernanceEnforcer {
+	return e.governance
+}
+
+// SetGovernance attaches the governance policy enforcer to the engine.
+func (e *Engine) SetGovernance(g GovernanceEnforcer) {
+	e.governance = g
 }
 
 // CancelExecution cancels an execution immediately if running, marks it cancelled,
@@ -627,6 +647,17 @@ func (e *Engine) recordDeadLetter(
 }
 
 func (e *Engine) recordStep(ctx context.Context, step *ExecutionStep) {
+	if step == nil {
+		return
+	}
+	if e.governance != nil {
+		exec, _ := e.executions.GetByID(ctx, step.ExecutionID)
+		tenantID := ""
+		if exec != nil {
+			tenantID = exec.TenantID
+		}
+		step = e.governance.MaskStep(tenantID, step)
+	}
 	if err := e.executions.RecordStep(ctx, step); err != nil {
 		slog.ErrorContext(ctx, "failed to persist execution step",
 			slog.String("execution_id", step.ExecutionID),
@@ -641,6 +672,15 @@ func (e *Engine) recordStep(ctx context.Context, step *ExecutionStep) {
 }
 
 func (e *Engine) updateStatus(ctx context.Context, id string, status ExecutionStatus, errStr *string, durationMs int64) {
+	if e.governance != nil && errStr != nil {
+		exec, _ := e.executions.GetByID(ctx, id)
+		tenantID := ""
+		if exec != nil {
+			tenantID = exec.TenantID
+		}
+		masked := e.governance.MaskString(tenantID, *errStr)
+		errStr = &masked
+	}
 	if err := e.executions.UpdateStatus(ctx, id, status, errStr, durationMs); err != nil {
 		slog.ErrorContext(ctx, "failed to persist execution status",
 			slog.String("execution_id", id),

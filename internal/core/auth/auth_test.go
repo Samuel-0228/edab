@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 func TestRolePermissions(t *testing.T) {
@@ -223,11 +224,27 @@ func TestMemoryStoreTenancyAndRBAC(t *testing.T) {
 	if logs[0].Details["secret_token"] != "[REDACTED]" {
 		t.Errorf("expected secret_token to be [REDACTED] in audit log, got %v", logs[0].Details["secret_token"])
 	}
+	if logs[0].SequenceNum != 1 {
+		t.Errorf("expected SequenceNum 1, got %d", logs[0].SequenceNum)
+	}
+	if logs[0].EntryHash == "" {
+		t.Errorf("expected EntryHash to be computed")
+	}
 
 	// Verify Tenant Isolation: Default tenant has 0 audit logs
 	defLogs, _ := store.ListAuditLogs(ctx, "default", AuditFilter{})
 	if len(defLogs) != 0 {
 		t.Errorf("expected 0 audit logs for default tenant, got %d", len(defLogs))
+	}
+
+	// Verify PruneAuditLogs
+	pruned, err := store.PruneAuditLogs(ctx, tenantB.ID, time.Now().UTC().Add(1*time.Hour))
+	if err != nil || pruned != 1 {
+		t.Fatalf("expected 1 pruned audit log, got %d (err: %v)", pruned, err)
+	}
+	afterPrune, _ := store.ListAuditLogs(ctx, tenantB.ID, AuditFilter{})
+	if len(afterPrune) != 0 {
+		t.Errorf("expected 0 audit logs after prune, got %d", len(afterPrune))
 	}
 }
 

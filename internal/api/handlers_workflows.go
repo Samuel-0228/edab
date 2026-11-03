@@ -8,6 +8,7 @@ import (
 
 	"kerob/internal/core/auth"
 	"kerob/internal/core/event"
+	"kerob/internal/core/governance"
 	"kerob/internal/core/workflow"
 )
 
@@ -66,6 +67,24 @@ func (h *Handlers) CreateWorkflow(w http.ResponseWriter, r *http.Request) {
 	if valErrs := ValidateWorkflowInput(&wf, false); len(valErrs) > 0 {
 		respondValidationError(w, r, valErrs)
 		return
+	}
+
+	if h.governanceEngine != nil {
+		if violations := h.governanceEngine.ValidateWorkflowPublish(r.Context(), wf.TenantID, &wf); len(violations) > 0 {
+			pol, _ := h.governanceEngine.GetPolicy(r.Context(), wf.TenantID)
+			if pol == nil || pol.EnforcementMode == governance.ModeEnforce {
+				h.recordAudit(r, "governance.publish_blocked", "workflow", wf.ID, map[string]any{
+					"name":       wf.Name,
+					"violations": violations,
+				})
+				respondPolicyViolations(w, violations)
+				return
+			}
+			h.recordAudit(r, "governance.publish_audit_warning", "workflow", wf.ID, map[string]any{
+				"name":       wf.Name,
+				"violations": violations,
+			})
+		}
 	}
 
 	created, err := h.workflows.Create(r.Context(), &wf)
@@ -154,6 +173,24 @@ func (h *Handlers) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 	if valErrs := ValidateWorkflowInput(&wf, false); len(valErrs) > 0 {
 		respondValidationError(w, r, valErrs)
 		return
+	}
+
+	if h.governanceEngine != nil {
+		if violations := h.governanceEngine.ValidateWorkflowPublish(r.Context(), wf.TenantID, &wf); len(violations) > 0 {
+			pol, _ := h.governanceEngine.GetPolicy(r.Context(), wf.TenantID)
+			if pol == nil || pol.EnforcementMode == governance.ModeEnforce {
+				h.recordAudit(r, "governance.publish_blocked", "workflow", wf.ID, map[string]any{
+					"name":       wf.Name,
+					"violations": violations,
+				})
+				respondPolicyViolations(w, violations)
+				return
+			}
+			h.recordAudit(r, "governance.publish_audit_warning", "workflow", wf.ID, map[string]any{
+				"name":       wf.Name,
+				"violations": violations,
+			})
+		}
 	}
 
 	updated, err := h.workflows.Update(r.Context(), &wf)

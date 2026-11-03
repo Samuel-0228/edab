@@ -106,6 +106,29 @@ func TestCLICommands(t *testing.T) {
 		})
 	})
 
+	// Mock governance policy
+	mux.HandleFunc("GET /api/v1/governance/policy", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(sdk.GovernancePolicy{
+			TenantID:               "tenant_test",
+			EnforcementMode:        "enforce",
+			MaxWorkflowRetries:     5,
+			DataRetentionDays:      90,
+			AllowedConnectors:      []string{"http"},
+			AllowedOutboundDomains: []string{"*.stripe.com"},
+		})
+	})
+
+	// Mock governance audit verify
+	mux.HandleFunc("GET /api/v1/governance/audit/verify", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(sdk.AuditVerificationResult{
+			Valid:        true,
+			TenantID:     "tenant_test",
+			TotalRecords: 10,
+		})
+	})
+
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
@@ -243,5 +266,18 @@ func TestCLICommands(t *testing.T) {
 	code = app.Execute([]string{"completion", "fish"})
 	if code != 0 || !strings.Contains(stdout.String(), "complete -c kerob") {
 		t.Fatalf("completion fish failed: code=%d", code)
+	}
+
+	// 13. Policy inspection and audit verify
+	stdout.Reset()
+	code = app.Execute([]string{"policy", "get"})
+	if code != 0 || !strings.Contains(stdout.String(), "tenant_test") {
+		t.Fatalf("policy get failed: code=%d out=%s", code, stdout.String())
+	}
+
+	stdout.Reset()
+	code = app.Execute([]string{"policy", "verify"})
+	if code != 0 || !strings.Contains(stdout.String(), "Audit chain is valid") {
+		t.Fatalf("policy verify failed: code=%d out=%s", code, stdout.String())
 	}
 }

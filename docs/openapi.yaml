@@ -1088,6 +1088,117 @@ paths:
                   event: { type: object }
                   executions: { type: array, items: { type: object } }
 
+  /api/v1/governance/policy:
+    get:
+      summary: Get active tenant governance policy
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Active governance policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernancePolicy'
+    put:
+      summary: Upsert tenant governance policy
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GovernancePolicy'
+      responses:
+        '200':
+          description: Updated governance policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GovernancePolicy'
+
+  /api/v1/governance/policy/validate:
+    post:
+      summary: Dry-run validate candidate workflow against governance policy
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Workflow'
+      responses:
+        '200':
+          description: Policy validation outcome
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyValidationResult'
+
+  /api/v1/governance/audit/verify:
+    get:
+      summary: Cryptographically verify tenant audit trail hash chain
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Verification report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditVerificationResult'
+
+  /api/v1/governance/retention/prune:
+    post:
+      summary: Clean up audit records exceeding configured data retention
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Retention prune report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPruneResult'
+
+  /api/v1/audit-logs/export:
+    get:
+      summary: Export audit logs in JSON or CSV format
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, csv], default: json }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: action
+          in: query
+          schema: { type: string }
+        - name: actor_id
+          in: query
+          schema: { type: string }
+        - name: resource_type
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Exported audit logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+            text/csv:
+              schema:
+                type: string
+
 components:
   securitySchemes:
     BearerAuth:
@@ -1286,4 +1397,63 @@ components:
         execution_ids:
           type: array
           items: { type: string }
+
+    GovernancePolicy:
+      type: object
+      required: [tenant_id, allowed_connectors, allowed_outbound_domains, max_workflow_retries, max_payload_size_bytes, data_retention_days, enforcement_mode]
+      properties:
+        tenant_id: { type: string }
+        allowed_connectors: { type: array, items: { type: string } }
+        allowed_outbound_domains: { type: array, items: { type: string } }
+        max_workflow_retries: { type: integer, default: 5 }
+        max_payload_size_bytes: { type: integer, format: int64, default: 1048576 }
+        data_retention_days: { type: integer, default: 90 }
+        require_approval_irreversible: { type: boolean, default: false }
+        mask_pii: { type: boolean, default: true }
+        mask_secrets: { type: boolean, default: true }
+        blocked_keywords: { type: array, items: { type: string } }
+        allowed_environments: { type: array, items: { type: string } }
+        enforcement_mode: { type: string, enum: [enforce, audit], default: enforce }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PolicyViolation:
+      type: object
+      required: [rule, field, message]
+      properties:
+        rule: { type: string }
+        field: { type: string }
+        message: { type: string }
+        details: { type: object }
+
+    PolicyValidationResult:
+      type: object
+      required: [valid, violations, tenant_id]
+      properties:
+        valid: { type: boolean }
+        violations:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolicyViolation'
+        tenant_id: { type: string }
+
+    AuditVerificationResult:
+      type: object
+      required: [valid, tenant_id, total_records, verified_at]
+      properties:
+        valid: { type: boolean }
+        tenant_id: { type: string }
+        total_records: { type: integer }
+        verified_at: { type: string, format: date-time }
+        broken_at_sequence: { type: integer, format: int64 }
+        error_message: { type: string }
+
+    RetentionPruneResult:
+      type: object
+      required: [pruned_audit_logs, retention_days, cutoff, tenant_id]
+      properties:
+        pruned_audit_logs: { type: integer, format: int64 }
+        retention_days: { type: integer }
+        cutoff: { type: string, format: date-time }
+        tenant_id: { type: string }
 

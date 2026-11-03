@@ -723,3 +723,66 @@ func (c *Client) BulkDiscardFailures(ctx context.Context, ids []string) (int, er
 	}
 	return res.DiscardedCount, nil
 }
+
+// GetGovernancePolicy retrieves the active tenant governance policy.
+func (c *Client) GetGovernancePolicy(ctx context.Context) (*GovernancePolicy, error) {
+	var p GovernancePolicy
+	if err := c.request(ctx, http.MethodGet, "/api/v1/governance/policy", nil, nil, &p); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// UpdateGovernancePolicy creates or updates the tenant governance policy.
+func (c *Client) UpdateGovernancePolicy(ctx context.Context, policy *GovernancePolicy) (*GovernancePolicy, error) {
+	var p GovernancePolicy
+	if err := c.request(ctx, http.MethodPut, "/api/v1/governance/policy", nil, policy, &p); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// ValidateWorkflowPolicy dry-runs policy checks against candidate workflow configuration.
+func (c *Client) ValidateWorkflowPolicy(ctx context.Context, wf any) (*PolicyValidationResult, error) {
+	var res PolicyValidationResult
+	if err := c.request(ctx, http.MethodPost, "/api/v1/governance/policy/validate", nil, wf, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// VerifyAuditChain validates the tamper-evident cryptographic hash chain of the tenant's audit trail.
+func (c *Client) VerifyAuditChain(ctx context.Context) (*AuditVerificationResult, error) {
+	var res AuditVerificationResult
+	if err := c.request(ctx, http.MethodGet, "/api/v1/governance/audit/verify", nil, nil, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// ExportAuditLogs downloads audit logs formatted as JSON or CSV.
+func (c *Client) ExportAuditLogs(ctx context.Context, format string, filter map[string]string) ([]byte, error) {
+	q := url.Values{}
+	if format != "" {
+		q.Set("format", format)
+	}
+	for k, v := range filter {
+		if v != "" {
+			q.Set(k, v)
+		}
+	}
+	var raw json.RawMessage
+	if err := c.request(ctx, http.MethodGet, "/api/v1/audit-logs/export", q, nil, &raw); err != nil {
+		return nil, err
+	}
+	return []byte(raw), nil
+}
+
+// PruneRetention triggers a cleanup of historical records exceeding the configured retention period.
+func (c *Client) PruneRetention(ctx context.Context) (*RetentionPruneResult, error) {
+	var res RetentionPruneResult
+	if err := c.request(ctx, http.MethodPost, "/api/v1/governance/retention/prune", nil, nil, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}

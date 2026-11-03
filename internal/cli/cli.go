@@ -186,6 +186,13 @@ func (a *App) Execute(args []string) int {
 		}
 		return 0
 
+	case "policy", "governance":
+		if err := runGovernance(ctx, client, formatter, cmdArgs); err != nil {
+			formatter.PrintError("%s", err.Error())
+			return 1
+		}
+		return 0
+
 	default:
 		formatter.PrintError("Unknown command %q. Run 'kerob --help' for available commands.", cmd)
 		return 1
@@ -208,6 +215,7 @@ COMMANDS:
   execution               Inspect and operate execution runs (list, get, retry, pause, resume, cancel, compensate)
   logs <execution_id>     View granular step execution audit logs and output
   dlq                     Dead-letter queue inspection and retries (list, retry, discard)
+  policy                  Governance and policy management (get, verify, prune, export)
   completion <shell>      Generate shell completion script (bash, zsh, fish)
 
 GLOBAL FLAGS:

@@ -132,4 +132,36 @@ describe('Kerob TypeScript SDK', () => {
       ])
     );
   });
+
+  it('fetches governance policy and verifies audit chain', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({
+        tenant_id: 'tenant-123',
+        enforcement_mode: 'enforce',
+        allowed_connectors: ['http', 'telegram']
+      })
+    });
+
+    const pol = await client.getGovernancePolicy();
+    expect(pol.tenant_id).toBe('tenant-123');
+    expect(pol.allowed_connectors).toContain('http');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({
+        valid: true,
+        tenant_id: 'tenant-123',
+        total_records: 12
+      })
+    });
+
+    const chainRes = await client.verifyAuditChain();
+    expect(chainRes.valid).toBe(true);
+    expect(chainRes.total_records).toBe(12);
+  });
 });

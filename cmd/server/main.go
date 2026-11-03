@@ -19,6 +19,7 @@ import (
 	"kerob/internal/core/delivery"
 	"kerob/internal/core/errtracker"
 	"kerob/internal/core/event"
+	"kerob/internal/core/governance"
 	"kerob/internal/core/routing"
 	"kerob/internal/core/schema"
 	"kerob/internal/core/streaming"
@@ -172,6 +173,11 @@ func main() {
 	errtracker.SetGlobalProvider(errTracker)
 	wfEngine.SetErrorTracker(errTracker)
 	wfEngine.SetApprovalStore(approvalStore)
+
+	govStore := governance.NewPostgresStore(db)
+	govEngine := governance.NewGovernanceEngine(govStore)
+	wfEngine.SetGovernance(govEngine)
+
 	actionRegistry.Register(actions.NewCallWorkflowActionExecutor(wfEngine))
 
 	// 6. Initialize Engine Pipeline & Delivery Worker
@@ -328,11 +334,12 @@ func main() {
 		AuthStore:    authStore,
 		MultiTenancy: cfg.MultiTenancyEnabled,
 
-		SchemaRegistry: schemaRegistry,
-		StreamAdapter:  streamAdapter,
-		StreamOffsets:  streamOffsetStore,
-		StreamDLQStore: streamDLQStore,
-		Approvals:      approvalStore,
+		SchemaRegistry:   schemaRegistry,
+		StreamAdapter:    streamAdapter,
+		StreamOffsets:    streamOffsetStore,
+		StreamDLQStore:   streamDLQStore,
+		Approvals:        approvalStore,
+		GovernanceEngine: govEngine,
 	})
 
 	server := api.NewServerWithOptions(cfg.ServerPort, handlers, api.ServerOptions{

@@ -313,3 +313,50 @@ type DiffResult struct {
 	Changes    []string `json:"changes,omitempty"`
 	DiffText   string   `json:"diff_text,omitempty"`
 }
+
+// GovernancePolicy defines enterprise security, rate limiting, and retention policies.
+type GovernancePolicy struct {
+	TenantID                              string    `json:"tenant_id"`
+	AllowedConnectors                     []string  `json:"allowed_connectors"`
+	AllowedOutboundDomains                []string  `json:"allowed_outbound_domains"`
+	MaxWorkflowRetries                    int       `json:"max_workflow_retries"`
+	MaxPayloadSizeBytes                   int64     `json:"max_payload_size_bytes"`
+	DataRetentionDays                     int       `json:"data_retention_days"`
+	RequireApprovalForIrreversibleActions bool      `json:"require_approval_irreversible"`
+	MaskPII                               bool      `json:"mask_pii"`
+	MaskSecrets                           bool      `json:"mask_secrets"`
+	BlockedKeywords                       []string  `json:"blocked_keywords"`
+	AllowedEnvironments                   []string  `json:"allowed_environments"`
+	EnforcementMode                       string    `json:"enforcement_mode"`
+	CreatedAt                             time.Time `json:"created_at"`
+	UpdatedAt                             time.Time `json:"updated_at"`
+}
+
+type PolicyViolation struct {
+	Rule    string         `json:"rule"`
+	Field   string         `json:"field"`
+	Message string         `json:"message"`
+	Details map[string]any `json:"details,omitempty"`
+}
+
+type PolicyValidationResult struct {
+	Valid      bool              `json:"valid"`
+	Violations []PolicyViolation `json:"violations"`
+	TenantID   string            `json:"tenant_id"`
+}
+
+type AuditVerificationResult struct {
+	Valid            bool      `json:"valid"`
+	TenantID         string    `json:"tenant_id"`
+	TotalRecords     int       `json:"total_records"`
+	VerifiedAt       time.Time `json:"verified_at"`
+	BrokenAtSequence *int64    `json:"broken_at_sequence,omitempty"`
+	ErrorMessage     string    `json:"error_message,omitempty"`
+}
+
+type RetentionPruneResult struct {
+	PrunedAuditLogs int64     `json:"pruned_audit_logs"`
+	RetentionDays   int       `json:"retention_days"`
+	Cutoff          time.Time `json:"cutoff"`
+	TenantID        string    `json:"tenant_id"`
+}

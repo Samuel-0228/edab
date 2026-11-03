@@ -61,7 +61,12 @@ const (
 	PermWebhooksWrite Permission = "webhooks:write"
 
 	// Audit Logs
-	PermAuditRead Permission = "audit:read"
+	PermAuditRead   Permission = "audit:read"
+	PermAuditExport Permission = "audit:export"
+
+	// Governance & Policy
+	PermPolicyRead  Permission = "policy:read"
+	PermPolicyWrite Permission = "policy:write"
 
 	// Administrative Management
 	PermMembersManage Permission = "members:manage"
@@ -114,20 +119,20 @@ func (r Role) HasPermission(p Permission) bool {
 		return p != PermTenantManage
 
 	case RoleEditor:
-		// Editor has read, write, execute, retry, replay across resources, but no member/token management
+		// Editor has read, write, execute, retry, replay across resources, but no member/token management or policy write
 		switch p {
-		case PermMembersManage, PermTokensManage, PermTenantManage:
+		case PermMembersManage, PermTokensManage, PermTenantManage, PermPolicyWrite:
 			return false
 		default:
 			return true
 		}
 
 	case RoleOperator:
-		// Operator has all viewer reads plus execution triggers, retries, and event replay
+		// Operator has all viewer reads plus execution triggers, retries, audit export, and event replay
 		switch p {
 		case PermWorkflowsRead, PermIntegrationsRead, PermCredentialsRead,
 			PermEventsRead, PermExecutionsRead, PermDLQRead, PermWebhooksRead,
-			PermAuditRead, PermWorkflowsExecute, PermEventsWrite,
+			PermAuditRead, PermAuditExport, PermPolicyRead, PermWorkflowsExecute, PermEventsWrite,
 			PermEventsReplay, PermExecutionsRetry, PermExecutionsCancel, PermExecutionsPause,
 			PermExecutionsCompensate, PermApprovalsRead, PermApprovalsWrite, PermDLQRetry:
 			return true
@@ -140,7 +145,7 @@ func (r Role) HasPermission(p Permission) bool {
 		switch p {
 		case PermWorkflowsRead, PermIntegrationsRead, PermCredentialsRead,
 			PermEventsRead, PermExecutionsRead, PermDLQRead, PermWebhooksRead,
-			PermApprovalsRead, PermAuditRead:
+			PermApprovalsRead, PermAuditRead, PermPolicyRead:
 			return true
 		default:
 			return false
@@ -220,6 +225,9 @@ type AuditLog struct {
 	ResourceID   string         `json:"resource_id"`
 	Details      map[string]any `json:"details,omitempty"`
 	IPAddress    string         `json:"ip_address,omitempty"`
+	SequenceNum  int64          `json:"sequence_num,omitempty"`
+	PrevHash     string         `json:"prev_hash,omitempty"`
+	EntryHash    string         `json:"entry_hash,omitempty"`
 	CreatedAt    time.Time      `json:"created_at"`
 }
 
