@@ -193,6 +193,13 @@ func (a *App) Execute(args []string) int {
 		}
 		return 0
 
+	case "ai":
+		if err := runAI(ctx, client, formatter, cmdArgs); err != nil {
+			formatter.PrintError("%s", err.Error())
+			return 1
+		}
+		return 0
+
 	default:
 		formatter.PrintError("Unknown command %q. Run 'kerob --help' for available commands.", cmd)
 		return 1
@@ -216,6 +223,7 @@ COMMANDS:
   logs <execution_id>     View granular step execution audit logs and output
   dlq                     Dead-letter queue inspection and retries (list, retry, discard)
   policy                  Governance and policy management (get, verify, prune, export)
+  ai                      Controlled AI assistance (status, draft, explain, proposals, accept, reject)
   completion <shell>      Generate shell completion script (bash, zsh, fish)
 
 GLOBAL FLAGS:

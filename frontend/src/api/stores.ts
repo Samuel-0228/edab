@@ -260,6 +260,15 @@ export function closeTourModal(): void {
   tourModal.set(false);
 }
 
+// AI Draft Modal
+export const aiDraftModal = writable<boolean>(false);
+export function openAIDraftModal(): void {
+  aiDraftModal.set(true);
+}
+export function closeAIDraftModal(): void {
+  aiDraftModal.set(false);
+}
+
 // Confirm Dialog
 export interface ConfirmModalState {
   open: boolean;

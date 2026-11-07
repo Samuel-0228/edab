@@ -47,6 +47,7 @@
   import ExecutionDetailModal from './components/modals/ExecutionDetailModal.svelte';
   import TourModal from './components/modals/TourModal.svelte';
   import ConfirmModal from './components/modals/ConfirmModal.svelte';
+  import AIDraftModal from './components/modals/AIDraftModal.svelte';
 </script>
 
 <div class="noise-overlay"></div>
@@ -116,6 +117,7 @@
 <ExecutionDetailModal />
 <TourModal />
 <ConfirmModal />
+<AIDraftModal />
 <NotificationToast />
 
 <style>

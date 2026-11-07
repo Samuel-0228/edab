@@ -534,3 +534,53 @@ export interface Identity {
   scopes: string[];
 }
 
+// --- Controlled AI Assistance Types ---
+
+export type AITaskType =
+  | 'draft_workflow'
+  | 'map_fields'
+  | 'generate_conditions'
+  | 'suggest_transformation'
+  | 'explain_failure';
+
+export type AIProposalStatus = 'pending_approval' | 'accepted' | 'rejected';
+
+export interface AIValidationResult {
+  valid: boolean;
+  errors?: string[];
+  warnings?: string[];
+}
+
+export interface AIProposal {
+  id: string;
+  tenant_id: string;
+  task: AITaskType;
+  status: AIProposalStatus;
+  prompt: string;
+  explanation: string;
+  content: unknown;
+  validation: AIValidationResult;
+  warnings?: string[];
+  model_used: string;
+  tokens_used: number;
+  created_at: string;
+  decided_at?: string;
+  decided_by?: string;
+}
+
+export interface AIStatusResponse {
+  enabled: boolean;
+  provider: string;
+  model: string;
+  tenant_id: string;
+  opted_out: boolean;
+  max_tokens: number;
+  timeout_seconds: number;
+  available_tasks: string[];
+}
+
+export interface AIAcceptProposalResult {
+  proposal: AIProposal;
+  applied_workflow_id?: string;
+}
+

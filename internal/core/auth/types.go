@@ -68,6 +68,10 @@ const (
 	PermPolicyRead  Permission = "policy:read"
 	PermPolicyWrite Permission = "policy:write"
 
+	// Controlled AI Assistance
+	PermAIUse   Permission = "ai:use"
+	PermAIAdmin Permission = "ai:admin"
+
 	// Administrative Management
 	PermMembersManage Permission = "members:manage"
 	PermTokensManage  Permission = "tokens:manage"
@@ -119,20 +123,20 @@ func (r Role) HasPermission(p Permission) bool {
 		return p != PermTenantManage
 
 	case RoleEditor:
-		// Editor has read, write, execute, retry, replay across resources, but no member/token management or policy write
+		// Editor has read, write, execute, retry, replay across resources, but no member/token management, policy write, or ai admin
 		switch p {
-		case PermMembersManage, PermTokensManage, PermTenantManage, PermPolicyWrite:
+		case PermMembersManage, PermTokensManage, PermTenantManage, PermPolicyWrite, PermAIAdmin:
 			return false
 		default:
 			return true
 		}
 
 	case RoleOperator:
-		// Operator has all viewer reads plus execution triggers, retries, audit export, and event replay
+		// Operator has all viewer reads plus execution triggers, retries, audit export, ai use, and event replay
 		switch p {
 		case PermWorkflowsRead, PermIntegrationsRead, PermCredentialsRead,
 			PermEventsRead, PermExecutionsRead, PermDLQRead, PermWebhooksRead,
-			PermAuditRead, PermAuditExport, PermPolicyRead, PermWorkflowsExecute, PermEventsWrite,
+			PermAuditRead, PermAuditExport, PermPolicyRead, PermAIUse, PermWorkflowsExecute, PermEventsWrite,
 			PermEventsReplay, PermExecutionsRetry, PermExecutionsCancel, PermExecutionsPause,
 			PermExecutionsCompensate, PermApprovalsRead, PermApprovalsWrite, PermDLQRetry:
 			return true
@@ -145,7 +149,7 @@ func (r Role) HasPermission(p Permission) bool {
 		switch p {
 		case PermWorkflowsRead, PermIntegrationsRead, PermCredentialsRead,
 			PermEventsRead, PermExecutionsRead, PermDLQRead, PermWebhooksRead,
-			PermApprovalsRead, PermAuditRead, PermPolicyRead:
+			PermApprovalsRead, PermAuditRead, PermPolicyRead, PermAIUse:
 			return true
 		default:
 			return false

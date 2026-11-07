@@ -138,4 +138,16 @@ func TestEmbeddedMigrations(t *testing.T) {
 			t.Errorf("expected 000008_governance_and_policy_engine.up.sql to contain '%s'", kw)
 		}
 	}
+
+	// Verify 000009 defines controlled AI assistance proposals
+	v9Up, ok := upMigrations["000009_controlled_ai_assistance.up.sql"]
+	if !ok {
+		t.Fatal("000009_controlled_ai_assistance.up.sql is required")
+	}
+	v9Required := []string{"ai_proposals", "prompt", "explanation", "content", "validation", "model_used", "tokens_used", "decided_at", "decided_by"}
+	for _, kw := range v9Required {
+		if !strings.Contains(v9Up, kw) {
+			t.Errorf("expected 000009_controlled_ai_assistance.up.sql to contain '%s'", kw)
+		}
+	}
 }

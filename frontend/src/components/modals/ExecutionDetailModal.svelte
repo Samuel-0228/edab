@@ -22,6 +22,8 @@
   let loading = $state(false);
   let retrying = $state(false);
   let operating = $state(false);
+  let explaining = $state(false);
+  let aiDiagnosis = $state<string | null>(null);
 
   $effect(() => {
     if ($executionDetailModal.open && $executionDetailModal.executionId) {
@@ -30,6 +32,7 @@
       execution = null;
       pendingApproval = null;
       approvalNote = '';
+      aiDiagnosis = null;
     }
   });
 
@@ -106,6 +109,25 @@
       notifyError(msg);
     } finally {
       operating = false;
+    }
+  }
+
+  async function handleExplainFailure() {
+    if (!execution) return;
+    explaining = true;
+    try {
+      const p = await api.explainFailureAI({
+        workflow_id: execution.workflow_id,
+        execution_id: execution.id,
+        error: execution.error || 'Execution encountered an error'
+      });
+      aiDiagnosis = p.explanation;
+      notifySuccess('AI failure analysis generated');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'AI diagnosis failed';
+      notifyError(msg);
+    } finally {
+      explaining = false;
     }
   }
 
@@ -274,6 +296,17 @@
         </div>
       {/if}
 
+      <!-- AI Diagnosis Card if present -->
+      {#if aiDiagnosis}
+        <div class="ai-diagnosis-card">
+          <div class="ai-diagnosis-header">
+            <span class="ai-diagnosis-title">AI Failure Diagnosis</span>
+            <Badge variant="stage-if">ASSIST</Badge>
+          </div>
+          <div class="ai-diagnosis-body">{aiDiagnosis}</div>
+        </div>
+      {/if}
+
       <!-- Step Lifecycle Timeline -->
       <div class="steps-section">
         <h4 class="steps-title">GRANULAR STAGES TIMELINE</h4>
@@ -344,6 +377,9 @@
     <Button variant="ghost" size="sm" onclick={closeExecutionDetail}>Close</Button>
     {#if execution && canOperateActions($currentIdentity?.role)}
       {#if execution.status === 'failed'}
+        <Button variant="secondary" size="sm" loading={explaining} onclick={handleExplainFailure}>
+          Diagnose with AI
+        </Button>
         <Button variant="primary" size="sm" icon="refresh" loading={retrying} onclick={handleRetry}>
           Retry Execution
         </Button>
@@ -482,6 +518,37 @@
     border: 1px solid var(--accent-crimson-border);
     border-radius: var(--radius-sm);
     padding: 12px 14px;
+  }
+
+  .ai-diagnosis-card {
+    background: rgba(14, 165, 233, 0.08);
+    border: 1px solid rgba(14, 165, 233, 0.25);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .ai-diagnosis-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .ai-diagnosis-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--accent-cyan);
+    text-transform: uppercase;
+  }
+
+  .ai-diagnosis-body {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-primary);
   }
 
   .error-title {

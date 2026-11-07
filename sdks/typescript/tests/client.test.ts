@@ -164,4 +164,48 @@ describe('Kerob TypeScript SDK', () => {
     expect(chainRes.valid).toBe(true);
     expect(chainRes.total_records).toBe(12);
   });
+
+  it('interacts with controlled AI assistance layer', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({
+        enabled: true,
+        provider: 'mock',
+        model: 'gpt-4o',
+        tenant_id: 'tenant-123',
+        opted_out: false,
+        max_tokens: 2000,
+        timeout_seconds: 30,
+        available_tasks: ['draft_workflow', 'map_fields', 'generate_conditions']
+      })
+    });
+
+    const status = await client.getAIStatus();
+    expect(status.enabled).toBe(true);
+    expect(status.available_tasks).toContain('draft_workflow');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({
+        id: 'prop-101',
+        tenant_id: 'tenant-123',
+        task: 'draft_workflow',
+        status: 'pending_approval',
+        prompt: 'Sync Github issues',
+        explanation: 'Proposed workflow drafted',
+        validation: { valid: true },
+        tokens_used: 150,
+        created_at: new Date().toISOString()
+      })
+    });
+
+    const proposal = await client.draftWorkflowAI({ prompt: 'Sync Github issues' });
+    expect(proposal.id).toBe('prop-101');
+    expect(proposal.status).toBe('pending_approval');
+    expect(proposal.validation.valid).toBe(true);
+  });
 });

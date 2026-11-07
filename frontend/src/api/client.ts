@@ -31,7 +31,10 @@ import type {
   StreamConsumerOffset,
   StreamDeadLetterEvent,
   StreamReplayResult,
-  Approval
+  Approval,
+  AIProposal,
+  AIStatusResponse,
+  AIAcceptProposalResult
 } from './types';
 
 export class ApiError extends Error {
@@ -654,6 +657,75 @@ export class KerobApiClient {
     const qs = params.toString();
     const data = await this.request<AuditLog[]>(`/api/v1/audit-logs${qs ? `?${qs}` : ''}`);
     return Array.isArray(data) ? data : [];
+  }
+
+  // --- Controlled AI Assistance ---
+  public async getAIStatus(): Promise<AIStatusResponse> {
+    return this.request<AIStatusResponse>('/api/v1/ai/status');
+  }
+
+  public async draftWorkflowAI(prompt: string, allowedConnectors?: string[]): Promise<AIProposal> {
+    return this.request<AIProposal>('/api/v1/ai/draft-workflow', {
+      method: 'POST',
+      body: JSON.stringify({ prompt, allowed_connectors: allowedConnectors })
+    });
+  }
+
+  public async mapFieldsAI(req: { source_schema?: Record<string, unknown>; target_schema?: Record<string, unknown>; sample_payload?: Record<string, unknown>; description?: string }): Promise<AIProposal> {
+    return this.request<AIProposal>('/api/v1/ai/map-fields', {
+      method: 'POST',
+      body: JSON.stringify(req)
+    });
+  }
+
+  public async generateConditionsAI(criteria: string, samplePayload?: Record<string, unknown>): Promise<AIProposal> {
+    return this.request<AIProposal>('/api/v1/ai/generate-conditions', {
+      method: 'POST',
+      body: JSON.stringify({ criteria, sample_payload: samplePayload })
+    });
+  }
+
+  public async suggestTransformationsAI(goal: string, inputPayload: Record<string, unknown>, desiredOutput?: Record<string, unknown>): Promise<AIProposal> {
+    return this.request<AIProposal>('/api/v1/ai/suggest-transformations', {
+      method: 'POST',
+      body: JSON.stringify({ goal, input_payload: inputPayload, desired_output: desiredOutput })
+    });
+  }
+
+  public async explainFailureAI(req: { workflow_id: string; execution_id: string; step_id?: string; step_type?: string; error: string; step_input?: unknown; step_output?: unknown }): Promise<AIProposal> {
+    return this.request<AIProposal>('/api/v1/ai/explain-failure', {
+      method: 'POST',
+      body: JSON.stringify(req)
+    });
+  }
+
+  public async listAIProposals(filter?: { task_type?: string; status?: string; limit?: number; offset?: number }): Promise<AIProposal[]> {
+    const params = new URLSearchParams();
+    if (filter?.task_type) params.set('task_type', filter.task_type);
+    if (filter?.status) params.set('status', filter.status);
+    if (filter?.limit) params.set('limit', String(filter.limit));
+    if (filter?.offset) params.set('offset', String(filter.offset));
+    const qs = params.toString();
+    const data = await this.request<AIProposal[]>(`/api/v1/ai/proposals${qs ? `?${qs}` : ''}`);
+    return Array.isArray(data) ? data : [];
+  }
+
+  public async getAIProposal(id: string): Promise<AIProposal> {
+    return this.request<AIProposal>(`/api/v1/ai/proposals/${encodeURIComponent(id)}`);
+  }
+
+  public async acceptAIProposal(id: string, createWorkflow: boolean = false): Promise<AIAcceptProposalResult> {
+    return this.request<AIAcceptProposalResult>(`/api/v1/ai/proposals/${encodeURIComponent(id)}/accept${createWorkflow ? '?create_workflow=true' : ''}`, {
+      method: 'POST',
+      body: JSON.stringify({ create_workflow: createWorkflow })
+    });
+  }
+
+  public async rejectAIProposal(id: string, reason?: string): Promise<AIProposal> {
+    return this.request<AIProposal>(`/api/v1/ai/proposals/${encodeURIComponent(id)}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || '' })
+    });
   }
 }
 

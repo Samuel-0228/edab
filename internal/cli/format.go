@@ -72,6 +72,26 @@ func (f *OutputFormatter) PrintSuccess(format string, a ...any) {
 	_, _ = fmt.Fprintf(f.Out, "✓ "+format+"\n", a...)
 }
 
+// PrintInfo prints an informational message.
+func (f *OutputFormatter) PrintInfo(format string, a ...any) {
+	if f.JSONMode {
+		msg := fmt.Sprintf(format, a...)
+		_ = f.PrintJSON(map[string]any{"status": "info", "message": msg})
+		return
+	}
+	_, _ = fmt.Fprintf(f.Out, "ℹ "+format+"\n", a...)
+}
+
+// PrintWarning prints a warning message.
+func (f *OutputFormatter) PrintWarning(format string, a ...any) {
+	if f.JSONMode {
+		msg := fmt.Sprintf(format, a...)
+		_ = f.PrintJSON(map[string]any{"status": "warning", "message": msg})
+		return
+	}
+	_, _ = fmt.Fprintf(f.ErrOut, "⚠ "+format+"\n", a...)
+}
+
 // PrintError prints an error message to standard error.
 func (f *OutputFormatter) PrintError(format string, a ...any) {
 	if f.JSONMode {

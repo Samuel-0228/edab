@@ -14,6 +14,7 @@ import (
 	"kerob/internal/api"
 	"kerob/internal/cli"
 	"kerob/internal/config"
+	"kerob/internal/core/ai"
 	"kerob/internal/core/auth"
 	"kerob/internal/core/credentials"
 	"kerob/internal/core/delivery"
@@ -178,6 +179,22 @@ func main() {
 	govEngine := governance.NewGovernanceEngine(govStore)
 	wfEngine.SetGovernance(govEngine)
 
+	aiStore := ai.NewPostgresStore(db)
+	var aiProvider ai.Provider
+	if cfg.AIProvider == "openai" && cfg.AIAPIKey != "" {
+		aiProvider = ai.NewOpenAIProvider(cfg.AIEndpoint, cfg.AIAPIKey, cfg.AIModel, cfg.AITimeout)
+	} else {
+		aiProvider = ai.NewMockProvider()
+	}
+	aiService := ai.NewService(ai.ServiceConfig{
+		Enabled:             cfg.AIEnabled,
+		Provider:            aiProvider,
+		Store:               aiStore,
+		MaxTokensPerRequest: cfg.AIMaxTokens,
+		MonthlyTokenLimit:   int(cfg.AIMonthlyTokenLimit),
+		Timeout:             cfg.AITimeout,
+	})
+
 	actionRegistry.Register(actions.NewCallWorkflowActionExecutor(wfEngine))
 
 	// 6. Initialize Engine Pipeline & Delivery Worker
@@ -340,6 +357,7 @@ func main() {
 		StreamDLQStore:   streamDLQStore,
 		Approvals:        approvalStore,
 		GovernanceEngine: govEngine,
+		AIService:        aiService,
 	})
 
 	server := api.NewServerWithOptions(cfg.ServerPort, handlers, api.ServerOptions{

@@ -1199,6 +1199,206 @@ paths:
               schema:
                 type: string
 
+  /api/v1/ai/status:
+    get:
+      summary: Get AI assistance subsystem operational status and quota
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: AI status report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIStatusResponse'
+
+  /api/v1/ai/draft-workflow:
+    post:
+      summary: Draft workflow JSON definition using AI
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIDraftWorkflowRequest'
+      responses:
+        '201':
+          description: Created AI proposal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIProposal'
+
+  /api/v1/ai/map-fields:
+    post:
+      summary: Propose payload field mappings using AI
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIMapFieldsRequest'
+      responses:
+        '201':
+          description: Field mapping proposal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIProposal'
+
+  /api/v1/ai/generate-conditions:
+    post:
+      summary: Generate step condition tree from criteria using AI
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIGenerateConditionsRequest'
+      responses:
+        '201':
+          description: Condition generation proposal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIProposal'
+
+  /api/v1/ai/suggest-transformations:
+    post:
+      summary: Suggest payload transformation steps using AI
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AISuggestTransformationRequest'
+      responses:
+        '201':
+          description: Transformation suggestion proposal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIProposal'
+
+  /api/v1/ai/explain-failure:
+    post:
+      summary: Diagnose execution failure using AI
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIExplainFailureRequest'
+      responses:
+        '201':
+          description: Failure explanation proposal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIProposal'
+
+  /api/v1/ai/proposals:
+    get:
+      summary: List AI proposals for the tenant
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: task_type
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Array of AI proposals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AIProposal'
+
+  /api/v1/ai/proposals/{id}:
+    get:
+      summary: Retrieve a single AI proposal
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Proposal details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIProposal'
+
+  /api/v1/ai/proposals/{id}/accept:
+    post:
+      summary: Explicitly approve an AI proposal
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: create_workflow
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Accepted proposal result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIAcceptProposalResult'
+
+  /api/v1/ai/proposals/{id}/reject:
+    post:
+      summary: Explicitly reject an AI proposal
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        '200':
+          description: Rejected proposal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIProposal'
+
 components:
   securitySchemes:
     BearerAuth:
@@ -1456,4 +1656,107 @@ components:
         retention_days: { type: integer }
         cutoff: { type: string, format: date-time }
         tenant_id: { type: string }
+
+    AIStatusResponse:
+      type: object
+      required: [enabled, provider, model, tenant_id]
+      properties:
+        enabled: { type: boolean }
+        provider: { type: string }
+        model: { type: string }
+        tenant_id: { type: string }
+        opted_out: { type: boolean }
+        max_tokens: { type: integer }
+        timeout_seconds: { type: integer }
+        available_tasks:
+          type: array
+          items: { type: string }
+
+    AIValidationResult:
+      type: object
+      required: [valid]
+      properties:
+        valid: { type: boolean }
+        errors:
+          type: array
+          items: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+
+    AIProposal:
+      type: object
+      required: [id, tenant_id, task, status, prompt, validation, created_at]
+      properties:
+        id: { type: string }
+        tenant_id: { type: string }
+        task:
+          type: string
+          enum: [draft_workflow, map_fields, generate_conditions, suggest_transformation, explain_failure]
+        status:
+          type: string
+          enum: [pending_approval, accepted, rejected]
+        prompt: { type: string }
+        explanation: { type: string }
+        content: { type: object }
+        validation:
+          $ref: '#/components/schemas/AIValidationResult'
+        model_used: { type: string }
+        tokens_used: { type: integer }
+        created_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time }
+        decided_by: { type: string }
+
+    AIDraftWorkflowRequest:
+      type: object
+      required: [prompt]
+      properties:
+        prompt: { type: string }
+        allowed_connectors:
+          type: array
+          items: { type: string }
+        context: { type: object }
+
+    AIMapFieldsRequest:
+      type: object
+      properties:
+        source_schema: { type: object }
+        target_schema: { type: object }
+        sample_payload: { type: object }
+        description: { type: string }
+
+    AIGenerateConditionsRequest:
+      type: object
+      required: [criteria]
+      properties:
+        criteria: { type: string }
+        sample_payload: { type: object }
+
+    AISuggestTransformationRequest:
+      type: object
+      required: [input_payload]
+      properties:
+        input_payload: { type: object }
+        desired_output: { type: object }
+        goal: { type: string }
+
+    AIExplainFailureRequest:
+      type: object
+      required: [workflow_id, execution_id, error]
+      properties:
+        workflow_id: { type: string }
+        execution_id: { type: string }
+        step_id: { type: string }
+        step_type: { type: string }
+        error: { type: string }
+        step_input: { type: object }
+        step_output: { type: object }
+
+    AIAcceptProposalResult:
+      type: object
+      required: [proposal]
+      properties:
+        proposal:
+          $ref: '#/components/schemas/AIProposal'
+        applied_workflow_id: { type: string }
 

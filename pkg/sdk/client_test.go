@@ -148,6 +148,42 @@ func TestGoSDKClient(t *testing.T) {
 		})
 	})
 
+	// Mock /api/v1/ai/status
+	mux.HandleFunc("GET /api/v1/ai/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(AIStatusResponse{
+			Enabled:  true,
+			Provider: "mock",
+			Model:    "gpt-4o",
+			TenantID: "tenant_test",
+		})
+	})
+
+	// Mock /api/v1/ai/draft-workflow
+	mux.HandleFunc("POST /api/v1/ai/draft-workflow", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(AIProposal{
+			ID:         "prop_1",
+			TenantID:   "tenant_test",
+			Task:       AITaskDraftWorkflow,
+			Status:     AIStatusPendingApproval,
+			Prompt:     "Forward Telegram alerts",
+			Validation: AIValidationResult{Valid: true},
+		})
+	})
+
+	// Mock /api/v1/ai/proposals/prop_1/accept
+	mux.HandleFunc("POST /api/v1/ai/proposals/prop_1/accept", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(AIAcceptProposalResult{
+			Proposal: &AIProposal{
+				ID:     "prop_1",
+				Status: AIStatusAccepted,
+			},
+			AppliedWorkflowID: "wf_created_1",
+		})
+	})
+
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
@@ -268,6 +304,31 @@ func TestGoSDKClient(t *testing.T) {
 	}
 	if !valRes.Valid {
 		t.Fatalf("expected valid dry run result")
+	}
+
+	// 12. Test AI Assistance Layer
+	aiStatus, err := client.GetAIStatus(ctx)
+	if err != nil {
+		t.Fatalf("GetAIStatus failed: %v", err)
+	}
+	if !aiStatus.Enabled || aiStatus.Provider != "mock" {
+		t.Fatalf("unexpected AI status: %+v", aiStatus)
+	}
+
+	proposal, err := client.DraftWorkflowAI(ctx, AIDraftWorkflowRequest{Prompt: "Forward Telegram alerts"})
+	if err != nil {
+		t.Fatalf("DraftWorkflowAI failed: %v", err)
+	}
+	if proposal.ID != "prop_1" || proposal.Status != AIStatusPendingApproval {
+		t.Fatalf("unexpected AI proposal: %+v", proposal)
+	}
+
+	acceptRes, err := client.AcceptAIProposal(ctx, "prop_1", true)
+	if err != nil {
+		t.Fatalf("AcceptAIProposal failed: %v", err)
+	}
+	if acceptRes.Proposal == nil || acceptRes.Proposal.Status != AIStatusAccepted {
+		t.Fatalf("unexpected AcceptAIProposal response: %+v", acceptRes)
 	}
 }
 

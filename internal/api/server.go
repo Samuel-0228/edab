@@ -70,6 +70,18 @@ func NewServerWithOptions(port string, handlers *Handlers, options ServerOptions
 	mux.HandleFunc("POST /api/v1/governance/policy/validate", handlers.ValidateWorkflowPolicy)
 	mux.HandleFunc("POST /api/v1/governance/retention/prune", handlers.PruneRetention)
 
+	// Controlled AI Assistance
+	mux.HandleFunc("GET /api/v1/ai/status", handlers.GetAIStatus)
+	mux.HandleFunc("POST /api/v1/ai/draft-workflow", handlers.DraftWorkflowAI)
+	mux.HandleFunc("POST /api/v1/ai/map-fields", handlers.MapFieldsAI)
+	mux.HandleFunc("POST /api/v1/ai/generate-conditions", handlers.GenerateConditionsAI)
+	mux.HandleFunc("POST /api/v1/ai/suggest-transformations", handlers.SuggestTransformationsAI)
+	mux.HandleFunc("POST /api/v1/ai/explain-failure", handlers.ExplainFailureAI)
+	mux.HandleFunc("GET /api/v1/ai/proposals", handlers.ListAIProposals)
+	mux.HandleFunc("GET /api/v1/ai/proposals/{id}", handlers.GetAIProposal)
+	mux.HandleFunc("POST /api/v1/ai/proposals/{id}/accept", handlers.AcceptAIProposal)
+	mux.HandleFunc("POST /api/v1/ai/proposals/{id}/reject", handlers.RejectAIProposal)
+
 	// Dashboard UI & Static Assets
 	mux.HandleFunc("GET /{$}", handlers.DashboardUI)
 	mux.HandleFunc("GET /ui", handlers.DashboardUI)

@@ -786,3 +786,113 @@ func (c *Client) PruneRetention(ctx context.Context) (*RetentionPruneResult, err
 	}
 	return &res, nil
 }
+
+// GetAIStatus fetches the controlled AI layer configuration and operational availability.
+func (c *Client) GetAIStatus(ctx context.Context) (*AIStatusResponse, error) {
+	var res AIStatusResponse
+	if err := c.request(ctx, http.MethodGet, "/api/v1/ai/status", nil, nil, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// DraftWorkflowAI proposes a declarative workflow JSON definition from natural language instructions.
+func (c *Client) DraftWorkflowAI(ctx context.Context, req AIDraftWorkflowRequest) (*AIProposal, error) {
+	var res AIProposal
+	if err := c.request(ctx, http.MethodPost, "/api/v1/ai/draft-workflow", nil, req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// MapFieldsAI proposes key-to-key payload mappings between source schemas and target destinations.
+func (c *Client) MapFieldsAI(ctx context.Context, req AIMapFieldsRequest) (*AIProposal, error) {
+	var res AIProposal
+	if err := c.request(ctx, http.MethodPost, "/api/v1/ai/map-fields", nil, req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// GenerateConditionsAI generates structured step filter conditions from user intent.
+func (c *Client) GenerateConditionsAI(ctx context.Context, req AIGenerateConditionsRequest) (*AIProposal, error) {
+	var res AIProposal
+	if err := c.request(ctx, http.MethodPost, "/api/v1/ai/generate-conditions", nil, req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// SuggestTransformationsAI suggests payload filters, transformations, or field rewrites.
+func (c *Client) SuggestTransformationsAI(ctx context.Context, req AISuggestTransformationRequest) (*AIProposal, error) {
+	var res AIProposal
+	if err := c.request(ctx, http.MethodPost, "/api/v1/ai/suggest-transformations", nil, req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// ExplainFailureAI analyzes execution errors, dead letters, and trace logs to produce safe human explanations.
+func (c *Client) ExplainFailureAI(ctx context.Context, req AIExplainFailureRequest) (*AIProposal, error) {
+	var res AIProposal
+	if err := c.request(ctx, http.MethodPost, "/api/v1/ai/explain-failure", nil, req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// ListAIProposals retrieves historical AI proposals for the caller's tenant.
+func (c *Client) ListAIProposals(ctx context.Context, task string, status string, limit, offset int) ([]*AIProposal, error) {
+	q := url.Values{}
+	if task != "" {
+		q.Set("task_type", task)
+	}
+	if status != "" {
+		q.Set("status", status)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+
+	var res []*AIProposal
+	if err := c.request(ctx, http.MethodGet, "/api/v1/ai/proposals", q, nil, &res); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// GetAIProposal retrieves a single AI proposal by ID.
+func (c *Client) GetAIProposal(ctx context.Context, id string) (*AIProposal, error) {
+	var res AIProposal
+	if err := c.request(ctx, http.MethodGet, "/api/v1/ai/proposals/"+url.PathEscape(id), nil, nil, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// AcceptAIProposal records explicit human approval and optionally instantiates the workflow.
+func (c *Client) AcceptAIProposal(ctx context.Context, id string, createWorkflow bool) (*AIAcceptProposalResult, error) {
+	q := url.Values{}
+	if createWorkflow {
+		q.Set("create_workflow", "true")
+	}
+
+	var res AIAcceptProposalResult
+	if err := c.request(ctx, http.MethodPost, "/api/v1/ai/proposals/"+url.PathEscape(id)+"/accept", q, map[string]bool{"create_workflow": createWorkflow}, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// RejectAIProposal records explicit human rejection of an AI proposal with an optional reason note.
+func (c *Client) RejectAIProposal(ctx context.Context, id string, reason string) (*AIProposal, error) {
+	var res AIProposal
+	body := map[string]string{"reason": reason}
+	if err := c.request(ctx, http.MethodPost, "/api/v1/ai/proposals/"+url.PathEscape(id)+"/reject", nil, body, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}

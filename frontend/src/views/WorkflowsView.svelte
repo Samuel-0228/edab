@@ -5,6 +5,7 @@
     openCreateWorkflow,
     openEditWorkflow,
     openDispatchModal,
+    openAIDraftModal,
     showConfirm,
     summaryCounts,
     notifySuccess,
@@ -143,6 +144,9 @@
       </div>
 
       <div class="toolbar-actions">
+        <Button variant="secondary" size="sm" onclick={() => openAIDraftModal()}>
+          Draft with AI
+        </Button>
         <Button variant="secondary" size="sm" onclick={() => openDispatchModal()}>
           Test Trigger
         </Button>

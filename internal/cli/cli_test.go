@@ -129,6 +129,43 @@ func TestCLICommands(t *testing.T) {
 		})
 	})
 
+	// Mock AI status
+	mux.HandleFunc("GET /api/v1/ai/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(sdk.AIStatusResponse{
+			Enabled:        true,
+			Provider:       "mock",
+			Model:          "gpt-4o",
+			TenantID:       "tenant_test",
+			MaxTokens:      2000,
+			TimeoutSeconds: 30,
+		})
+	})
+
+	// Mock AI draft
+	mux.HandleFunc("POST /api/v1/ai/draft-workflow", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(sdk.AIProposal{
+			ID:          "prop_99",
+			Status:      sdk.AIStatusPendingApproval,
+			Task:        sdk.AITaskDraftWorkflow,
+			Explanation: "Proposed draft workflow",
+			Validation:  sdk.AIValidationResult{Valid: true},
+		})
+	})
+
+	// Mock AI accept
+	mux.HandleFunc("POST /api/v1/ai/proposals/prop_99/accept", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(sdk.AIAcceptProposalResult{
+			Proposal: &sdk.AIProposal{
+				ID:     "prop_99",
+				Status: sdk.AIStatusAccepted,
+			},
+			AppliedWorkflowID: "wf_ai_created",
+		})
+	})
+
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
@@ -279,5 +316,24 @@ func TestCLICommands(t *testing.T) {
 	code = app.Execute([]string{"policy", "verify"})
 	if code != 0 || !strings.Contains(stdout.String(), "Audit chain is valid") {
 		t.Fatalf("policy verify failed: code=%d out=%s", code, stdout.String())
+	}
+
+	// 14. AI status, draft, and accept
+	stdout.Reset()
+	code = app.Execute([]string{"ai", "status"})
+	if code != 0 || !strings.Contains(stdout.String(), "mock") {
+		t.Fatalf("ai status failed: code=%d out=%s", code, stdout.String())
+	}
+
+	stdout.Reset()
+	code = app.Execute([]string{"ai", "draft", "Send Slack alert on failed payments"})
+	if code != 0 || !strings.Contains(stdout.String(), "prop_99") {
+		t.Fatalf("ai draft failed: code=%d out=%s", code, stdout.String())
+	}
+
+	stdout.Reset()
+	code = app.Execute([]string{"ai", "accept", "prop_99", "--create-workflow"})
+	if code != 0 || !strings.Contains(stdout.String(), "accepted") {
+		t.Fatalf("ai accept failed: code=%d out=%s", code, stdout.String())
 	}
 }

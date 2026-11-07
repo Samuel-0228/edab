@@ -332,4 +332,56 @@ describe('KerobApiClient', () => {
     expect(compensated.status).toBe('compensated');
     expect(mockFetch.mock.calls[2][0]).toContain('/api/v1/executions/exec-1/compensate');
   });
+
+  it('supports Controlled AI Assistance operations', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({
+        enabled: true,
+        provider: 'mock',
+        model: 'gpt-4o',
+        tenant_id: 'default',
+        opted_out: false,
+        max_tokens: 2000,
+        timeout_seconds: 30,
+        available_tasks: ['draft_workflow', 'explain_failure']
+      })
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const status = await client.getAIStatus();
+    expect(status.enabled).toBe(true);
+    expect(mockFetch.mock.calls[0][0]).toContain('/api/v1/ai/status');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({
+        id: 'prop-1',
+        task: 'draft_workflow',
+        status: 'pending_approval',
+        validation: { valid: true }
+      })
+    });
+    const proposal = await client.draftWorkflowAI('Create Slack notification on webhook');
+    expect(proposal.id).toBe('prop-1');
+    expect(proposal.status).toBe('pending_approval');
+    expect(mockFetch.mock.calls[1][0]).toContain('/api/v1/ai/draft-workflow');
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({
+        proposal: { id: 'prop-1', status: 'accepted' },
+        applied_workflow_id: 'wf-100'
+      })
+    });
+    const accepted = await client.acceptAIProposal('prop-1', true);
+    expect(accepted.applied_workflow_id).toBe('wf-100');
+    expect(mockFetch.mock.calls[2][0]).toContain('/api/v1/ai/proposals/prop-1/accept?create_workflow=true');
+  });
 });

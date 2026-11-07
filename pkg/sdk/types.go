@@ -360,3 +360,97 @@ type RetentionPruneResult struct {
 	Cutoff          time.Time `json:"cutoff"`
 	TenantID        string    `json:"tenant_id"`
 }
+
+// Controlled AI Assistance Types
+
+type AITaskType string
+
+const (
+	AITaskDraftWorkflow         AITaskType = "draft_workflow"
+	AITaskMapFields             AITaskType = "map_fields"
+	AITaskGenerateConditions    AITaskType = "generate_conditions"
+	AITaskSuggestTransformation AITaskType = "suggest_transformation"
+	AITaskExplainFailure        AITaskType = "explain_failure"
+)
+
+type AIProposalStatus string
+
+const (
+	AIStatusPendingApproval AIProposalStatus = "pending_approval"
+	AIStatusAccepted        AIProposalStatus = "accepted"
+	AIStatusRejected        AIProposalStatus = "rejected"
+)
+
+type AIValidationResult struct {
+	Valid    bool     `json:"valid"`
+	Errors   []string `json:"errors,omitempty"`
+	Warnings []string `json:"warnings,omitempty"`
+}
+
+type AIProposal struct {
+	ID          string             `json:"id"`
+	TenantID    string             `json:"tenant_id"`
+	Task        AITaskType         `json:"task"`
+	Status      AIProposalStatus   `json:"status"`
+	Prompt      string             `json:"prompt"`
+	Explanation string             `json:"explanation"`
+	Content     json.RawMessage    `json:"content"`
+	Validation  AIValidationResult `json:"validation"`
+	Warnings    []string           `json:"warnings,omitempty"`
+	ModelUsed   string             `json:"model_used"`
+	TokensUsed  int                `json:"tokens_used"`
+	CreatedAt   time.Time          `json:"created_at"`
+	DecidedAt   *time.Time         `json:"decided_at,omitempty"`
+	DecidedBy   *string            `json:"decided_by,omitempty"`
+}
+
+type AIDraftWorkflowRequest struct {
+	Prompt            string         `json:"prompt"`
+	AllowedConnectors []string       `json:"allowed_connectors,omitempty"`
+	Context           map[string]any `json:"context,omitempty"`
+}
+
+type AIMapFieldsRequest struct {
+	SourceSchema  map[string]any `json:"source_schema,omitempty"`
+	TargetSchema  map[string]any `json:"target_schema,omitempty"`
+	SamplePayload map[string]any `json:"sample_payload,omitempty"`
+	Description   string         `json:"description,omitempty"`
+}
+
+type AIGenerateConditionsRequest struct {
+	Criteria      string         `json:"criteria"`
+	SamplePayload map[string]any `json:"sample_payload,omitempty"`
+}
+
+type AISuggestTransformationRequest struct {
+	InputPayload  map[string]any `json:"input_payload"`
+	DesiredOutput map[string]any `json:"desired_output,omitempty"`
+	Goal          string         `json:"goal,omitempty"`
+}
+
+type AIExplainFailureRequest struct {
+	WorkflowID  string          `json:"workflow_id"`
+	ExecutionID string          `json:"execution_id"`
+	StepID      string          `json:"step_id,omitempty"`
+	StepType    string          `json:"step_type,omitempty"`
+	Error       string          `json:"error"`
+	StepInput   any             `json:"step_input,omitempty"`
+	StepOutput  any             `json:"step_output,omitempty"`
+	Config      json.RawMessage `json:"config,omitempty"`
+}
+
+type AIStatusResponse struct {
+	Enabled        bool     `json:"enabled"`
+	Provider       string   `json:"provider"`
+	Model          string   `json:"model"`
+	TenantID       string   `json:"tenant_id"`
+	OptedOut       bool     `json:"opted_out"`
+	MaxTokens      int      `json:"max_tokens"`
+	TimeoutSeconds int      `json:"timeout_seconds"`
+	AvailableTasks []string `json:"available_tasks"`
+}
+
+type AIAcceptProposalResult struct {
+	Proposal          *AIProposal `json:"proposal"`
+	AppliedWorkflowID string      `json:"applied_workflow_id,omitempty"`
+}

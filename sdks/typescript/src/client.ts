@@ -15,7 +15,15 @@ import type {
   GovernancePolicy,
   PolicyValidationResult,
   AuditVerificationResult,
-  RetentionPruneResult
+  RetentionPruneResult,
+  AIStatusResponse,
+  AIProposal,
+  AIDraftWorkflowRequest,
+  AIMapFieldsRequest,
+  AIGenerateConditionsRequest,
+  AISuggestTransformationRequest,
+  AIExplainFailureRequest,
+  AIAcceptProposalResult
 } from './types.js';
 
 export class KerobApiError extends Error {
@@ -339,5 +347,58 @@ export class KerobClient {
 
   public async pruneRetention(): Promise<RetentionPruneResult> {
     return this.request<RetentionPruneResult>('POST', '/api/v1/governance/retention/prune');
+  }
+
+  // --- Controlled AI Assistance ---
+  public async getAIStatus(): Promise<AIStatusResponse> {
+    return this.request<AIStatusResponse>('GET', '/api/v1/ai/status');
+  }
+
+  public async draftWorkflowAI(req: AIDraftWorkflowRequest): Promise<AIProposal> {
+    return this.request<AIProposal>('POST', '/api/v1/ai/draft-workflow', { body: req });
+  }
+
+  public async mapFieldsAI(req: AIMapFieldsRequest): Promise<AIProposal> {
+    return this.request<AIProposal>('POST', '/api/v1/ai/map-fields', { body: req });
+  }
+
+  public async generateConditionsAI(req: AIGenerateConditionsRequest): Promise<AIProposal> {
+    return this.request<AIProposal>('POST', '/api/v1/ai/generate-conditions', { body: req });
+  }
+
+  public async suggestTransformationsAI(req: AISuggestTransformationRequest): Promise<AIProposal> {
+    return this.request<AIProposal>('POST', '/api/v1/ai/suggest-transformations', { body: req });
+  }
+
+  public async explainFailureAI(req: AIExplainFailureRequest): Promise<AIProposal> {
+    return this.request<AIProposal>('POST', '/api/v1/ai/explain-failure', { body: req });
+  }
+
+  public async listAIProposals(params?: { task?: string; status?: string; limit?: number; offset?: number }): Promise<AIProposal[]> {
+    return this.request<AIProposal[]>('GET', '/api/v1/ai/proposals', {
+      query: {
+        task_type: params?.task,
+        status: params?.status,
+        limit: params?.limit ? String(params.limit) : undefined,
+        offset: params?.offset ? String(params.offset) : undefined
+      }
+    });
+  }
+
+  public async getAIProposal(id: string): Promise<AIProposal> {
+    return this.request<AIProposal>('GET', `/api/v1/ai/proposals/${encodeURIComponent(id)}`);
+  }
+
+  public async acceptAIProposal(id: string, createWorkflow: boolean = false): Promise<AIAcceptProposalResult> {
+    return this.request<AIAcceptProposalResult>('POST', `/api/v1/ai/proposals/${encodeURIComponent(id)}/accept`, {
+      query: createWorkflow ? { create_workflow: 'true' } : undefined,
+      body: { create_workflow: createWorkflow }
+    });
+  }
+
+  public async rejectAIProposal(id: string, reason?: string): Promise<AIProposal> {
+    return this.request<AIProposal>('POST', `/api/v1/ai/proposals/${encodeURIComponent(id)}/reject`, {
+      body: { reason: reason || '' }
+    });
   }
 }

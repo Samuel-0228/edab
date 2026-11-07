@@ -6,6 +6,7 @@ import (
 
 	"kerob/internal/adapters/destinations"
 	"kerob/internal/adapters/sources"
+	"kerob/internal/core/ai"
 	"kerob/internal/core/auth"
 	"kerob/internal/core/credentials"
 	"kerob/internal/core/delivery"
@@ -64,6 +65,9 @@ type Handlers struct {
 
 	// Governance & Policy Engine
 	governanceEngine *governance.GovernanceEngine
+
+	// Controlled AI Assistance
+	aiService *ai.Service
 }
 
 // Config bundles all dependencies for NewHandlers.
@@ -91,6 +95,7 @@ type Config struct {
 	Approvals workflow.ApprovalStore
 
 	GovernanceEngine *governance.GovernanceEngine
+	AIService        *ai.Service
 
 	Sources      sources.Store
 	Destinations destinations.Store
@@ -163,6 +168,14 @@ func NewHandlersFromConfig(cfg Config) *Handlers {
 		cfg.WorkflowEngine.SetGovernance(govEngine)
 	}
 
+	aiSvc := cfg.AIService
+	if aiSvc == nil {
+		aiSvc = ai.NewService(ai.ServiceConfig{
+			Enabled: false,
+			Store:   ai.NewMemoryStore(),
+		})
+	}
+
 	return &Handlers{
 		workflows:      cfg.Workflows,
 		executions:     cfg.Executions,
@@ -197,6 +210,7 @@ func NewHandlersFromConfig(cfg Config) *Handlers {
 
 		approvals:        appStore,
 		governanceEngine: govEngine,
+		aiService:        aiSvc,
 	}
 }
 
@@ -275,6 +289,16 @@ func (h *Handlers) Tracker() errtracker.Provider {
 		return h.errorTracker
 	}
 	return errtracker.NewLogProvider()
+}
+
+// GovernanceEngine returns the active governance engine.
+func (h *Handlers) GovernanceEngine() *governance.GovernanceEngine {
+	return h.governanceEngine
+}
+
+// AIService returns the active AI assistance service.
+func (h *Handlers) AIService() *ai.Service {
+	return h.aiService
 }
 
 // NewHandlers provides backwards-compatible initialization.

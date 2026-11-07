@@ -50,6 +50,16 @@ type Config struct {
 	StreamDataDir    string
 	StreamPartitions int
 	StreamGroupID    string
+
+	// Controlled AI Assistance
+	AIEnabled           bool
+	AIProvider          string
+	AIModel             string
+	AIEndpoint          string
+	AIAPIKey            string
+	AIMaxTokens         int
+	AITimeout           time.Duration
+	AIMonthlyTokenLimit int64
 }
 
 // Load loads configuration from environment variables with sensible defaults.
@@ -92,6 +102,15 @@ func Load() *Config {
 		StreamDataDir:              getEnv("STREAM_DATA_DIR", "./data/streams"),
 		StreamPartitions:           getEnvInt("STREAM_PARTITIONS", 4),
 		StreamGroupID:              getEnv("STREAM_GROUP_ID", "kerob-engine-workers"),
+
+		AIEnabled:           getEnvBool("AI_ENABLED", false),
+		AIProvider:          getEnv("AI_PROVIDER", "mock"),
+		AIModel:             getEnv("AI_MODEL", "gpt-4o-mini"),
+		AIEndpoint:          getEnv("AI_ENDPOINT", ""),
+		AIAPIKey:            getEnv("AI_API_KEY", ""),
+		AIMaxTokens:         getEnvInt("AI_MAX_TOKENS", 2048),
+		AITimeout:           getEnvDuration("AI_TIMEOUT", 30*time.Second),
+		AIMonthlyTokenLimit: int64(getEnvInt("AI_MONTHLY_TOKEN_LIMIT", 1000000)),
 	}
 }
 
