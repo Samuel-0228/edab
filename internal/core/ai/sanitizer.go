@@ -21,6 +21,15 @@ func SanitizePromptInput(input any) any {
 	return deepCleanSecrets(masked)
 }
 
+// SanitizeString scrubs a string prompt directly and safely returns a string.
+func SanitizeString(s string) string {
+	res := SanitizePromptInput(s)
+	if str, ok := res.(string); ok {
+		return str
+	}
+	return s
+}
+
 func deepCleanSecrets(v any) any {
 	switch val := v.(type) {
 	case string:

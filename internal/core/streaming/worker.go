@@ -102,7 +102,7 @@ func (w *StreamWorker) processRecord(ctx context.Context, record *Record) error 
 	if w.schemaRegistry != nil {
 		valErrs, err := w.schemaRegistry.ValidateEvent(ctx, ev.TenantID, ev.EventType, ev.Payload)
 		if err != nil || len(valErrs) > 0 {
-			errReason := "schema validation failed"
+			var errReason string
 			if err != nil {
 				errReason = fmt.Sprintf("schema error: %s", err.Error())
 			} else {

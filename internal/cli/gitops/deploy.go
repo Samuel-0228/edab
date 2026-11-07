@@ -151,9 +151,6 @@ func DeployPath(ctx context.Context, client *sdk.Client, targetPath string, opts
 		// Convert remote SDK model to workflow.Workflow for diffing
 		var remoteWf *workflow.Workflow
 		if remote != nil {
-			remBytes, _ := os.ReadFile(file) // temporary buffer
-			remBytes, _ = os.ReadFile(file)
-			_ = remBytes
 			remoteWf = &workflow.Workflow{
 				ID:          remote.ID,
 				Name:        remote.Name,

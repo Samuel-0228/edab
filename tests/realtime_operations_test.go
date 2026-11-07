@@ -268,7 +268,7 @@ func TestExecutionCancellationPropagation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cancel request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK from cancel, got %d", resp.StatusCode)
@@ -377,7 +377,7 @@ func TestExecutionPauseAndResume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pause request failed: %v", err)
 	}
-	defer pauseResp.Body.Close()
+	defer func() { _ = pauseResp.Body.Close() }()
 
 	if pauseResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 from pause, got %d", pauseResp.StatusCode)
@@ -412,7 +412,7 @@ func TestExecutionPauseAndResume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resume request failed: %v", err)
 	}
-	defer resumeResp.Body.Close()
+	defer func() { _ = resumeResp.Body.Close() }()
 
 	if resumeResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 from resume, got %d", resumeResp.StatusCode)
@@ -457,7 +457,7 @@ func TestServerSentEventsOperationsStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to connect to SSE stream: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 from stream, got %d", resp.StatusCode)
@@ -599,7 +599,7 @@ func TestRealtimeOperationsRBACAndCrossTenantDenial(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected 403 for viewer cancelling, got %d", resp.StatusCode)
 	}
@@ -611,7 +611,7 @@ func TestRealtimeOperationsRBACAndCrossTenantDenial(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer respBeta.Body.Close()
+	defer func() { _ = respBeta.Body.Close() }()
 	if respBeta.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected 403 for cross-tenant cancel, got %d", respBeta.StatusCode)
 	}
@@ -629,7 +629,7 @@ func TestRealtimeOperationsRBACAndCrossTenantDenial(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer respPause.Body.Close()
+	defer func() { _ = respPause.Body.Close() }()
 	if respPause.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected 403 for cross-tenant pause, got %d", respPause.StatusCode)
 	}
@@ -641,7 +641,7 @@ func TestRealtimeOperationsRBACAndCrossTenantDenial(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer respResume.Body.Close()
+	defer func() { _ = respResume.Body.Close() }()
 	if respResume.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected 403 for cross-tenant resume, got %d", respResume.StatusCode)
 	}

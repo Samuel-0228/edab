@@ -66,10 +66,8 @@ func AssertConnectorContract(t *testing.T, c connector.Connector) {
 		}
 	}
 
-	// Verify configuration validation
-	if err := c.ValidateConfig(nil); err != nil {
-		// Validating nil may or may not succeed based on requirements, but should not panic
-	}
+	// Verify configuration validation does not panic on nil
+	_ = c.ValidateConfig(nil)
 }
 
 func TestTokenSecrecyContract(t *testing.T) {

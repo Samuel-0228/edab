@@ -153,7 +153,7 @@ func (c *Client) request(ctx context.Context, method, path string, query url.Val
 	if err != nil {
 		return fmt.Errorf("request to %s %s failed: %w", method, path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {

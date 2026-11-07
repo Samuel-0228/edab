@@ -267,11 +267,6 @@ func (ge *GovernanceEngine) MaskExecution(tenantID string, exec *workflow.Execut
 		tenantID = "default"
 	}
 
-	policy, _ := ge.store.GetPolicy(context.Background(), tenantID)
-	if policy == nil {
-		policy = DefaultPolicy(tenantID)
-	}
-
 	cp := *exec
 	if len(exec.Steps) > 0 {
 		cp.Steps = make([]workflow.ExecutionStep, len(exec.Steps))

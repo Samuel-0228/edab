@@ -160,12 +160,6 @@ func (m *MemoryStreamAdapter) Subscribe(ctx context.Context, groupID string, top
 		m.groupOffsets[groupID] = make(map[string]map[int32]int64)
 	}
 
-	var chansToClean []struct {
-		topic string
-		part  int32
-		ch    chan struct{}
-	}
-
 	// For each topic and each partition, spawn a dedicated consumer goroutine
 	for _, topic := range topics {
 		if _, ok := m.groupOffsets[groupID][topic]; !ok {
@@ -180,11 +174,6 @@ func (m *MemoryStreamAdapter) Subscribe(ctx context.Context, groupID string, top
 			top := topic
 			ch := make(chan struct{}, 10)
 			m.listeners[top][part] = append(m.listeners[top][part], ch)
-			chansToClean = append(chansToClean, struct {
-				topic string
-				part  int32
-				ch    chan struct{}
-			}{top, part, ch})
 
 			go m.consumePartition(ctx, groupID, top, part, ch, handler)
 		}

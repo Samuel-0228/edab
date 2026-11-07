@@ -44,7 +44,7 @@ func TestPartitionStrategyOrderingKeys(t *testing.T) {
 
 func TestMemoryStreamAdapterPublishAndConsume(t *testing.T) {
 	adapter := streaming.NewMemoryStreamAdapter(4)
-	defer adapter.Close()
+	defer func() { _ = adapter.Close() }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -124,7 +124,7 @@ func TestMemoryStreamAdapterPublishAndConsume(t *testing.T) {
 
 func TestStreamWorkerSchemaValidationAndDLQ(t *testing.T) {
 	adapter := streaming.NewMemoryStreamAdapter(2)
-	defer adapter.Close()
+	defer func() { _ = adapter.Close() }()
 
 	schemaStore := schema.NewMemoryStore()
 	schemaReg := schema.NewRegistry(schemaStore)
@@ -214,7 +214,7 @@ func TestDurableFileStreamAdapterPersistenceAndRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	offsetStore := streaming.NewMemoryOffsetStore()
 
@@ -258,7 +258,7 @@ func TestDurableFileStreamAdapterPersistenceAndRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to re-open durable adapter: %v", err)
 	}
-	defer adapter2.Close()
+	defer func() { _ = adapter2.Close() }()
 
 	// Write 6th record and ensure offset continues from 5
 	ev6, _ := event.New("sensor", "m-5", "metric.temperature", map[string]any{"val": 31}, nil)

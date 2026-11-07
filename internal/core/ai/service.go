@@ -132,7 +132,7 @@ func (s *Service) DraftWorkflow(ctx context.Context, tenantID, _ string, req Dra
 		return nil, err
 	}
 
-	sanitizedPrompt := SanitizePromptInput(req.Prompt).(string)
+	sanitizedPrompt := SanitizeString(req.Prompt)
 	sanitizedContext := SanitizePromptInput(req.Context)
 
 	ctxTimeout, cancel := context.WithTimeout(ctx, s.timeout)
@@ -173,7 +173,7 @@ func (s *Service) MapFields(ctx context.Context, tenantID, _ string, req MapFiel
 	}
 
 	sanitizedSample := SanitizePromptInput(req.SamplePayload)
-	sanitizedDesc := SanitizePromptInput(req.Description).(string)
+	sanitizedDesc := SanitizeString(req.Description)
 
 	ctxTimeout, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
@@ -212,7 +212,7 @@ func (s *Service) GenerateConditions(ctx context.Context, tenantID, _ string, re
 		return nil, err
 	}
 
-	sanitizedCriteria := SanitizePromptInput(req.Criteria).(string)
+	sanitizedCriteria := SanitizeString(req.Criteria)
 	sanitizedSample := SanitizePromptInput(req.SamplePayload)
 
 	ctxTimeout, cancel := context.WithTimeout(ctx, s.timeout)
@@ -254,7 +254,7 @@ func (s *Service) SuggestTransformation(ctx context.Context, tenantID, _ string,
 
 	sanitizedInput := SanitizePromptInput(req.InputPayload)
 	sanitizedDesired := SanitizePromptInput(req.DesiredOutput)
-	sanitizedGoal := SanitizePromptInput(req.Goal).(string)
+	sanitizedGoal := SanitizeString(req.Goal)
 
 	ctxTimeout, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
@@ -293,7 +293,7 @@ func (s *Service) ExplainFailure(ctx context.Context, tenantID, _ string, req Ex
 		return nil, err
 	}
 
-	sanitizedErr := SanitizePromptInput(req.Error).(string)
+	sanitizedErr := SanitizeString(req.Error)
 	sanitizedInput := SanitizePromptInput(req.StepInput)
 	sanitizedOutput := SanitizePromptInput(req.StepOutput)
 	sanitizedConfig := SanitizeJSON(req.Config)

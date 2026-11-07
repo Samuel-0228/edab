@@ -59,7 +59,7 @@ func (s *PostgresOffsetStore) ListOffsets(ctx context.Context, groupID string) (
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var result []ConsumerOffset
 	for rows.Next() {
@@ -157,7 +157,7 @@ func (s *PostgresDeadLetterStore) List(ctx context.Context, filter DLQFilter) ([
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var result []*DeadLetterEvent
 	for rows.Next() {

@@ -218,7 +218,7 @@ func countExistingRecords(logPath string) int64 {
 	if err != nil {
 		return 0
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var count int64
 	scanner := bufio.NewScanner(f)
@@ -274,7 +274,7 @@ func (d *DurableStreamAdapter) readRecordsFromDisk(topic string, partition int32
 		}
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var result []*Record
 	scanner := bufio.NewScanner(f)

@@ -235,7 +235,7 @@ func doRequest(t *testing.T, method, url, token string, body any) (*http.Respons
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var buf bytes.Buffer
 	_, _ = buf.ReadFrom(resp.Body)

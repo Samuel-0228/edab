@@ -63,7 +63,10 @@ func TestSanitizationBeforeModelCall(t *testing.T) {
 		"normal_text":    "Please sync this order",
 	}
 
-	sanitized := SanitizePromptInput(input).(map[string]any)
+	sanitized, ok := SanitizePromptInput(input).(map[string]any)
+	if !ok {
+		t.Fatalf("expected map[string]any from SanitizePromptInput")
+	}
 
 	if sanitized["api_key"] != "[REDACTED]" {
 		t.Errorf("expected api_key to be redacted, got: %v", sanitized["api_key"])

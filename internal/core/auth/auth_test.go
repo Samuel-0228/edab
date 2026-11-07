@@ -90,7 +90,10 @@ func TestScrubAuditDetails(t *testing.T) {
 		t.Errorf("expected auth_header to be [REDACTED], got %v", scrubbed["auth_header"])
 	}
 
-	nested := scrubbed["nested"].(map[string]any)
+	nested, ok := scrubbed["nested"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected nested to be map[string]any")
+	}
 	if nested["api_key"] != "[REDACTED]" {
 		t.Errorf("expected nested api_key to be [REDACTED]")
 	}
@@ -98,7 +101,10 @@ func TestScrubAuditDetails(t *testing.T) {
 		t.Errorf("expected nested public_id to be preserved")
 	}
 
-	inner := nested["inner"].(map[string]any)
+	inner, ok := nested["inner"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected inner to be map[string]any")
+	}
 	if inner["password"] != "[REDACTED]" {
 		t.Errorf("expected inner password to be [REDACTED]")
 	}
@@ -106,8 +112,14 @@ func TestScrubAuditDetails(t *testing.T) {
 		t.Errorf("expected inner status to be preserved")
 	}
 
-	list := scrubbed["list"].([]any)
-	listItem := list[0].(map[string]any)
+	list, ok := scrubbed["list"].([]any)
+	if !ok || len(list) == 0 {
+		t.Fatalf("expected list to be non-empty []any")
+	}
+	listItem, ok := list[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected listItem to be map[string]any")
+	}
 	if listItem["secret_key"] != "[REDACTED]" {
 		t.Errorf("expected list secret_key to be [REDACTED]")
 	}

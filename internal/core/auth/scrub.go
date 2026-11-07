@@ -98,7 +98,7 @@ func computeAuditEntryHash(log *AuditLog) string {
 	}
 
 	h := sha256.New()
-	fmt.Fprintf(h, "%s|%d|%s|%s|%s|%s|%s|%s|%s|%d",
+	_, _ = fmt.Fprintf(h, "%s|%d|%s|%s|%s|%s|%s|%s|%s|%d",
 		log.TenantID,
 		log.SequenceNum,
 		log.PrevHash,

@@ -160,7 +160,7 @@ func (s *PostgresStore) List(ctx context.Context, tenantID string) ([]*Schema, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to list schemas: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var result []*Schema
 	for rows.Next() {
@@ -188,7 +188,7 @@ func (s *PostgresStore) ListVersions(ctx context.Context, tenantID, name string)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list schema versions: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var result []*Schema
 	for rows.Next() {

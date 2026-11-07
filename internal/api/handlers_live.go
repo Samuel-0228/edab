@@ -41,13 +41,13 @@ func (h *Handlers) OperationsStream(w http.ResponseWriter, r *http.Request) {
 	defer unsubscribe()
 
 	// Initial greeting & reconnection hint
-	fmt.Fprintf(w, "retry: 3000\n\n")
+	_, _ = fmt.Fprintf(w, "retry: 3000\n\n")
 	connInfo, _ := json.Marshal(map[string]any{
 		"status":    "connected",
 		"tenant_id": tenantID,
 		"time":      time.Now().UTC(),
 	})
-	fmt.Fprintf(w, "event: connected\ndata: %s\n\n", connInfo)
+	_, _ = fmt.Fprintf(w, "event: connected\ndata: %s\n\n", connInfo)
 	flusher.Flush()
 
 	// Periodic keepalive ticker to prevent intermediate load balancer timeouts
@@ -59,7 +59,7 @@ func (h *Handlers) OperationsStream(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-ticker.C:
-			fmt.Fprintf(w, ": keepalive %d\n\n", time.Now().Unix())
+			_, _ = fmt.Fprintf(w, ": keepalive %d\n\n", time.Now().Unix())
 			flusher.Flush()
 		case evt, ok := <-sub.Events:
 			if !ok {
@@ -69,7 +69,7 @@ func (h *Handlers) OperationsStream(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				continue
 			}
-			fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", evt.SequenceID, evt.Type, payload)
+			_, _ = fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", evt.SequenceID, evt.Type, payload)
 			flusher.Flush()
 		}
 	}
