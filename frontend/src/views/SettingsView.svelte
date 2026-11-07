@@ -71,7 +71,9 @@
       const logs = await api.listAuditLogs(50, 0);
       auditLogs = logs;
     } catch (err: unknown) {
-      notifyError('Failed to load audit logs: ' + (err instanceof Error ? err.message : String(err)));
+      notifyError(
+        'Failed to load audit logs: ' + (err instanceof Error ? err.message : String(err))
+      );
     } finally {
       loadingAudit = false;
     }
@@ -185,7 +187,12 @@
   }
 
   async function handleRevokeToken(id: string) {
-    if (!confirm('Are you sure you want to revoke this API token? Any client using it will lose access.')) return;
+    if (
+      !confirm(
+        'Are you sure you want to revoke this API token? Any client using it will lose access.'
+      )
+    )
+      return;
     try {
       await api.revokeAPIToken(id);
       notifySuccess('API Token revoked');
@@ -290,7 +297,9 @@
         <div class="identity-banner mono">
           <div class="banner-item">
             <span class="banner-label">Organization:</span>
-            <span class="banner-val">{$currentIdentity.tenant_name} ({$currentIdentity.tenant_id})</span>
+            <span class="banner-val"
+              >{$currentIdentity.tenant_name} ({$currentIdentity.tenant_id})</span
+            >
           </div>
           <div class="banner-item">
             <span class="banner-label">User:</span>
@@ -298,7 +307,9 @@
           </div>
           <div class="banner-item">
             <span class="banner-label">Role:</span>
-            <span class="role-tag {$currentIdentity.role}">{$currentIdentity.role.toUpperCase()}</span>
+            <span class="role-tag {$currentIdentity.role}"
+              >{$currentIdentity.role.toUpperCase()}</span
+            >
           </div>
         </div>
       {:else}
@@ -313,11 +324,7 @@
     >
       {#if canManageMembers($currentIdentity?.role)}
         <div class="invite-form">
-          <Input
-            placeholder="User ID (e.g. usr_123 or user@domain)"
-            bind:value={newUserId}
-            mono
-          />
+          <Input placeholder="User ID (e.g. usr_123 or user@domain)" bind:value={newUserId} mono />
           <select class="role-select" bind:value={newMemberRole}>
             <option value="viewer">Viewer</option>
             <option value="editor">Editor</option>
@@ -325,12 +332,7 @@
             <option value="admin">Admin</option>
             <option value="owner">Owner</option>
           </select>
-          <Button
-            variant="primary"
-            size="sm"
-            loading={invitingMember}
-            onclick={handleAddMember}
-          >
+          <Button variant="primary" size="sm" loading={invitingMember} onclick={handleAddMember}>
             Add Member
           </Button>
         </div>
@@ -351,7 +353,10 @@
           <tbody>
             {#if loadingAccess}
               <tr>
-                <td colspan={canManageMembers($currentIdentity?.role) ? 4 : 3} class="text-center text-muted">
+                <td
+                  colspan={canManageMembers($currentIdentity?.role) ? 4 : 3}
+                  class="text-center text-muted"
+                >
                   Loading team access...
                 </td>
               </tr>
@@ -364,7 +369,11 @@
                       <select
                         class="role-select-inline"
                         value={m.role}
-                        onchange={(e) => handleUpdateRole(m.user_id, (e.currentTarget as HTMLSelectElement).value as Role)}
+                        onchange={(e) =>
+                          handleUpdateRole(
+                            m.user_id,
+                            (e.currentTarget as HTMLSelectElement).value as Role
+                          )}
                       >
                         <option value="viewer">Viewer</option>
                         <option value="editor">Editor</option>
@@ -395,7 +404,10 @@
                 </tr>
               {:else}
                 <tr>
-                  <td colspan={canManageMembers($currentIdentity?.role) ? 4 : 3} class="text-center text-muted">
+                  <td
+                    colspan={canManageMembers($currentIdentity?.role) ? 4 : 3}
+                    class="text-center text-muted"
+                  >
                     No members loaded.
                   </td>
                 </tr>
@@ -429,12 +441,7 @@
             bind:value={newTokenScopes}
             mono
           />
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={creatingToken}
-            onclick={handleCreateToken}
-          >
+          <Button variant="secondary" size="sm" loading={creatingToken} onclick={handleCreateToken}>
             Create API Token
           </Button>
         </div>
@@ -472,11 +479,7 @@
                 </td>
                 {#if canManageMembers($currentIdentity?.role)}
                   <td>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onclick={() => handleRevokeToken(t.id)}
-                    >
+                    <Button variant="ghost" size="sm" onclick={() => handleRevokeToken(t.id)}>
                       Revoke
                     </Button>
                   </td>
@@ -484,7 +487,10 @@
               </tr>
             {:else}
               <tr>
-                <td colspan={canManageMembers($currentIdentity?.role) ? 6 : 5} class="text-center text-muted">
+                <td
+                  colspan={canManageMembers($currentIdentity?.role) ? 6 : 5}
+                  class="text-center text-muted"
+                >
                   No API tokens configured.
                 </td>
               </tr>

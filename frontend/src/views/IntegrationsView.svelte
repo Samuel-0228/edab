@@ -16,7 +16,9 @@
 
   let catalog = $state<IntegrationMetadata[]>([]);
   let connectors = $state<ConnectorManifest[]>([]);
-  let healthMap = $state<Record<string, { status: string; latency?: number; message?: string; checking?: boolean }>>({});
+  let healthMap = $state<
+    Record<string, { status: string; latency?: number; message?: string; checking?: boolean }>
+  >({});
 
   async function loadData() {
     try {
@@ -71,7 +73,9 @@
       if (res.status === 'healthy') {
         notifySuccess(`${connectorId} is healthy (${res.latency_ms}ms)`);
       } else {
-        notifyError(`${connectorId} health check: ${res.status} (${res.message || 'unknown error'})`);
+        notifyError(
+          `${connectorId} health check: ${res.status} (${res.message || 'unknown error'})`
+        );
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Health check failed';

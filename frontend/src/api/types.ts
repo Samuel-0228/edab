@@ -334,7 +334,13 @@ export interface ConnectorManifest {
   schemas?: Record<string, Record<string, unknown>>;
   triggers: Array<{ type: string; name: string; description: string }>;
   actions: Array<{ type: string; name: string; description: string }>;
-  credentials: Array<{ key: string; label: string; type: string; required: boolean; description: string }>;
+  credentials: Array<{
+    key: string;
+    label: string;
+    type: string;
+    required: boolean;
+    description: string;
+  }>;
   documentation_url?: string;
 }
 
@@ -583,4 +589,3 @@ export interface AIAcceptProposalResult {
   proposal: AIProposal;
   applied_workflow_id?: string;
 }
-

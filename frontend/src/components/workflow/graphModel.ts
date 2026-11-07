@@ -9,14 +9,7 @@ import type {
 } from '../../api/types';
 
 export type NodeType =
-  | 'trigger'
-  | 'condition'
-  | 'transformation'
-  | 'action'
-  | 'branch'
-  | 'loop'
-  | 'delay'
-  | 'parallel';
+  'trigger' | 'condition' | 'transformation' | 'action' | 'branch' | 'loop' | 'delay' | 'parallel';
 
 export interface Port {
   id: string;
@@ -60,9 +53,14 @@ export interface ValidationError {
   message: string;
 }
 
-export function createNode(type: NodeType, x: number, y: number, initialData?: Record<string, any>): VisualNode {
+export function createNode(
+  type: NodeType,
+  x: number,
+  y: number,
+  initialData?: Record<string, any>
+): VisualNode {
   const id = `node_${type}_${Math.random().toString(36).slice(2, 8)}`;
-  
+
   switch (type) {
     case 'trigger':
       return {
@@ -360,7 +358,12 @@ export function validateWorkflowDraft(draft: WorkflowDraft): {
   }
 
   const actionNodes = draft.nodes.filter(
-    (n) => n.type === 'action' || n.type === 'branch' || n.type === 'loop' || n.type === 'delay' || n.type === 'parallel'
+    (n) =>
+      n.type === 'action' ||
+      n.type === 'branch' ||
+      n.type === 'loop' ||
+      n.type === 'delay' ||
+      n.type === 'parallel'
   );
   if (actionNodes.length === 0) {
     errors.push({ message: 'Pipeline must contain at least one action or control flow step.' });
@@ -408,12 +411,18 @@ export function validateWorkflowDraft(draft: WorkflowDraft): {
 
       case 'loop':
         if (!node.data.items?.trim()) {
-          errors.push({ nodeId: node.id, message: 'Loop items expression (e.g. payload.items) is required.' });
+          errors.push({
+            nodeId: node.id,
+            message: 'Loop items expression (e.g. payload.items) is required.'
+          });
         }
         break;
 
       case 'delay':
-        if (!node.data.duration?.trim() && (!node.data.duration_seconds || node.data.duration_seconds <= 0)) {
+        if (
+          !node.data.duration?.trim() &&
+          (!node.data.duration_seconds || node.data.duration_seconds <= 0)
+        ) {
           errors.push({ nodeId: node.id, message: 'Delay duration (e.g. 10s, 5m) is required.' });
         }
         break;
@@ -612,7 +621,10 @@ export function graphToWorkflow(draft: WorkflowDraft): WorkflowCreateInput {
     event_types: Array.isArray(triggerData.eventTypes)
       ? triggerData.eventTypes
       : typeof triggerData.eventTypes === 'string'
-        ? triggerData.eventTypes.split(',').map((s: string) => s.trim()).filter(Boolean)
+        ? triggerData.eventTypes
+            .split(',')
+            .map((s: string) => s.trim())
+            .filter(Boolean)
         : ['*'],
     config: triggerConfig
   };

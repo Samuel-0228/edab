@@ -35,7 +35,9 @@ describe('Visual Workflow Builder Component & Studio', () => {
         kind: 'action',
         triggers: [],
         credentials: [],
-        actions: [{ type: 'send_message', name: 'Send Message', description: 'Post message to channel' }]
+        actions: [
+          { type: 'send_message', name: 'Send Message', description: 'Post message to channel' }
+        ]
       },
       {
         id: 'telegram',
@@ -43,8 +45,12 @@ describe('Visual Workflow Builder Component & Studio', () => {
         description: 'Bot updates and messages',
         kind: 'both',
         credentials: [],
-        triggers: [{ type: 'telegram.message', name: 'Message', description: 'Receive bot update' }],
-        actions: [{ type: 'send_message', name: 'Send Message', description: 'Send telegram chat message' }]
+        triggers: [
+          { type: 'telegram.message', name: 'Message', description: 'Receive bot update' }
+        ],
+        actions: [
+          { type: 'send_message', name: 'Send Message', description: 'Send telegram chat message' }
+        ]
       }
     ]);
   });

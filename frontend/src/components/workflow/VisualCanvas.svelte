@@ -29,11 +29,19 @@
   }: Props = $props();
 
   // State for interactive edge creation
-  let connectingFrom = $state<{ nodeId: string; portId: string; x: number; y: number } | null>(null);
+  let connectingFrom = $state<{ nodeId: string; portId: string; x: number; y: number } | null>(
+    null
+  );
   let mousePos = $state({ x: 0, y: 0 });
 
   // State for dragging nodes
-  let draggingNode = $state<{ id: string; startMouseX: number; startMouseY: number; startNodeX: number; startNodeY: number } | null>(null);
+  let draggingNode = $state<{
+    id: string;
+    startMouseX: number;
+    startMouseY: number;
+    startNodeX: number;
+    startNodeY: number;
+  } | null>(null);
 
   // SVG dimensions derived from furthest node
   let canvasWidth = $derived.by(() => {
@@ -52,7 +60,11 @@
     return maxY;
   });
 
-  function getPortPosition(node: VisualNode, portId: string, isOutput: boolean): { x: number; y: number } {
+  function getPortPosition(
+    node: VisualNode,
+    portId: string,
+    isOutput: boolean
+  ): { x: number; y: number } {
     const nodeWidth = 240;
     const nodeHeaderHeight = 44;
     const x = isOutput ? node.x + nodeWidth : node.x;
@@ -98,7 +110,10 @@
   }
 
   function handleStartDragNode(node: VisualNode, e: MouseEvent) {
-    if ((e.target as HTMLElement).closest('.port-dot') || (e.target as HTMLElement).closest('button')) {
+    if (
+      (e.target as HTMLElement).closest('.port-dot') ||
+      (e.target as HTMLElement).closest('button')
+    ) {
       return;
     }
     onselectnode(node.id);
@@ -220,30 +235,47 @@
     <button class="palette-btn action" onclick={() => onaddnode('action')} title="Add Action Step">
       + Action
     </button>
-    <button class="palette-btn condition" onclick={() => onaddnode('condition')} title="Add Filter Condition">
+    <button
+      class="palette-btn condition"
+      onclick={() => onaddnode('condition')}
+      title="Add Filter Condition"
+    >
       + Condition
     </button>
-    <button class="palette-btn transform" onclick={() => onaddnode('transformation')} title="Add Payload Transformation">
+    <button
+      class="palette-btn transform"
+      onclick={() => onaddnode('transformation')}
+      title="Add Payload Transformation"
+    >
       + Transform
     </button>
-    <button class="palette-btn branch" onclick={() => onaddnode('branch')} title="Add Conditional Fork">
+    <button
+      class="palette-btn branch"
+      onclick={() => onaddnode('branch')}
+      title="Add Conditional Fork"
+    >
       + Branch
     </button>
     <button class="palette-btn loop" onclick={() => onaddnode('loop')} title="Add For Each Loop">
       + Loop
     </button>
-    <button class="palette-btn delay" onclick={() => onaddnode('delay')} title="Add Execution Delay">
+    <button
+      class="palette-btn delay"
+      onclick={() => onaddnode('delay')}
+      title="Add Execution Delay"
+    >
       + Delay
     </button>
-    <button class="palette-btn parallel" onclick={() => onaddnode('parallel')} title="Add Parallel Fan-Out">
+    <button
+      class="palette-btn parallel"
+      onclick={() => onaddnode('parallel')}
+      title="Add Parallel Fan-Out"
+    >
       + Parallel
     </button>
   </div>
 
-  <div
-    class="canvas-space"
-    style="width: {canvasWidth}px; height: {canvasHeight}px;"
-  >
+  <div class="canvas-space" style="width: {canvasWidth}px; height: {canvasHeight}px;">
     <!-- SVG Connection Lines -->
     <svg class="connections-svg" width={canvasWidth} height={canvasHeight}>
       <defs>
@@ -280,28 +312,21 @@
           {@const p2 = getPortPosition(toNode, edge.toPort, false)}
           {@const pathD = createBezierPath(p1.x, p1.y, p2.x, p2.y)}
           <g class="edge-group">
-            <path
-              d={pathD}
-              class="edge-path-bg"
-              onclick={() => ondeleteedge(edge.id)}
-            />
-            <path
-              d={pathD}
-              class="edge-path"
-              marker-end="url(#arrow)"
-            />
+            <path d={pathD} class="edge-path-bg" onclick={() => ondeleteedge(edge.id)} />
+            <path d={pathD} class="edge-path" marker-end="url(#arrow)" />
           </g>
         {/if}
       {/each}
 
       <!-- In-Flight Connecting Wire -->
       {#if connectingFrom}
-        {@const livePath = createBezierPath(connectingFrom.x, connectingFrom.y, mousePos.x, mousePos.y)}
-        <path
-          d={livePath}
-          class="edge-path-connecting"
-          marker-end="url(#arrow-active)"
-        />
+        {@const livePath = createBezierPath(
+          connectingFrom.x,
+          connectingFrom.y,
+          mousePos.x,
+          mousePos.y
+        )}
+        <path d={livePath} class="edge-path-connecting" marker-end="url(#arrow-active)" />
       {/if}
     </svg>
 
@@ -511,7 +536,9 @@
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
     cursor: grab;
     z-index: 10;
-    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+    transition:
+      box-shadow 0.15s ease,
+      border-color 0.15s ease;
   }
 
   .node-card:active {
@@ -520,7 +547,9 @@
 
   .node-card.selected {
     border-color: var(--accent-blue, #3b82f6);
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4), 0 8px 24px rgba(0, 0, 0, 0.6);
+    box-shadow:
+      0 0 0 2px rgba(59, 130, 246, 0.4),
+      0 8px 24px rgba(0, 0, 0, 0.6);
   }
 
   .node-card.trigger {
@@ -623,7 +652,9 @@
     border: 2px solid #4a5568;
     cursor: crosshair;
     position: relative;
-    transition: transform 0.15s ease, border-color 0.15s ease;
+    transition:
+      transform 0.15s ease,
+      border-color 0.15s ease;
   }
 
   .port-dot:hover {

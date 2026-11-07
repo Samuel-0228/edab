@@ -32,6 +32,11 @@
         "track": "5.x",
         "major": 5,
         "reason": "Vitest 5 is the unit and component test runner aligned with Vite 6."
+      },
+      "@vitest/coverage-v8": {
+        "track": "5.x",
+        "major": 5,
+        "reason": "Vitest coverage v8 aligned with Vitest 5."
       }
     },
     "allowOutdated": [

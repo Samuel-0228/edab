@@ -73,6 +73,7 @@ describe('AIDraftModal Component', () => {
         status: 'accepted',
         prompt: 'Sync Github issues',
         explanation: 'Approved',
+        content: { name: 'Sync Issues', steps: [] },
         validation: { valid: true },
         tokens_used: 120,
         model_used: 'gpt-4o',

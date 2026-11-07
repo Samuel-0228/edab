@@ -87,7 +87,10 @@
   </div>
 
   <div class="header-actions">
-    <div class="stream-status {$liveStreamStatus}" title={`Live Operations Center: ${$liveStreamStatus}`}>
+    <div
+      class="stream-status {$liveStreamStatus}"
+      title={`Live Operations Center: ${$liveStreamStatus}`}
+    >
       <span class="status-indicator-dot"></span>
       <span class="status-indicator-label">
         {#if $liveStreamStatus === 'connected'}
@@ -106,7 +109,8 @@
 
     {#if $currentIdentity}
       <div class="tenant-badge mono">
-        <span class="tenant-name">{$currentIdentity.tenant_name || $currentIdentity.tenant_id}</span>
+        <span class="tenant-name">{$currentIdentity.tenant_name || $currentIdentity.tenant_id}</span
+        >
         <span class="role-pill {$currentIdentity.role}">{$currentIdentity.role.toUpperCase()}</span>
       </div>
     {/if}

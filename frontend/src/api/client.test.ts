@@ -178,7 +178,9 @@ describe('KerobApiClient', () => {
   it('constructs correct operations SSE streaming URL with token', () => {
     client.setBaseUrl('http://localhost:8080');
     client.setToken('auth-xyz');
-    expect(client.getOperationsStreamUrl()).toBe('http://localhost:8080/api/v1/operations/stream?token=auth-xyz');
+    expect(client.getOperationsStreamUrl()).toBe(
+      'http://localhost:8080/api/v1/operations/stream?token=auth-xyz'
+    );
 
     client.setToken('');
     expect(client.getOperationsStreamUrl()).toBe('http://localhost:8080/api/v1/operations/stream');
@@ -205,17 +207,24 @@ describe('KerobApiClient', () => {
     });
     const health = await client.checkConnectorHealth('github', 'cred-123');
     expect(health.status).toBe('healthy');
-    expect(mockFetch.mock.calls[1][0]).toContain('/api/v1/connectors/github/health?credential_id=cred-123');
+    expect(mockFetch.mock.calls[1][0]).toContain(
+      '/api/v1/connectors/github/health?credential_id=cred-123'
+    );
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'application/json' }),
-      json: async () => ({ authorize_url: 'https://github.com/login/oauth/authorize?state=xyz', state: 'xyz' })
+      json: async () => ({
+        authorize_url: 'https://github.com/login/oauth/authorize?state=xyz',
+        state: 'xyz'
+      })
     });
     const authResp = await client.authorizeOAuth('github', 'https://app.kerob.dev/cb');
     expect(authResp.state).toBe('xyz');
-    expect(mockFetch.mock.calls[2][0]).toContain('/api/v1/oauth/github/authorize?redirect_uri=https%3A%2F%2Fapp.kerob.dev%2Fcb');
+    expect(mockFetch.mock.calls[2][0]).toContain(
+      '/api/v1/oauth/github/authorize?redirect_uri=https%3A%2F%2Fapp.kerob.dev%2Fcb'
+    );
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -258,7 +267,9 @@ describe('KerobApiClient', () => {
       headers: new Headers({ 'content-type': 'application/json' }),
       json: async () => ({ valid: true, errors: [] })
     });
-    const valResp = await client.validatePayloadAgainstSchema('order.created', { order_id: 'ord_1' });
+    const valResp = await client.validatePayloadAgainstSchema('order.created', {
+      order_id: 'ord_1'
+    });
     expect(valResp.valid).toBe(true);
     expect(mockFetch.mock.calls[1][0]).toContain('/api/v1/schemas/order.created/validate');
 
@@ -382,6 +393,52 @@ describe('KerobApiClient', () => {
     });
     const accepted = await client.acceptAIProposal('prop-1', true);
     expect(accepted.applied_workflow_id).toBe('wf-100');
-    expect(mockFetch.mock.calls[2][0]).toContain('/api/v1/ai/proposals/prop-1/accept?create_workflow=true');
+    expect(mockFetch.mock.calls[2][0]).toContain(
+      '/api/v1/ai/proposals/prop-1/accept?create_workflow=true'
+    );
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ id: 'prop-1', task: 'map_fields', status: 'pending_approval' })
+    });
+
+    await client.mapFieldsAI({ description: 'map payload' });
+    await client.generateConditionsAI('only high priority');
+    await client.suggestTransformationsAI('format template', { msg: 'hi' });
+    await client.explainFailureAI({ workflow_id: 'w1', execution_id: 'e1', error: 'boom' });
+    await client.listAIProposals({ task_type: 'draft_workflow', status: 'pending_approval' });
+    await client.getAIProposal('prop-1');
+    await client.rejectAIProposal('prop-1', 'unwanted');
+    await client.listAuditLogs(10, 0);
+
+    // Additional API coverage
+    await client.rejectApproval('app-1', 'rejected');
+    await client.getApprovalByToken('token-123');
+    await client.decideApprovalByToken('token-123', 'approve', 'ok', 'user1');
+    expect(client.getOperationsStreamUrl()).toContain('/api/v1/operations/stream');
+    await client.listFailures(true);
+    await client.getFailure('fail-1');
+    await client.retryFailure('fail-1');
+    await client.discardFailure('fail-1');
+    await client.listEvents({ limit: 10 });
+    await client.getEvent('evt-1');
+    await client.ingestEvent({ source_id: 'src1', event_type: 'custom', payload: {} });
+    await client.listWebhooks();
+    await client.getWebhook('wh-1');
+    await client.createWebhook({ name: 'wh-new', event_type: 'custom' });
+    await client.deleteWebhook('wh-1');
+    await client.getHealth();
+    await client.getReady();
+    await client.getMetricsText();
+    await client.getMe();
+    await client.listTenants();
+    await client.createTenant('T2', 't2');
+    await client.listMembers();
+    await client.createMember('u2', 'operator');
+    await client.updateMemberRole('u2', 'admin');
+    await client.deleteMember('u2');
+    await client.listAPITokens();
   });
 });

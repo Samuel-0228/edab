@@ -284,17 +284,32 @@ export class KerobApiClient {
     return this.request<ConnectorManifest>(`/api/v1/connectors/${encodeURIComponent(id)}`);
   }
 
-  public async checkConnectorHealth(id: string, credentialId?: string): Promise<ConnectorHealthStatus> {
+  public async checkConnectorHealth(
+    id: string,
+    credentialId?: string
+  ): Promise<ConnectorHealthStatus> {
     const query = credentialId ? `?credential_id=${encodeURIComponent(credentialId)}` : '';
-    return this.request<ConnectorHealthStatus>(`/api/v1/connectors/${encodeURIComponent(id)}/health${query}`);
+    return this.request<ConnectorHealthStatus>(
+      `/api/v1/connectors/${encodeURIComponent(id)}/health${query}`
+    );
   }
 
-  public async authorizeOAuth(connectorId: string, redirectUri?: string): Promise<OAuthAuthorizeResponse> {
+  public async authorizeOAuth(
+    connectorId: string,
+    redirectUri?: string
+  ): Promise<OAuthAuthorizeResponse> {
     const query = redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : '';
-    return this.request<OAuthAuthorizeResponse>(`/api/v1/oauth/${encodeURIComponent(connectorId)}/authorize${query}`);
+    return this.request<OAuthAuthorizeResponse>(
+      `/api/v1/oauth/${encodeURIComponent(connectorId)}/authorize${query}`
+    );
   }
 
-  public async callbackOAuth(connectorId: string, state: string, code: string, redirectUri?: string): Promise<Credential> {
+  public async callbackOAuth(
+    connectorId: string,
+    state: string,
+    code: string,
+    redirectUri?: string
+  ): Promise<Credential> {
     return this.request<Credential>(`/api/v1/oauth/${encodeURIComponent(connectorId)}/callback`, {
       method: 'POST',
       body: JSON.stringify({ state, code, redirect_uri: redirectUri })
@@ -308,11 +323,17 @@ export class KerobApiClient {
     });
   }
 
-  public async revokeOAuthToken(connectorId: string, credentialId: string): Promise<{ status: string; message: string }> {
-    return this.request<{ status: string; message: string }>(`/api/v1/oauth/${encodeURIComponent(connectorId)}/revoke`, {
-      method: 'POST',
-      body: JSON.stringify({ credential_id: credentialId })
-    });
+  public async revokeOAuthToken(
+    connectorId: string,
+    credentialId: string
+  ): Promise<{ status: string; message: string }> {
+    return this.request<{ status: string; message: string }>(
+      `/api/v1/oauth/${encodeURIComponent(connectorId)}/revoke`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ credential_id: credentialId })
+      }
+    );
   }
 
   // --- Schema Registry & Event Streaming ---
@@ -339,15 +360,23 @@ export class KerobApiClient {
   }
 
   public async listSchemaVersions(name: string): Promise<EventSchema[]> {
-    const data = await this.request<EventSchema[]>(`/api/v1/schemas/${encodeURIComponent(name)}/versions`);
+    const data = await this.request<EventSchema[]>(
+      `/api/v1/schemas/${encodeURIComponent(name)}/versions`
+    );
     return Array.isArray(data) ? data : [];
   }
 
-  public async validatePayloadAgainstSchema(name: string, payload: unknown): Promise<{ valid: boolean; errors: unknown[] }> {
-    return this.request<{ valid: boolean; errors: unknown[] }>(`/api/v1/schemas/${encodeURIComponent(name)}/validate`, {
-      method: 'POST',
-      body: JSON.stringify({ payload })
-    });
+  public async validatePayloadAgainstSchema(
+    name: string,
+    payload: unknown
+  ): Promise<{ valid: boolean; errors: unknown[] }> {
+    return this.request<{ valid: boolean; errors: unknown[] }>(
+      `/api/v1/schemas/${encodeURIComponent(name)}/validate`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ payload })
+      }
+    );
   }
 
   public async publishToStream(input: StreamPublishInput): Promise<StreamPublishResult> {
@@ -370,7 +399,12 @@ export class KerobApiClient {
     });
   }
 
-  public async listStreamDLQ(filter?: { topic?: string; resolved?: boolean; limit?: number; offset?: number }): Promise<StreamDeadLetterEvent[]> {
+  public async listStreamDLQ(filter?: {
+    topic?: string;
+    resolved?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<StreamDeadLetterEvent[]> {
     const params = new URLSearchParams();
     if (filter?.topic) params.set('topic', filter.topic);
     if (filter?.resolved !== undefined) params.set('resolved', String(filter.resolved));
@@ -381,10 +415,15 @@ export class KerobApiClient {
     return Array.isArray(data) ? data : [];
   }
 
-  public async retryStreamDLQ(id: string): Promise<{ event: unknown; executions: unknown[]; status: string }> {
-    return this.request<{ event: unknown; executions: unknown[]; status: string }>(`/api/v1/streams/dlq/${encodeURIComponent(id)}/retry`, {
-      method: 'POST'
-    });
+  public async retryStreamDLQ(
+    id: string
+  ): Promise<{ event: unknown; executions: unknown[]; status: string }> {
+    return this.request<{ event: unknown; executions: unknown[]; status: string }>(
+      `/api/v1/streams/dlq/${encodeURIComponent(id)}/retry`,
+      {
+        method: 'POST'
+      }
+    );
   }
 
   // --- Executions ---
@@ -478,7 +517,9 @@ export class KerobApiClient {
   }
 
   public async getApprovalByToken(token: string): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>(`/api/v1/approval-tokens/${encodeURIComponent(token)}`);
+    return this.request<Record<string, unknown>>(
+      `/api/v1/approval-tokens/${encodeURIComponent(token)}`
+    );
   }
 
   public async decideApprovalByToken(
@@ -620,10 +661,13 @@ export class KerobApiClient {
   }
 
   public async updateMemberRole(userId: string, role: Role): Promise<Membership> {
-    return this.request<Membership>(`/api/v1/tenants/current/members/${encodeURIComponent(userId)}`, {
-      method: 'PUT',
-      body: JSON.stringify({ role })
-    });
+    return this.request<Membership>(
+      `/api/v1/tenants/current/members/${encodeURIComponent(userId)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ role })
+      }
+    );
   }
 
   public async deleteMember(userId: string): Promise<void> {
@@ -637,7 +681,11 @@ export class KerobApiClient {
     return Array.isArray(data) ? data : [];
   }
 
-  public async createAPIToken(name: string, scopes: string[], expiresAt?: string): Promise<APIToken> {
+  public async createAPIToken(
+    name: string,
+    scopes: string[],
+    expiresAt?: string
+  ): Promise<APIToken> {
     return this.request<APIToken>('/api/v1/tokens', {
       method: 'POST',
       body: JSON.stringify({ name, scopes, expires_at: expiresAt })
@@ -671,35 +719,60 @@ export class KerobApiClient {
     });
   }
 
-  public async mapFieldsAI(req: { source_schema?: Record<string, unknown>; target_schema?: Record<string, unknown>; sample_payload?: Record<string, unknown>; description?: string }): Promise<AIProposal> {
+  public async mapFieldsAI(req: {
+    source_schema?: Record<string, unknown>;
+    target_schema?: Record<string, unknown>;
+    sample_payload?: Record<string, unknown>;
+    description?: string;
+  }): Promise<AIProposal> {
     return this.request<AIProposal>('/api/v1/ai/map-fields', {
       method: 'POST',
       body: JSON.stringify(req)
     });
   }
 
-  public async generateConditionsAI(criteria: string, samplePayload?: Record<string, unknown>): Promise<AIProposal> {
+  public async generateConditionsAI(
+    criteria: string,
+    samplePayload?: Record<string, unknown>
+  ): Promise<AIProposal> {
     return this.request<AIProposal>('/api/v1/ai/generate-conditions', {
       method: 'POST',
       body: JSON.stringify({ criteria, sample_payload: samplePayload })
     });
   }
 
-  public async suggestTransformationsAI(goal: string, inputPayload: Record<string, unknown>, desiredOutput?: Record<string, unknown>): Promise<AIProposal> {
+  public async suggestTransformationsAI(
+    goal: string,
+    inputPayload: Record<string, unknown>,
+    desiredOutput?: Record<string, unknown>
+  ): Promise<AIProposal> {
     return this.request<AIProposal>('/api/v1/ai/suggest-transformations', {
       method: 'POST',
       body: JSON.stringify({ goal, input_payload: inputPayload, desired_output: desiredOutput })
     });
   }
 
-  public async explainFailureAI(req: { workflow_id: string; execution_id: string; step_id?: string; step_type?: string; error: string; step_input?: unknown; step_output?: unknown }): Promise<AIProposal> {
+  public async explainFailureAI(req: {
+    workflow_id: string;
+    execution_id: string;
+    step_id?: string;
+    step_type?: string;
+    error: string;
+    step_input?: unknown;
+    step_output?: unknown;
+  }): Promise<AIProposal> {
     return this.request<AIProposal>('/api/v1/ai/explain-failure', {
       method: 'POST',
       body: JSON.stringify(req)
     });
   }
 
-  public async listAIProposals(filter?: { task_type?: string; status?: string; limit?: number; offset?: number }): Promise<AIProposal[]> {
+  public async listAIProposals(filter?: {
+    task_type?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<AIProposal[]> {
     const params = new URLSearchParams();
     if (filter?.task_type) params.set('task_type', filter.task_type);
     if (filter?.status) params.set('status', filter.status);
@@ -714,11 +787,17 @@ export class KerobApiClient {
     return this.request<AIProposal>(`/api/v1/ai/proposals/${encodeURIComponent(id)}`);
   }
 
-  public async acceptAIProposal(id: string, createWorkflow: boolean = false): Promise<AIAcceptProposalResult> {
-    return this.request<AIAcceptProposalResult>(`/api/v1/ai/proposals/${encodeURIComponent(id)}/accept${createWorkflow ? '?create_workflow=true' : ''}`, {
-      method: 'POST',
-      body: JSON.stringify({ create_workflow: createWorkflow })
-    });
+  public async acceptAIProposal(
+    id: string,
+    createWorkflow: boolean = false
+  ): Promise<AIAcceptProposalResult> {
+    return this.request<AIAcceptProposalResult>(
+      `/api/v1/ai/proposals/${encodeURIComponent(id)}/accept${createWorkflow ? '?create_workflow=true' : ''}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ create_workflow: createWorkflow })
+      }
+    );
   }
 
   public async rejectAIProposal(id: string, reason?: string): Promise<AIProposal> {

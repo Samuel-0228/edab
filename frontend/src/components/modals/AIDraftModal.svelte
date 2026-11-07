@@ -114,7 +114,7 @@
     </div>
 
     <div class="draft-action-row">
-      <Button variant="secondary" size="sm" loading={loading} onclick={handleDraft}>
+      <Button variant="secondary" size="sm" {loading} onclick={handleDraft}>
         Draft Workflow Proposal
       </Button>
     </div>
@@ -184,9 +184,7 @@
   {#snippet footer()}
     <Button variant="ghost" size="sm" onclick={closeAIDraftModal}>Cancel</Button>
     {#if proposal && proposal.status === 'pending_approval'}
-      <Button variant="danger" size="sm" loading={deciding} onclick={handleReject}>
-        Reject
-      </Button>
+      <Button variant="danger" size="sm" loading={deciding} onclick={handleReject}>Reject</Button>
       <Button
         variant="primary"
         size="sm"

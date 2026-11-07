@@ -18,14 +18,7 @@
     onclose: () => void;
   }
 
-  let {
-    node,
-    integrations = [],
-    credentials = [],
-    onchange,
-    ondelete,
-    onclose
-  }: Props = $props();
+  let { node, integrations = [], credentials = [], onchange, ondelete, onclose }: Props = $props();
 
   let activeSchema = $state<IntegrationJSONSchema | null>(null);
   let jsonFormatError = $state<string | null>(null);
@@ -33,7 +26,9 @@
   // Trigger options derived
   let triggerOptions = $derived.by(() => {
     const list = integrations
-      .filter((i) => (i.triggers && i.triggers.length > 0) || i.kind === 'trigger' || i.kind === 'both')
+      .filter(
+        (i) => (i.triggers && i.triggers.length > 0) || i.kind === 'trigger' || i.kind === 'both'
+      )
       .map((i) => ({ value: i.id, label: `${i.name} (${i.description})` }));
     if (!list.some((item) => item.value === 'telegram')) {
       list.push({ value: 'telegram', label: 'Telegram (Bot Messages)' });
@@ -51,7 +46,9 @@
   // Action integrations derived
   let actionIntegrations = $derived.by(() => {
     const list = integrations
-      .filter((i) => (i.actions && i.actions.length > 0) || i.kind === 'action' || i.kind === 'both')
+      .filter(
+        (i) => (i.actions && i.actions.length > 0) || i.kind === 'action' || i.kind === 'both'
+      )
       .map((i) => ({ value: i.id, label: `${i.name}` }));
     if (!list.some((item) => item.value === 'discord')) {
       list.push({ value: 'discord', label: 'Discord' });
@@ -167,11 +164,7 @@
 
     <div class="header-actions">
       {#if node.type !== 'trigger'}
-        <button
-          class="danger-icon-btn"
-          title="Delete Node"
-          onclick={() => ondelete(node.id)}
-        >
+        <button class="danger-icon-btn" title="Delete Node" onclick={() => ondelete(node.id)}>
           <Icon name="trash" size={14} />
         </button>
       {/if}
@@ -207,14 +200,19 @@
 
         <Input
           label="Matched Event Types (comma-separated or * for all)"
-          value={Array.isArray(node.data.eventTypes) ? node.data.eventTypes.join(', ') : node.data.eventTypes || '*'}
+          value={Array.isArray(node.data.eventTypes)
+            ? node.data.eventTypes.join(', ')
+            : node.data.eventTypes || '*'}
           placeholder="e.g. telegram.message, github.push"
           mono
           onchange={(e) => {
             const val = (e.target as HTMLInputElement).value;
             updateField(
               'eventTypes',
-              val.split(',').map((s: string) => s.trim()).filter(Boolean)
+              val
+                .split(',')
+                .map((s: string) => s.trim())
+                .filter(Boolean)
             );
           }}
         />
@@ -228,7 +226,8 @@
                 value={node.data.scheduleInterval}
                 placeholder="5m, 1h, 30s"
                 mono
-                onchange={(e) => updateField('scheduleInterval', (e.target as HTMLInputElement).value)}
+                onchange={(e) =>
+                  updateField('scheduleInterval', (e.target as HTMLInputElement).value)}
               />
               <Input
                 label="Cron Expression (optional)"
@@ -242,7 +241,7 @@
         {/if}
       </div>
 
-    <!-- CONDITION CONFIGURATION -->
+      <!-- CONDITION CONFIGURATION -->
     {:else if node.type === 'condition'}
       <div class="section-group">
         <div class="section-header">RULE EXPRESSION EVALUATOR</div>
@@ -270,7 +269,7 @@
         />
       </div>
 
-    <!-- TRANSFORMATION CONFIGURATION -->
+      <!-- TRANSFORMATION CONFIGURATION -->
     {:else if node.type === 'transformation'}
       <div class="section-group">
         <div class="section-header">PAYLOAD FORMATTER & TEMPLATES</div>
@@ -294,12 +293,13 @@
             ></textarea>
           </div>
           <span class="field-hint">
-            Supports pipes: <code>| upper</code>, <code>| lower</code>, <code>| truncate:20</code>, <code>| date_format:"2006-01-02"</code>
+            Supports pipes: <code>| upper</code>, <code>| lower</code>, <code>| truncate:20</code>,
+            <code>| date_format:"2006-01-02"</code>
           </span>
         {/if}
       </div>
 
-    <!-- ACTION CONFIGURATION -->
+      <!-- ACTION CONFIGURATION -->
     {:else if node.type === 'action'}
       <div class="section-group">
         <div class="section-header">DISPATCH TARGET & INTEGRATION</div>
@@ -338,10 +338,7 @@
 
         {#if activeSchema}
           <div class="schema-helper">
-            <SchemaConfigForm
-              schema={activeSchema}
-              bind:value={node.data.configRaw}
-            />
+            <SchemaConfigForm schema={activeSchema} bind:value={node.data.configRaw} />
           </div>
         {/if}
 
@@ -376,19 +373,21 @@
             label="Timeout (sec)"
             type="number"
             value={String(node.data.timeout_seconds || 30)}
-            onchange={(e) => updateField('timeout_seconds', Number((e.target as HTMLInputElement).value) || 30)}
+            onchange={(e) =>
+              updateField('timeout_seconds', Number((e.target as HTMLInputElement).value) || 30)}
           />
 
           <Input
             label="Max Retries"
             type="number"
             value={String(node.data.max_retries ?? 3)}
-            onchange={(e) => updateField('max_retries', Number((e.target as HTMLInputElement).value) || 3)}
+            onchange={(e) =>
+              updateField('max_retries', Number((e.target as HTMLInputElement).value) || 3)}
           />
         </div>
       </div>
 
-    <!-- BRANCH CONFIGURATION -->
+      <!-- BRANCH CONFIGURATION -->
     {:else if node.type === 'branch'}
       <div class="section-group">
         <div class="section-header">CONDITIONAL FORK</div>
@@ -413,11 +412,12 @@
           onchange={(e) => updateField('value', (e.target as HTMLInputElement).value)}
         />
         <span class="field-hint">
-          Connect output <b>Matched</b> to the steps for this condition, and <b>Default</b> for fallback steps.
+          Connect output <b>Matched</b> to the steps for this condition, and <b>Default</b> for fallback
+          steps.
         </span>
       </div>
 
-    <!-- LOOP CONFIGURATION -->
+      <!-- LOOP CONFIGURATION -->
     {:else if node.type === 'loop'}
       <div class="section-group">
         <div class="section-header">ARRAY ITERATOR (FOR EACH)</div>
@@ -440,15 +440,16 @@
             label="Max Iterations Cap"
             type="number"
             value={String(node.data.max_iterations || 50)}
-            onchange={(e) => updateField('max_iterations', Number((e.target as HTMLInputElement).value) || 50)}
+            onchange={(e) =>
+              updateField('max_iterations', Number((e.target as HTMLInputElement).value) || 50)}
           />
         </div>
         <span class="field-hint">
-          Steps connected to <b>Each Item</b> can access <code>{"{{item.field}}"}</code> during iteration.
+          Steps connected to <b>Each Item</b> can access <code>{'{{item.field}}'}</code> during iteration.
         </span>
       </div>
 
-    <!-- DELAY CONFIGURATION -->
+      <!-- DELAY CONFIGURATION -->
     {:else if node.type === 'delay'}
       <div class="section-group">
         <div class="section-header">DURABLE ASYNC DELAY</div>
@@ -460,11 +461,12 @@
           onchange={(e) => updateField('duration', (e.target as HTMLInputElement).value)}
         />
         <span class="field-hint">
-          Execution pauses durable state in PostgreSQL without occupying worker threads or database connections.
+          Execution pauses durable state in PostgreSQL without occupying worker threads or database
+          connections.
         </span>
       </div>
 
-    <!-- PARALLEL CONFIGURATION -->
+      <!-- PARALLEL CONFIGURATION -->
     {:else if node.type === 'parallel'}
       <div class="section-group">
         <div class="section-header">CONCURRENT FAN-OUT</div>
@@ -472,7 +474,8 @@
           label="Concurrency Limit"
           type="number"
           value={String(node.data.concurrency || 4)}
-          onchange={(e) => updateField('concurrency', Number((e.target as HTMLInputElement).value) || 4)}
+          onchange={(e) =>
+            updateField('concurrency', Number((e.target as HTMLInputElement).value) || 4)}
         />
         <span class="field-hint">
           Executes child branches concurrently with bounded goroutine concurrency.

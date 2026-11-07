@@ -123,9 +123,7 @@
   }
 
   // Selected node derived
-  let selectedNode = $derived(
-    graphDraft.nodes.find((n) => n.id === selectedNodeId) || null
-  );
+  let selectedNode = $derived(graphDraft.nodes.find((n) => n.id === selectedNodeId) || null);
 
   // Live validation
   let validationResult = $derived(
@@ -232,7 +230,10 @@
       triggerNode.data = {
         ...triggerNode.data,
         triggerType,
-        eventTypes: triggerEventType.split(',').map((s) => s.trim()).filter(Boolean),
+        eventTypes: triggerEventType
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
         scheduleInterval,
         scheduleCron
       };
@@ -301,8 +302,16 @@
           const pre = modalState.preselectedIntegration || '';
           graphDraft = workflowToGraph({
             name: '',
-            trigger: { type: pre === 'schedule' ? 'schedule' : pre === 'github' ? 'github' : 'telegram' },
-            actions: [{ integration: pre === 'discord' ? 'discord' : 'discord', action_type: 'send_message', config: {} }]
+            trigger: {
+              type: pre === 'schedule' ? 'schedule' : pre === 'github' ? 'github' : 'telegram'
+            },
+            actions: [
+              {
+                integration: pre === 'discord' ? 'discord' : 'discord',
+                action_type: 'send_message',
+                config: {}
+              }
+            ]
           });
           selectedNodeId = graphDraft.nodes[0]?.id || null;
           syncGraphToLinearForm();
@@ -580,11 +589,19 @@
             <span>Valid Pipeline</span>
           {:else}
             <span class="dot amber"></span>
-            <span>{validationResult.errors.length} Issue{validationResult.errors.length > 1 ? 's' : ''}</span>
+            <span
+              >{validationResult.errors.length} Issue{validationResult.errors.length > 1
+                ? 's'
+                : ''}</span
+            >
           {/if}
         </div>
 
-        <button class="tool-btn" onclick={handleExportJson} title="Export Workflow Definition as JSON">
+        <button
+          class="tool-btn"
+          onclick={handleExportJson}
+          title="Export Workflow Definition as JSON"
+        >
           Export JSON
         </button>
         <button class="tool-btn" onclick={handleOpenImport} title="Import Workflow from JSON">
@@ -652,7 +669,8 @@
               <Icon name="workflow" size={28} />
               <div class="empty-inspector-title">No Step Selected</div>
               <div class="empty-inspector-desc">
-                Click any step on the left-to-right canvas to configure its triggers, conditions, or actions.
+                Click any step on the left-to-right canvas to configure its triggers, conditions, or
+                actions.
               </div>
             </div>
           {/if}
@@ -677,7 +695,11 @@
           operators={conditionOperators}
         />
 
-        <WorkflowTransformStage bind:transformType bind:transformTemplate options={transformOptions} />
+        <WorkflowTransformStage
+          bind:transformType
+          bind:transformTemplate
+          options={transformOptions}
+        />
 
         <WorkflowActionStage
           bind:actionIntegration
@@ -720,10 +742,10 @@
           class="import-textarea"
           rows={10}
           placeholder="Paste workflow JSON here..."
-          bind:value={importJsonText}
-        ></textarea>
+          bind:value={importJsonText}></textarea>
         <div class="import-actions">
-          <Button variant="ghost" size="sm" onclick={() => (showImportModal = false)}>Cancel</Button>
+          <Button variant="ghost" size="sm" onclick={() => (showImportModal = false)}>Cancel</Button
+          >
           <Button variant="primary" size="sm" onclick={handleConfirmImport}>Load Graph</Button>
         </div>
       </div>

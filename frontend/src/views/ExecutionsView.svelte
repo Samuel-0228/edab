@@ -79,7 +79,11 @@
   }
 
   async function handleCompensate(id: string) {
-    if (!confirm('Initiate saga rollback compensation for this execution? Completed steps with defined compensation actions will be undone.')) {
+    if (
+      !confirm(
+        'Initiate saga rollback compensation for this execution? Completed steps with defined compensation actions will be undone.'
+      )
+    ) {
       return;
     }
     try {
@@ -157,7 +161,9 @@
                 <div class="approval-desc">{app.description}</div>
               {/if}
               <div class="approval-meta">
-                <span>Execution: <code class="mono-id">{app.execution_id.slice(0, 10)}...</code></span>
+                <span
+                  >Execution: <code class="mono-id">{app.execution_id.slice(0, 10)}...</code></span
+                >
                 <span>Workflow: <code class="mono-id">{app.workflow_id.slice(0, 8)}...</code></span>
                 {#if app.approver_roles?.length}
                   <span>Roles: {app.approver_roles.join(', ')}</span>
@@ -166,7 +172,11 @@
               </div>
             </div>
             <div class="approval-actions">
-              <Button variant="ghost" size="sm" onclick={() => openExecutionDetail(app.execution_id)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onclick={() => openExecutionDetail(app.execution_id)}
+              >
                 View Run
               </Button>
               {#if canOperateActions($currentIdentity?.role)}
@@ -296,11 +306,19 @@
                         <Button variant="primary" size="sm" onclick={() => retryRun(exec.id)}>
                           Retry
                         </Button>
-                        <Button variant="danger" size="sm" onclick={() => handleCompensate(exec.id)}>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onclick={() => handleCompensate(exec.id)}
+                        >
                           Rollback
                         </Button>
                       {:else if exec.status === 'waiting_approval'}
-                        <Button variant="danger" size="sm" onclick={() => handleCompensate(exec.id)}>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onclick={() => handleCompensate(exec.id)}
+                        >
                           Rollback
                         </Button>
                       {:else if exec.status === 'running' || exec.status === 'pending' || exec.status === 'retrying'}

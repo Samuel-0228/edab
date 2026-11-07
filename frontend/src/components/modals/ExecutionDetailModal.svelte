@@ -65,7 +65,10 @@
     if (!pendingApproval) return;
     operating = true;
     try {
-      await api.approveApproval(pendingApproval.id, approvalNote || 'Approved via execution audit modal');
+      await api.approveApproval(
+        pendingApproval.id,
+        approvalNote || 'Approved via execution audit modal'
+      );
       notifySuccess('Approval granted — workflow execution resumed');
       triggerRefresh();
       if (execution) await loadExecution(execution.id);
@@ -81,7 +84,10 @@
     if (!pendingApproval) return;
     operating = true;
     try {
-      await api.rejectApproval(pendingApproval.id, approvalNote || 'Rejected via execution audit modal');
+      await api.rejectApproval(
+        pendingApproval.id,
+        approvalNote || 'Rejected via execution audit modal'
+      );
       notifySuccess('Approval rejected — saga compensation rollback initiated');
       triggerRefresh();
       if (execution) await loadExecution(execution.id);
@@ -95,7 +101,11 @@
 
   async function handleCompensate() {
     if (!execution) return;
-    if (!confirm('Initiate saga rollback compensation for this execution? Completed steps with defined compensation actions will be undone.')) {
+    if (
+      !confirm(
+        'Initiate saga rollback compensation for this execution? Completed steps with defined compensation actions will be undone.'
+      )
+    ) {
       return;
     }
     operating = true;

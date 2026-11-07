@@ -34,7 +34,9 @@
   let newSchemaType = $state<'json_schema' | 'protobuf'>('json_schema');
   let newSchemaCompat = $state<'BACKWARD' | 'FORWARD' | 'FULL' | 'NONE'>('BACKWARD');
   let newSchemaDesc = $state('');
-  let newSchemaDef = $state('{\n  "type": "object",\n  "required": ["event_type"],\n  "properties": {\n    "event_type": { "type": "string" }\n  }\n}');
+  let newSchemaDef = $state(
+    '{\n  "type": "object",\n  "required": ["event_type"],\n  "properties": {\n    "event_type": { "type": "string" }\n  }\n}'
+  );
   let registeringSchema = $state(false);
   let selectedSchema = $state<EventSchema | null>(null);
 
@@ -157,9 +159,10 @@
     replayingStream = true;
     try {
       const sinceMins = parseInt(replaySinceMinutes, 10);
-      const sinceDate = !isNaN(sinceMins) && sinceMins > 0
-        ? new Date(Date.now() - sinceMins * 60 * 1000).toISOString()
-        : undefined;
+      const sinceDate =
+        !isNaN(sinceMins) && sinceMins > 0
+          ? new Date(Date.now() - sinceMins * 60 * 1000).toISOString()
+          : undefined;
 
       const res = await api.replayStream({
         topic: replayTopic.trim() || undefined,
@@ -316,10 +319,14 @@
     <Card padding="sm">
       <div class="filter-toolbar">
         <div class="section-desc">
-          <span>Manage event schemas with JSON Schema / Protobuf validation and backward/forward compatibility guarantees.</span>
+          <span
+            >Manage event schemas with JSON Schema / Protobuf validation and backward/forward
+            compatibility guarantees.</span
+          >
         </div>
         <div class="toolbar-actions">
-          <Button variant="secondary" size="sm" icon="refresh" onclick={loadSchemas}>Refresh</Button>
+          <Button variant="secondary" size="sm" icon="refresh" onclick={loadSchemas}>Refresh</Button
+          >
           <Button variant="primary" size="sm" onclick={() => (showRegisterModal = true)}>
             + Register Schema
           </Button>
@@ -361,12 +368,20 @@
                     <Badge variant="stage-when">{s.schema_type}</Badge>
                   </td>
                   <td>
-                    <Badge variant={s.compatibility === 'BACKWARD' ? 'success' : s.compatibility === 'FULL' ? 'warning' : 'neutral'}>
+                    <Badge
+                      variant={s.compatibility === 'BACKWARD'
+                        ? 'success'
+                        : s.compatibility === 'FULL'
+                          ? 'warning'
+                          : 'neutral'}
+                    >
                       {s.compatibility}
                     </Badge>
                   </td>
                   <td class="text-muted">{s.description || '—'}</td>
-                  <td class="text-muted timestamp-cell">{new Date(s.created_at).toLocaleString()}</td>
+                  <td class="text-muted timestamp-cell"
+                    >{new Date(s.created_at).toLocaleString()}</td
+                  >
                   <td>
                     <Button
                       variant="secondary"
@@ -415,10 +430,15 @@
     <Card padding="sm">
       <div class="filter-toolbar">
         <div class="section-desc">
-          <span>Active streaming consumers, partition offsets, and dead-letter records rejected during ingestion or validation.</span>
+          <span
+            >Active streaming consumers, partition offsets, and dead-letter records rejected during
+            ingestion or validation.</span
+          >
         </div>
         <div class="toolbar-actions">
-          <Button variant="secondary" size="sm" icon="refresh" onclick={loadStreamingData}>Refresh</Button>
+          <Button variant="secondary" size="sm" icon="refresh" onclick={loadStreamingData}
+            >Refresh</Button
+          >
           <Button variant="primary" size="sm" onclick={() => (showReplayModal = true)}>
             Replay Stream
           </Button>
@@ -427,7 +447,11 @@
     </Card>
 
     {#if offsets.length > 0}
-      <Card title="Consumer Partition Offsets" subtitle="Committed high-water mark offsets across consumer groups" padding="none">
+      <Card
+        title="Consumer Partition Offsets"
+        subtitle="Committed high-water mark offsets across consumer groups"
+        padding="none"
+      >
         <div class="table-container">
           <table class="tech-table">
             <thead>
@@ -446,7 +470,9 @@
                   <td><Badge variant="neutral">{off.topic}</Badge></td>
                   <td>#{off.partition}</td>
                   <td><strong>{off.offset}</strong></td>
-                  <td class="text-muted timestamp-cell">{new Date(off.committed_at).toLocaleTimeString()}</td>
+                  <td class="text-muted timestamp-cell"
+                    >{new Date(off.committed_at).toLocaleTimeString()}</td
+                  >
                 </tr>
               {/each}
             </tbody>
@@ -535,54 +561,53 @@
   maxWidth="640px"
   onclose={() => (showRegisterModal = false)}
 >
-  {#snippet children()}
-    <div class="modal-form">
-      <Input
-        label="Schema Name / Subject"
-        placeholder="e.g. user.signup or order.completed"
-        bind:value={newSchemaName}
-        required
+  <div class="modal-form">
+    <Input
+      label="Schema Name / Subject"
+      placeholder="e.g. user.signup or order.completed"
+      bind:value={newSchemaName}
+      required
+    />
+
+    <div class="form-row">
+      <Select
+        label="Schema Type"
+        bind:value={newSchemaType}
+        options={[
+          { value: 'json_schema', label: 'JSON Schema' },
+          { value: 'protobuf', label: 'Protobuf (proto3)' }
+        ]}
       />
-
-      <div class="form-row">
-        <Select
-          label="Schema Type"
-          bind:value={newSchemaType}
-          options={[
-            { value: 'json_schema', label: 'JSON Schema' },
-            { value: 'protobuf', label: 'Protobuf (proto3)' }
-          ]}
-        />
-        <Select
-          label="Compatibility Mode"
-          bind:value={newSchemaCompat}
-          options={[
-            { value: 'BACKWARD', label: 'BACKWARD (Consumers read new payloads)' },
-            { value: 'FORWARD', label: 'FORWARD (Old consumers read new payloads)' },
-            { value: 'FULL', label: 'FULL (Backward & Forward)' },
-            { value: 'NONE', label: 'NONE (No evolution checks)' }
-          ]}
-        />
-      </div>
-
-      <Input
-        label="Description (optional)"
-        placeholder="Brief description of this schema's purpose"
-        bind:value={newSchemaDesc}
+      <Select
+        label="Compatibility Mode"
+        bind:value={newSchemaCompat}
+        options={[
+          { value: 'BACKWARD', label: 'BACKWARD (Consumers read new payloads)' },
+          { value: 'FORWARD', label: 'FORWARD (Old consumers read new payloads)' },
+          { value: 'FULL', label: 'FULL (Backward & Forward)' },
+          { value: 'NONE', label: 'NONE (No evolution checks)' }
+        ]}
       />
-
-      <div class="definition-field">
-        <label for="schema-def-input" class="field-label">Schema Definition <span class="required-star">*</span></label>
-        <textarea
-          id="schema-def-input"
-          class="tech-textarea font-mono"
-          bind:value={newSchemaDef}
-          rows="8"
-          placeholder="Enter JSON Schema or Protobuf IDL"
-        ></textarea>
-      </div>
     </div>
-  {/snippet}
+
+    <Input
+      label="Description (optional)"
+      placeholder="Brief description of this schema's purpose"
+      bind:value={newSchemaDesc}
+    />
+
+    <div class="definition-field">
+      <label for="schema-def-input" class="field-label"
+        >Schema Definition <span class="required-star">*</span></label
+      >
+      <textarea
+        id="schema-def-input"
+        class="tech-textarea font-mono"
+        bind:value={newSchemaDef}
+        rows="8"
+        placeholder="Enter JSON Schema or Protobuf IDL"></textarea>
+    </div>
+  </div>
 
   {#snippet footer()}
     <div class="modal-actions">
@@ -606,55 +631,52 @@
   maxWidth="540px"
   onclose={() => (showReplayModal = false)}
 >
-  {#snippet children()}
-    <div class="modal-form">
+  <div class="modal-form">
+    <Input
+      label="Topic (optional)"
+      placeholder="e.g. kerob.events (leave blank for default)"
+      bind:value={replayTopic}
+    />
+    <div class="form-row">
       <Input
-        label="Topic (optional)"
-        placeholder="e.g. kerob.events (leave blank for default)"
-        bind:value={replayTopic}
+        label="Event Type (optional)"
+        placeholder="e.g. payment.processed"
+        bind:value={replayEventType}
       />
-      <div class="form-row">
-        <Input
-          label="Event Type (optional)"
-          placeholder="e.g. payment.processed"
-          bind:value={replayEventType}
-        />
-        <Input
-          label="Source ID (optional)"
-          placeholder="e.g. stripe_webhook"
-          bind:value={replaySourceId}
-        />
-      </div>
-
-      <Select
-        label="Time Window (Since)"
-        bind:value={replaySinceMinutes}
-        options={[
-          { value: '15', label: 'Last 15 minutes' },
-          { value: '60', label: 'Last 1 hour' },
-          { value: '360', label: 'Last 6 hours' },
-          { value: '1440', label: 'Last 24 hours' },
-          { value: '0', label: 'Beginning of Stream (All)' }
-        ]}
+      <Input
+        label="Source ID (optional)"
+        placeholder="e.g. stripe_webhook"
+        bind:value={replaySourceId}
       />
-
-      <div class="checkbox-row">
-        <label class="checkbox-label">
-          <input type="checkbox" bind:checked={replayBypassIdempotency} />
-          <span><strong>Bypass Idempotency</strong> (forces workflow execution even if event was previously executed)</span>
-        </label>
-      </div>
     </div>
-  {/snippet}
+
+    <Select
+      label="Time Window (Since)"
+      bind:value={replaySinceMinutes}
+      options={[
+        { value: '15', label: 'Last 15 minutes' },
+        { value: '60', label: 'Last 1 hour' },
+        { value: '360', label: 'Last 6 hours' },
+        { value: '1440', label: 'Last 24 hours' },
+        { value: '0', label: 'Beginning of Stream (All)' }
+      ]}
+    />
+
+    <div class="checkbox-row">
+      <label class="checkbox-label">
+        <input type="checkbox" bind:checked={replayBypassIdempotency} />
+        <span
+          ><strong>Bypass Idempotency</strong> (forces workflow execution even if event was previously
+          executed)</span
+        >
+      </label>
+    </div>
+  </div>
 
   {#snippet footer()}
     <div class="modal-actions">
       <Button variant="secondary" onclick={() => (showReplayModal = false)}>Cancel</Button>
-      <Button
-        variant="primary"
-        disabled={replayingStream}
-        onclick={handleTriggerReplay}
-      >
+      <Button variant="primary" disabled={replayingStream} onclick={handleTriggerReplay}>
         {replayingStream ? 'Replaying...' : 'Execute Replay'}
       </Button>
     </div>
