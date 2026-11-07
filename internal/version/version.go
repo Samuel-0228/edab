@@ -5,7 +5,7 @@ import "fmt"
 // Build-time variables injected via -ldflags
 var (
 	// Version is the current semantic version of Kerob.
-	Version = "v0.2.0"
+	Version = "v0.3.0"
 
 	// Commit is the git commit SHA of the build.
 	Commit = "dev"

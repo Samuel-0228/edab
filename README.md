@@ -42,7 +42,7 @@
 ## Table of Contents
 
 - [Core Capabilities](#core-capabilities)
-- [Workflow Reference Manual](docs/WORKFLOW_REFERENCE.md)
+- [Documentation Index](#documentation-index)
 - [Quick Start Guide](#quick-start-guide)
   - [Step 1: Download or Clone](#step-1-download-or-clone)
   - [Step 2: Configure Environment](#step-2-configure-environment)
@@ -61,6 +61,20 @@
 - [Production Deployment Hardening](#production-deployment-hardening)
 - [Upgrade & Migration Notes](#upgrade--migration-notes)
 - [Security & License](#security--license)
+
+---
+
+## Documentation Index
+
+- [v0.3.0 Release Notes](docs/RELEASE_NOTES_v0.3.0.md)
+- [Workflow Reference Manual](docs/WORKFLOW_REFERENCE.md)
+- [Controlled AI Assistance](docs/CONTROLLED_AI_ASSISTANCE.md)
+- [Enterprise Governance & Cryptographic Auditing](docs/ENTERPRISE_GOVERNANCE.md)
+- [CLI & GitOps Deployment Guide](docs/CLI_AND_GITOPS_GUIDE.md)
+- [Distributed Sagas & Human Approvals](docs/SAGAS_AND_APPROVALS.md)
+- [Event Streaming & Schema Registry Guide](docs/EVENT_STREAMING_GUIDE.md)
+- [Custom Connector SDK & Integration Guide](docs/INTEGRATION_GUIDE.md)
+- [OpenAPI Specification](docs/openapi.yaml)
 
 ---
 
@@ -97,8 +111,8 @@ Download the pre-compiled binary for your architecture from the [GitHub Releases
 
 ```bash
 # Example for Linux (x86_64)
-curl -sL https://github.com/Samuel-0228/edab/releases/download/v0.1.1/kerob-v0.1.1-linux-amd64.tar.gz | tar -xz
-cd kerob-v0.1.1-linux-amd64
+curl -sL https://github.com/Samuel-0228/edab/releases/download/v0.3.0/kerob-v0.3.0-linux-amd64.tar.gz | tar -xz
+cd kerob-v0.3.0-linux-amd64
 ```
 
 #### Or Clone Repository

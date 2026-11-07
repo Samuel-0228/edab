@@ -5,6 +5,106 @@ The project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 
 ---
 
+## [v0.3.0] - 2026-11-07
+
+### Milestone Release: Enterprise Event Automation & Controlled Intelligence
+Kerob `v0.3.0` is a major milestone release delivering 10 architectural phases that evolve Kerob into a distributed, multi-tenant enterprise event orchestration and automation platform with tamper-evident cryptographic governance and controlled AI assistance.
+
+### Added
+
+#### 1. Controlled AI Assistance Layer (Phase 10)
+- **Deterministic & Non-Autonomous AI Architecture**:
+  - Model outputs are persisted as immutable `Proposal` entities with `status: pending_approval`. Autonomous production mutations and autonomous workflow triggering are strictly prohibited.
+  - Acceptance of any proposal strictly requires explicit human approval backed by `PermWorkflowsWrite` (`workflows:write`) permissions.
+- **Five AI Capabilities**:
+  - **Workflow Drafting (`POST /api/v1/ai/draft-workflow`)**: Drafts complete declarative workflows from natural language briefs.
+  - **Payload Field Mapping (`POST /api/v1/ai/map-fields`)**: Analyzes source schemas and target destinations to propose key-to-key mapping pipelines.
+  - **Condition Generation (`POST /api/v1/ai/generate-conditions`)**: Translates natural language criteria into declarative IF/ELSE condition AST trees.
+  - **Transformation Suggestions (`POST /api/v1/ai/suggest-transformations`)**: Suggests UNIX-pipe transformations (extract, rename, format, cast).
+  - **Failure Diagnosis (`POST /api/v1/ai/explain-failure`)**: Analyzes execution trace errors and dead-letters to provide actionable root-cause explanations and remediations.
+- **Strict Threat Model & Safety Guardrails**:
+  - **Disabled by Default**: AI subsystem remains inactive until explicitly enabled via `AI_ENABLED=true`.
+  - **In-Memory Sanitization**: Redacts API keys, passwords, bearer tokens, AWS keys, and PII before dispatching model requests. Zero direct vault access.
+  - **Deterministic Safety Validator**: Verifies candidate ASTs against dangerous execution patterns (`bash`, `sh -c`, `eval`, `rm -rf`, `curl`), SSRF addresses, unapproved connectors, and schema syntax errors.
+  - **Provider Abstraction**: Supports OpenAI-compatible endpoints (Ollama, LocalAI, vLLM) and deterministic mock provider.
+  - **Quota & Cost Limits**: Enforces monthly token ceilings (`AI_MONTHLY_TOKEN_LIMIT`), per-request token caps, timeouts, and tenant opt-out controls.
+  - **Database Migration 000009**: Creates multi-tenant isolated `ai_proposals` table.
+
+#### 2. Enterprise Governance & Cryptographic Policy Engine (Phase 9)
+- **Tenant Compliance Policy Engine**:
+  - Configurable policies per tenant: `allowed_connectors`, `allowed_outbound_domains`, `max_workflow_retries`, `max_payload_size_bytes`, `require_approval_irreversible`, `mask_pii`, `mask_secrets`, and `blocked_keywords`.
+  - Enforcement modes: `enforce` (strictly blocks non-compliant publish attempts) and `audit` (records audit warning).
+  - Dry-run policy validation endpoint: `POST /api/v1/governance/policy/validate`.
+- **Tamper-Evident Cryptographic Audit Trail**:
+  - SHA-256 HMAC hash chaining across all tenant audit events (`prev_hash`, `entry_hash`, `signature`).
+  - Cryptographic verification endpoint (`GET /api/v1/governance/audit/verify`) detects sequence breaks, tampering, or missing entries.
+- **Data Retention & Compliance Exports**:
+  - Automated retention pruning (`POST /api/v1/governance/retention/prune`) based on `data_retention_days`.
+  - Compliant audit log exports in JSON and CSV formats (`GET /api/v1/audit-logs/export`).
+  - Database Migration 000008: Adds governance policy tables and cryptographic hash chaining columns.
+
+#### 3. Unified Developer CLI, GitOps Automation & SDKs (Phase 8)
+- **Kerob Unified CLI (`kerob`)**:
+  - GitOps deployment (`kerob workflow deploy <path>`) with automated secret scanning, schema validation, semantic diffing, dry-runs, and rollback on failure.
+  - Full resource management: `workflow`, `event`, `execution`, `logs`, `dlq`, `tenant`, `policy`, and `ai`.
+  - Interactive login (`kerob login`) with configuration caching and shell auto-completion (`bash`, `zsh`, `fish`).
+- **Go SDK (`pkg/sdk`) & TypeScript SDK (`@kerob/sdk`)**:
+  - Zero-runtime-dependency Go SDK with complete typed API coverage.
+  - Production TypeScript SDK with automated secret scanning and diff engines.
+
+#### 4. Distributed Sagas, Compensation & Human Approvals (Phase 7)
+- **Automatic Reverse-Order Compensation**:
+  - Workflows can define compensating actions for reversible steps. On pipeline failure, the engine automatically triggers compensation steps in reverse order.
+  - Manual operator compensation endpoint (`POST /api/v1/executions/{id}/compensate`).
+- **Human-in-the-Loop Approval Gates**:
+  - Dedicated approval step pausing workflow execution pending human decision.
+  - Configurable expiration timeouts and escalation callbacks.
+  - Cryptographically signed one-time decision tokens for email/webhook integrations.
+  - Database Migration 000007: Adds approvals table with tenant isolation.
+
+#### 5. Partitioned Event Streaming & Schema Registry (Phase 6)
+- **Partitioned Event Broker**:
+  - High-throughput streaming subsystem with partition ordering keys (`ordering_key`).
+  - Pluggable streaming adapters (`durable` disk-backed and memory-backed).
+  - Consumer offset management and dead-letter queue topics (`/api/v1/streams/dlq`).
+- **JSON Schema Registry**:
+  - Versioned schema registry for event payload validation (`POST /api/v1/schemas`).
+  - Backward and forward compatibility mode enforcement.
+  - Database Migration 000006: Adds schema registry, stream offsets, and streaming DLQ tables.
+
+#### 6. Extensible Connector SDK & OAuth2 Lifecycle (Phase 5)
+- **Pluggable Connector Architecture**:
+  - Standardized `Connector` interface with manifest, capabilities, and dynamic health probes (`GET /api/v1/connectors/{id}/health`).
+  - Built-in GitHub connector with webhook triggers and API actions.
+- **Full OAuth2 Lifecycle**:
+  - Authorization flow (`/api/v1/oauth/{connector}/authorize`), PKCE verification, automatic token refresh, and revocation.
+
+#### 7. Visual Workflow Builder & Studio (Phase 4)
+- **Interactive Visual Canvas**:
+  - High-performance node graph canvas built in Svelte 5 with zoom, pan, and mini-map.
+  - Visual editing for branch, loop (`for_each`), delay, parallel, and approval nodes.
+  - Bidirectional visual-to-JSON/YAML synchronization with immediate schema validation.
+
+#### 8. Real-Time Operations Center (Phase 3)
+- **Sub-Second Live Operational Feed**:
+  - Server-Sent Events (SSE) stream (`GET /api/v1/operations/stream`) broadcasting execution state changes, step transitions, and throughput metrics.
+  - Interactive live dashboard with filterable execution logs and latency gauges.
+
+#### 9. Multi-Tenancy & Role-Based Access Control (Phase 2)
+- **Organizational Tenant Isolation**:
+  - Row-level tenant partitioning across all database tables and queries.
+  - Hierarchical RBAC: `admin`, `editor`, `operator`, and `viewer` roles.
+  - Scoped API tokens with expiry and revocation management.
+  - Database Migration 000005: Adds multi-tenant tables, memberships, and API tokens.
+
+#### 10. Distributed Execution & Worker Coordination (Phase 1)
+- **Resilient Distributed Execution**:
+  - Distributed job leasing with PostgreSQL row locks and active worker heartbeats.
+  - Automatic stale lease reclamation and worker failover recovery.
+  - Multi-worker concurrent processing with priority execution queuing.
+
+---
+
 ## [v0.2.0] - 2026-10-30
 
 ### Added
